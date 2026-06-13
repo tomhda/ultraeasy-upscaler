@@ -7,3 +7,9 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+
+# 設計 / デザインQA アーティファクト（リポジトリには含めない）
+/ui-mockup-*.png
+/current-shot-final.png
+/design-qa-comparison.png
+/design-qa.md

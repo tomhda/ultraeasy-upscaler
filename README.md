@@ -21,6 +21,7 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 - Python 3.13（同梱の `.venv` を使用）
 - ffmpeg / ffprobe（PATH 上）
 - `vendor/realesrgan/` に realesrgan-ncnn-vulkan 一式（exe + models）
+  - `vendor/` は git 管理外。初回・再クローン時は `.venv\Scripts\python.exe scripts\get_models.py` で本体＋追加モデル（汎用動画モデル含む）を一括取得。
 
 ## 起動
 `run.bat` をダブルクリック、または:
