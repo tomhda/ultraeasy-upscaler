@@ -46,6 +46,8 @@ _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
     "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
     "realesr-animevideov3": "Anime Video v3",
+    "realesr-general-x4v3": "General Video v3",
+    "realesr-general-wdn-x4v3": "General Video v3 (Denoise)",
 }
 
 
