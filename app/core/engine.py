@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import media, upscaler, video
 from .jobs import Cancelled, Job, JobKind, ProgressCb
-from .settings import OutputLocation, UpscaleSettings
+from .settings import OutputLocation, UpscaleBackend, UpscaleSettings
 
 
 def _check_cancel(cancel) -> None:
@@ -125,7 +125,11 @@ def _process_video(job, settings, progress, cancel) -> Path:
 
         # 中間フレームは常に PNG に固定する。
         # 出力形式設定が jpg/webp でも、再結合側は frame_%08d.png 固定で読むため。
-        frame_settings = replace(settings, image_format="png")
+        frame_settings = replace(
+            settings,
+            backend=UpscaleBackend.VULKAN,
+            image_format="png",
+        )
         progress(0.20, "フレームをアップスケール中…")
         upscaler.upscale_folder(
             str(src_frames), str(up_frames), frame_settings,

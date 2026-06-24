@@ -67,7 +67,7 @@ def test_window_creates_and_adds_job(app):
 
 def test_build_settings_maps_widgets(app):
     """ウィジェット値が UpscaleSettings に反映される。"""
-    from app.core.settings import OutputLocation
+    from app.core.settings import OutputLocation, UpscaleBackend
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
@@ -81,9 +81,33 @@ def test_build_settings_maps_widgets(app):
 
     s = win.build_settings()
     assert s.scale == 2
+    assert s.backend == UpscaleBackend.VULKAN
     assert s.tta_mode is True
     assert s.image_format == "webp"
     assert s.output_location == OutputLocation.SAME  # 既定は「元の場所」
+
+    win.close()
+    app.processEvents()
+
+
+def test_backend_combo_maps_to_npu_and_locks_scale(app):
+    """NPU選択は設定へ反映され、倍率は4xに固定される。"""
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+
+    idx = win.backend_combo.findData(UpscaleBackend.NPU.value)
+    assert idx >= 0
+    win.backend_combo.setCurrentIndex(idx)
+    app.processEvents()
+
+    s = win.build_settings()
+    assert s.backend == UpscaleBackend.NPU
+    assert s.scale == 4
+    assert win._scale_btns[2].isEnabled() is False
+    assert win._scale_btns[4].isEnabled() is True
 
     win.close()
     app.processEvents()

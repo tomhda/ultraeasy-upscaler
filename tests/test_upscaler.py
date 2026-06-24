@@ -13,7 +13,7 @@ import pytest
 from PIL import Image
 
 from app.core import binaries, jobs, upscaler
-from app.core.settings import UpscaleSettings
+from app.core.settings import UpscaleBackend, UpscaleSettings
 
 REPO = Path(__file__).resolve().parents[1]
 INPUT_JPG = REPO / "vendor" / "realesrgan" / "input.jpg"
@@ -160,3 +160,45 @@ def test_upscale_image_cancel(tmp_path: Path) -> None:
 
     with pytest.raises(jobs.Cancelled):
         upscaler.upscale_image(str(INPUT_JPG), str(out), settings, cancel=cancel)
+
+
+def test_upscale_image_npu_dispatch(monkeypatch, tmp_path: Path) -> None:
+    """backend=npu なら Vulkan exe ではなく NPU backend に委譲する。"""
+    calls: list[tuple[str, str, UpscaleSettings]] = []
+    out = tmp_path / "out.png"
+
+    def fake_npu(in_path, out_path, settings, progress=None, cancel=None):
+        calls.append((in_path, out_path, settings))
+        out.write_bytes(b"ok")
+        if progress:
+            progress(1.0, "完了")
+
+    from app.core import npu_backend
+
+    monkeypatch.setattr(npu_backend, "upscale_image", fake_npu)
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU, scale=4)
+    upscaler.upscale_image("in.png", str(out), settings)
+
+    assert len(calls) == 1
+    assert calls[0][0] == "in.png"
+    assert calls[0][1] == str(out)
+    assert calls[0][2].backend == UpscaleBackend.NPU
+
+
+def test_upscale_folder_npu_dispatch(monkeypatch, tmp_path: Path) -> None:
+    """フォルダも backend=npu なら NPU backend に委譲する。"""
+    calls: list[tuple[str, str, UpscaleSettings]] = []
+
+    def fake_npu(in_dir, out_dir, settings, progress=None, cancel=None):
+        calls.append((in_dir, out_dir, settings))
+        if progress:
+            progress(1.0, "1/1 枚")
+
+    from app.core import npu_backend
+
+    monkeypatch.setattr(npu_backend, "upscale_folder", fake_npu)
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU, scale=4)
+    upscaler.upscale_folder("in", str(tmp_path / "out"), settings)
+
+    assert len(calls) == 1
+    assert calls[0][2].backend == UpscaleBackend.NPU

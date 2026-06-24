@@ -19,7 +19,7 @@ from typing import Optional
 
 from . import binaries, jobs, media
 from .jobs import ProgressCb
-from .settings import UpscaleSettings
+from .settings import UpscaleBackend, UpscaleSettings
 
 # stderr に出る進捗行（例: "25.00%"）を拾う。
 _PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
@@ -121,6 +121,11 @@ def upscale_image(in_path: str, out_path: str, settings: UpscaleSettings,
         [-t <tile>] [-g <gpu>] [-j <threads>] [-x] -f <fmt> -m <models_dir>
     進捗は stderr の "xx.xx%" を解析する。out_path の親フォルダは事前に作成すること。
     """
+    if settings.backend == UpscaleBackend.NPU:
+        from . import npu_backend
+        npu_backend.upscale_image(in_path, out_path, settings, progress, cancel)
+        return
+
     progress = progress or _noop
 
     out = Path(out_path)
@@ -190,6 +195,11 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
     進捗は out_dir の生成ファイル数 / in_dir の画像数 で算出するのが堅実
     （別スレッドでポーリング）。out_dir は事前に作成しておくこと。
     """
+    if settings.backend == UpscaleBackend.NPU:
+        from . import npu_backend
+        npu_backend.upscale_folder(in_dir, out_dir, settings, progress, cancel)
+        return
+
     progress = progress or _noop
 
     in_p = Path(in_dir)

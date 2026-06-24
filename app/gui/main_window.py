@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from app.core import binaries
 from app.core.jobs import Job, JobKind, JobStatus
-from app.core.settings import OutputLocation, UpscaleSettings
+from app.core.settings import OutputLocation, UpscaleBackend, UpscaleSettings
 
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
@@ -42,6 +42,10 @@ from .worker import QueueWorker
 _SCALE_CHOICES = (2, 4)
 # 動画の結合方法（現状は「自動で結合」のみ。将来拡張の余地を残す）
 _VIDEO_MODES = ["自動で結合"]
+_BACKEND_LABELS = {
+    UpscaleBackend.VULKAN: "GPU (Vulkan)",
+    UpscaleBackend.NPU: "NPU (画像 x4)",
+}
 _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
     "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
@@ -145,7 +149,13 @@ class MainWindow(QWidget):
         panel.setObjectName("controlPanel")
         row = QHBoxLayout(panel)
         row.setContentsMargins(18, 12, 18, 12)
-        row.setSpacing(24)
+        row.setSpacing(20)
+
+        self.backend_combo = QComboBox()
+        for backend, label in _BACKEND_LABELS.items():
+            self.backend_combo.addItem(label, backend.value)
+        self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
+        row.addLayout(self._field("処理", self.backend_combo))
 
         # 倍率トグル（2x / 4x）
         scale_box = QHBoxLayout()
@@ -329,6 +339,15 @@ class MainWindow(QWidget):
 
     def _refresh_scale_enabled(self) -> None:
         """選択モデルがサポートする倍率だけ有効化（v2 の 2x/4x トグル）。"""
+        backend = self._selected_backend()
+        if backend == UpscaleBackend.NPU:
+            self.model_combo.setEnabled(False)
+            self._set_scale(4)
+            for s, btn in self._scale_btns.items():
+                btn.setEnabled(s == 4)
+            return
+
+        self.model_combo.setEnabled(self.model_combo.currentData() is not None)
         model = self.model_combo.currentData() or self.model_combo.currentText()
         first_enabled: int | None = None
         for s, btn in self._scale_btns.items():
@@ -343,6 +362,16 @@ class MainWindow(QWidget):
         cur_btn = self._scale_btns.get(self._scale)
         if cur_btn is not None and not cur_btn.isEnabled() and first_enabled is not None:
             self._set_scale(first_enabled)
+
+    def _selected_backend(self) -> UpscaleBackend:
+        value = self.backend_combo.currentData() if hasattr(self, "backend_combo") else None
+        try:
+            return UpscaleBackend(value or UpscaleBackend.VULKAN.value)
+        except ValueError:
+            return UpscaleBackend.VULKAN
+
+    def _on_backend_changed(self) -> None:
+        self._refresh_scale_enabled()
 
     def _on_output_changed(self, index: int) -> None:
         # index 1 = 「フォルダ選択…」
@@ -369,6 +398,7 @@ class MainWindow(QWidget):
     def build_settings(self) -> UpscaleSettings:
         """現在のウィジェット値から UpscaleSettings を構築する。"""
         s = UpscaleSettings()
+        s.backend = self._selected_backend()
         s.scale = self._scale
         if self.model_combo.isEnabled():
             s.model = self.model_combo.currentData() or self.model_combo.currentText()
@@ -438,7 +468,7 @@ class MainWindow(QWidget):
         self.pause_btn.setEnabled(running)
         self.pause_btn.setText("一時停止")
         # 実行中は入力系をロック（モデル/倍率/出力先/追加）
-        for w in (self.model_combo, self.output_combo, self.video_combo,
+        for w in (self.backend_combo, self.model_combo, self.output_combo, self.video_combo,
                   self.clear_btn, self.output_open_btn, self.settings_btn):
             w.setEnabled(not running)
         for btn in self._scale_btns.values():

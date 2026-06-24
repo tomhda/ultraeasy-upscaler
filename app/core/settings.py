@@ -10,6 +10,11 @@ class OutputLocation(str, Enum):
     CUSTOM = "custom"  # 指定フォルダに出力
 
 
+class UpscaleBackend(str, Enum):
+    VULKAN = "vulkan"  # realesrgan-ncnn-vulkan
+    NPU = "npu"        # Ryzen AI NPU (VitisAI EP)
+
+
 # vendor 同梱の既定モデル
 DEFAULT_MODEL = "realesrgan-x4plus"
 
@@ -19,6 +24,7 @@ class UpscaleSettings:
     """1ジョブ分のアップスケール設定。"""
 
     # --- 基本 ---
+    backend: UpscaleBackend = UpscaleBackend.VULKAN     # 実行経路
     scale: int = 4                                   # 倍率: 2 / 3 / 4
     model: str = DEFAULT_MODEL                       # realesrgan モデル名（-n）
     image_format: str = "png"                        # 画像出力形式: png / jpg / webp
