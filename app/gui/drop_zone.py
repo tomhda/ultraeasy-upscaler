@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from .icons import Icon, apply_icon_font
@@ -16,12 +16,15 @@ class DropZone(QFrame):
     """画像・動画・フォルダをドロップで受け取るパネル。"""
 
     pathsDropped = Signal(list)  # list[str] のローカルパス
+    browseRequested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("dropZone")
         self.setAcceptDrops(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(250)
+        self._pressed_inside = False
         self._build()
 
     def _build(self) -> None:
@@ -38,6 +41,7 @@ class DropZone(QFrame):
             g.setObjectName("dropGlyph")
             apply_icon_font(g, 64)
             g.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            g.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             glyph_row.addWidget(g)
         glyph_row.addStretch(1)
         root.addLayout(glyph_row)
@@ -45,11 +49,13 @@ class DropZone(QFrame):
         title = QLabel("画像・動画をドロップ")
         title.setObjectName("dropTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         root.addWidget(title)
 
-        hint = QLabel("ファイル / フォルダ / 複数選択OK")
+        hint = QLabel("クリックでファイル選択 / 複数選択OK")
         hint.setObjectName("dropHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         root.addWidget(hint)
 
         root.addStretch(1)
@@ -82,3 +88,24 @@ class DropZone(QFrame):
             self.pathsDropped.emit(paths)
         else:
             event.ignore()
+
+    # --- クリックでファイル選択 ---
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed_inside = True
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._pressed_inside
+            and self.rect().contains(event.position().toPoint())
+        ):
+            self._pressed_inside = False
+            self.browseRequested.emit()
+            event.accept()
+            return
+        self._pressed_inside = False
+        super().mouseReleaseEvent(event)

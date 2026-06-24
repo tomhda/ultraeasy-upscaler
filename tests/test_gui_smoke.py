@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +63,31 @@ def test_window_creates_and_adds_job(app):
     assert row.job.name == SAMPLE_IMAGE.name
 
     # 後始末（実行はしない）
+    win.close()
+    app.processEvents()
+
+
+def test_drop_zone_click_adds_selected_file(app, monkeypatch):
+    from app.gui import main_window
+
+    def fake_get_open_file_names(*_args, **_kwargs):
+        return [str(SAMPLE_IMAGE)], ""
+
+    monkeypatch.setattr(
+        main_window.QFileDialog, "getOpenFileNames", fake_get_open_file_names
+    )
+
+    win = main_window.MainWindow()
+    win.show()
+    app.processEvents()
+
+    QTest.mouseClick(win.drop_zone, Qt.MouseButton.LeftButton)
+    app.processEvents()
+
+    assert win.queue.row_count() == 1
+    job = next(iter(win._jobs.values()))
+    assert job.input_path == SAMPLE_IMAGE
+
     win.close()
     app.processEvents()
 

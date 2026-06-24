@@ -87,6 +87,7 @@ class MainWindow(QWidget):
         root.addWidget(self._build_header())
         self.drop_zone = DropZone()
         self.drop_zone.pathsDropped.connect(self._on_paths_dropped)
+        self.drop_zone.browseRequested.connect(self._pick_files)
         root.addWidget(self.drop_zone)
 
         root.addWidget(self._build_controls())
