@@ -149,7 +149,7 @@ def test_build_settings_maps_widgets(app):
     app.processEvents()
 
 
-def test_settings_drawer_uses_plain_language(app):
+def test_settings_drawer_explains_specialized_terms(app):
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
@@ -164,16 +164,23 @@ def test_settings_drawer_uses_plain_language(app):
         for i in range(child.count())
     ]
     visible_text = "\n".join(labels + checks + combo_items)
+    help_icons = [
+        w for w in win.drawer.findChildren(QLabel)
+        if w.objectName() == "helpIcon"
+    ]
 
     assert "動画の保存形式" in labels
-    assert "動画の画質" in labels
+    assert "動画の画質 (CRF/QP)" in labels
+    assert "分割処理 (タイル)" in labels
     assert "出力フォルダ名" in labels
     assert "動画コンテナ" not in visible_text
-    assert "CRF" not in visible_text
-    assert "QP" not in visible_text
     assert "サブフォルダ" not in visible_text
-    assert "HW" not in visible_text
-    assert "TTA" not in visible_text
+    assert win.drawer.tta_mode.text() == "高品質モード (TTA)"
+    assert len(help_icons) >= 10
+    assert all(icon.text() == "?" for icon in help_icons)
+    assert all(icon.toolTip() for icon in help_icons)
+    assert any("数字が小さいほど高画質" in icon.toolTip() for icon in help_icons)
+    assert any("かなり遅く" in icon.toolTip() for icon in help_icons)
     assert win.drawer.hw_encode.objectName() == "clearCheck"
     assert win.drawer.hw_encode.isChecked() is True
     assert win.drawer.tta_mode.isChecked() is False

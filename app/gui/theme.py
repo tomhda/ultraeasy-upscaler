@@ -112,6 +112,25 @@ QLabel#fieldLabel {{
     font-size: 15px;
     font-weight: 700;
 }}
+QWidget#fieldLabelWrap, QWidget#checkRow {{
+    background-color: transparent;
+}}
+QLabel#helpIcon {{
+    color: {ACCENT};
+    background-color: #132832;
+    border: 1px solid #285463;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 800;
+}}
+QToolTip {{
+    background-color: #111820;
+    color: {TEXT};
+    border: 1px solid {BORDER_LIGHT};
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 13px;
+}}
 QLabel#sectionTitle {{
     color: {TEXT};
     font-size: 20px;

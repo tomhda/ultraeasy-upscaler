@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QVBoxLayout,
@@ -37,6 +38,18 @@ _GPU_OPTIONS = [
     ("GPU 2", 2),
     ("GPU 3", 3),
 ]
+_HELP = {
+    "image_format": "画像を書き出す形式です。pngは劣化なし、jpgは容量小、webpは容量を抑えやすい形式です。",
+    "video_format": "動画ファイルの保存形式です。mp4は再生互換性が高く、mkv/movは用途に合わせて選びます。",
+    "video_quality": "CRF/QPは動画の圧縮品質です。数字が小さいほど高画質で容量は大きくなります。",
+    "tile_size": "タイルは画像を分割して処理する単位です。通常は自動でOK。メモリ不足で失敗するときだけ節約側にします。",
+    "gpu_id": "通常は自動でOK。GPUが複数あるPCで、使うGPUを固定したい時だけ番号を選びます。",
+    "subfolder": "出力をまとめるフォルダ名です。上段の出力先が「元の場所」なら、元画像の横にこの名前のフォルダを作ります。",
+    "hw_encode": "動画の書き出しにGPUを使います。対応していれば速くなります。失敗時は通常エンコードに戻します。",
+    "keep_audio": "元動画の音声を、新しく作る動画にも入れます。",
+    "tta": "TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。",
+    "create_folder": "チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。",
+}
 
 
 class ClearCheckBox(QCheckBox):
@@ -99,6 +112,18 @@ class ClearCheckBox(QCheckBox):
         )
 
 
+class HelpIcon(QLabel):
+    """マウスオーバーで説明を出す小さなヘルプアイコン。"""
+
+    def __init__(self, text: str, parent=None) -> None:
+        super().__init__("?", parent)
+        self.setObjectName("helpIcon")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setFixedSize(18, 18)
+        self.setToolTip(text)
+        self.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+
 class SettingsDrawer(QFrame):
     """折りたたみ可能な詳細設定パネル。"""
 
@@ -107,10 +132,30 @@ class SettingsDrawer(QFrame):
         self.setObjectName("card")
         self._build()
 
-    def _label(self, text: str) -> QLabel:
+    def _label(self, text: str, help_text: str | None = None) -> QWidget:
+        wrap = QWidget()
+        wrap.setObjectName("fieldLabelWrap")
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
         lab = QLabel(text)
         lab.setObjectName("fieldLabel")
-        return lab
+        row.addWidget(lab)
+        if help_text:
+            row.addWidget(HelpIcon(help_text))
+        row.addStretch(1)
+        return wrap
+
+    def _check_row(self, checkbox: ClearCheckBox, help_text: str) -> QWidget:
+        wrap = QWidget()
+        wrap.setObjectName("checkRow")
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(checkbox)
+        row.addWidget(HelpIcon(help_text))
+        row.addStretch(1)
+        return wrap
 
     def _combo_with_data(self, options: list[tuple[str, int]]) -> QComboBox:
         combo = QComboBox()
@@ -140,34 +185,34 @@ class SettingsDrawer(QFrame):
         # --- 画像の保存形式 ---
         self.image_format = QComboBox()
         self.image_format.addItems(_IMAGE_FORMATS)
-        grid.addWidget(self._label("画像の保存形式"), 0, 0)
+        grid.addWidget(self._label("画像の保存形式", _HELP["image_format"]), 0, 0)
         grid.addWidget(self.image_format, 0, 1)
 
         # --- 動画の保存形式 ---
         self.video_format = QComboBox()
         self.video_format.addItems(_VIDEO_FORMATS)
-        grid.addWidget(self._label("動画の保存形式"), 0, 2)
+        grid.addWidget(self._label("動画の保存形式", _HELP["video_format"]), 0, 2)
         grid.addWidget(self.video_format, 0, 3)
 
         # --- 動画の画質 ---
         self.video_quality = self._combo_with_data(_VIDEO_QUALITY_OPTIONS)
-        grid.addWidget(self._label("動画の画質"), 1, 0)
+        grid.addWidget(self._label("動画の画質 (CRF/QP)", _HELP["video_quality"]), 1, 0)
         grid.addWidget(self.video_quality, 1, 1)
 
         # --- 分割処理 ---
         self.tile_size = self._combo_with_data(_TILE_OPTIONS)
-        grid.addWidget(self._label("分割処理"), 1, 2)
+        grid.addWidget(self._label("分割処理 (タイル)", _HELP["tile_size"]), 1, 2)
         grid.addWidget(self.tile_size, 1, 3)
 
         # --- 使うGPU ---
         self.gpu_id = self._combo_with_data(_GPU_OPTIONS)
-        grid.addWidget(self._label("使うGPU"), 2, 0)
+        grid.addWidget(self._label("使うGPU", _HELP["gpu_id"]), 2, 0)
         grid.addWidget(self.gpu_id, 2, 1)
 
         # --- 出力フォルダ名 ---
         self.subfolder_name = QLineEdit()
         self.subfolder_name.setPlaceholderText("upscaled")
-        grid.addWidget(self._label("出力フォルダ名"), 2, 2)
+        grid.addWidget(self._label("出力フォルダ名", _HELP["subfolder"]), 2, 2)
         grid.addWidget(self.subfolder_name, 2, 3)
 
         root.addLayout(grid)
@@ -178,12 +223,12 @@ class SettingsDrawer(QFrame):
         toggles.setVerticalSpacing(8)
         self.hw_encode = ClearCheckBox("動画の保存を速くする")
         self.keep_audio = ClearCheckBox("動画の音声を残す")
-        self.tta_mode = ClearCheckBox("高品質モード（遅い）")
+        self.tta_mode = ClearCheckBox("高品質モード (TTA)")
         self.create_subfolder = ClearCheckBox("出力フォルダを作る")
-        toggles.addWidget(self.hw_encode, 0, 0)
-        toggles.addWidget(self.keep_audio, 0, 1)
-        toggles.addWidget(self.tta_mode, 1, 0)
-        toggles.addWidget(self.create_subfolder, 1, 1)
+        toggles.addWidget(self._check_row(self.hw_encode, _HELP["hw_encode"]), 0, 0)
+        toggles.addWidget(self._check_row(self.keep_audio, _HELP["keep_audio"]), 0, 1)
+        toggles.addWidget(self._check_row(self.tta_mode, _HELP["tta"]), 1, 0)
+        toggles.addWidget(self._check_row(self.create_subfolder, _HELP["create_folder"]), 1, 1)
         toggle_wrap = QWidget()
         toggle_wrap.setObjectName("toggleWrap")
         toggle_wrap.setLayout(toggles)
