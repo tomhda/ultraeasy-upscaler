@@ -178,9 +178,20 @@ def test_settings_drawer_explains_specialized_terms(app):
     assert win.drawer.tta_mode.text() == "高品質モード (TTA)"
     assert len(help_icons) >= 10
     assert all(icon.text() == "?" for icon in help_icons)
-    assert all(icon.toolTip() for icon in help_icons)
-    assert any("数字が小さいほど高画質" in icon.toolTip() for icon in help_icons)
-    assert any("かなり遅く" in icon.toolTip() for icon in help_icons)
+    assert all(getattr(icon, "help_text", "") for icon in help_icons)
+    assert any("数字が小さいほど高画質" in icon.help_text for icon in help_icons)
+    assert any("かなり遅く" in icon.help_text for icon in help_icons)
+
+    quality_help = next(
+        icon for icon in help_icons
+        if "数字が小さいほど高画質" in icon.help_text
+    )
+    quality_help._show_popup()
+    app.processEvents()
+    assert quality_help._popup is not None
+    assert quality_help._popup.text() == quality_help.help_text
+    assert quality_help._popup.text() != "?"
+    quality_help._hide_popup()
     assert win.drawer.hw_encode.objectName() == "clearCheck"
     assert win.drawer.hw_encode.isChecked() is True
     assert win.drawer.tta_mode.isChecked() is False

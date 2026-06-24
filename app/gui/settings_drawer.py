@@ -4,6 +4,7 @@ from __future__ import annotations
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPen
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFrame,
@@ -117,11 +118,56 @@ class HelpIcon(QLabel):
 
     def __init__(self, text: str, parent=None) -> None:
         super().__init__("?", parent)
+        self.help_text = text
+        self._popup: QLabel | None = None
         self.setObjectName("helpIcon")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setFixedSize(18, 18)
-        self.setToolTip(text)
         self.setCursor(Qt.CursorShape.WhatsThisCursor)
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self._show_popup()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._hide_popup()
+        super().leaveEvent(event)
+
+    def _show_popup(self) -> None:
+        if self._popup is None:
+            self._popup = QLabel(self.help_text)
+            self._popup.setObjectName("helpPopup")
+            self._popup.setWindowFlags(
+                Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint
+            )
+            self._popup.setWordWrap(True)
+            self._popup.setFixedWidth(340)
+        self._popup.setText(self.help_text)
+        self._popup.adjustSize()
+
+        pos = self.mapToGlobal(self.rect().bottomLeft())
+        pos.setX(pos.x() + 2)
+        pos.setY(pos.y() + 8)
+
+        screen = QApplication.screenAt(pos) or QApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            if pos.x() + self._popup.width() > available.right():
+                pos.setX(max(available.left(), available.right() - self._popup.width()))
+            if pos.y() + self._popup.height() > available.bottom():
+                above_icon = (
+                    self.mapToGlobal(self.rect().topLeft()).y()
+                    - self._popup.height()
+                    - 8
+                )
+                pos.setY(max(available.top(), above_icon))
+
+        self._popup.move(pos)
+        self._popup.show()
+
+    def _hide_popup(self) -> None:
+        if self._popup is not None:
+            self._popup.hide()
 
 
 class SettingsDrawer(QFrame):

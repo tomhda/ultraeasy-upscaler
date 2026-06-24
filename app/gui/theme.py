@@ -123,13 +123,15 @@ QLabel#helpIcon {{
     font-size: 12px;
     font-weight: 800;
 }}
-QToolTip {{
+QLabel#helpPopup {{
     background-color: #111820;
     color: {TEXT};
     border: 1px solid {BORDER_LIGHT};
     border-radius: 6px;
-    padding: 7px 9px;
+    padding: 9px 11px;
+    font-family: "Yu Gothic UI", "Meiryo UI", "Segoe UI", sans-serif;
     font-size: 13px;
+    line-height: 1.35;
 }}
 QLabel#sectionTitle {{
     color: {TEXT};
