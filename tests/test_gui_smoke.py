@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 
 # QApplication 生成前にオフスクリーンを強制
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -87,6 +88,37 @@ def test_drop_zone_click_adds_selected_file(app, monkeypatch):
     assert win.queue.row_count() == 1
     job = next(iter(win._jobs.values()))
     assert job.input_path == SAMPLE_IMAGE
+
+    win.close()
+    app.processEvents()
+
+
+def test_queue_progress_bars_align_for_different_file_names(app, tmp_path):
+    from app.gui.main_window import MainWindow
+
+    sources = [
+        tmp_path / "a.jpg",
+        tmp_path / "アイコン_緑強め.png",
+        tmp_path / "very-very-long-file-name-that-should-not-push-the-bar.jpg",
+    ]
+    for src in sources:
+        shutil.copy(SAMPLE_IMAGE, src)
+
+    win = MainWindow()
+    win.resize(1360, 780)
+    win.show()
+    app.processEvents()
+
+    win.add_paths([str(src) for src in sources])
+    app.processEvents()
+
+    rows = [win.queue.row(job_id) for job_id in win._order]
+    bar_x = {row._bar.geometry().x() for row in rows if row is not None}
+    bar_widths = {row._bar.geometry().width() for row in rows if row is not None}
+
+    assert len(rows) == 3
+    assert len(bar_x) == 1
+    assert len(bar_widths) == 1
 
     win.close()
     app.processEvents()

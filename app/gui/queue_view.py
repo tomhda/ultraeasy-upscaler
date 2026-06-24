@@ -32,6 +32,8 @@ _KIND_LABEL = {
     JobKind.VIDEO: "動画",
     JobKind.FOLDER: "フォルダ",
 }
+_INFO_COL_WIDTH = 170
+_META_COL_WIDTH = 136
 
 # 状態ごとの表示文言（メッセージが無い場合のフォールバック）
 _STATUS_TEXT = {
@@ -70,29 +72,31 @@ class QueueRow(QFrame):
         self._set_thumb()
         row.addWidget(self._thumb)
 
-        text_col = QVBoxLayout()
+        text_widget = QWidget()
+        text_widget.setObjectName("rowText")
+        text_widget.setFixedWidth(_INFO_COL_WIDTH)
+        text_col = QVBoxLayout(text_widget)
+        text_col.setContentsMargins(0, 0, 0, 0)
         text_col.setSpacing(5)
 
-        top = QHBoxLayout()
-        top.setSpacing(10)
         self._name = QLabel(self.job.name)
         self._name.setObjectName("rowName")
         self._name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        top.addWidget(self._name)
-        self._meta = QLabel()
-        self._meta.setObjectName("rowMeta")
-        top.addWidget(self._meta)
-        top.addStretch(1)
-        text_col.addLayout(top)
+        self._name.setFixedWidth(_INFO_COL_WIDTH)
+        self._name.setToolTip(self.job.name)
+        text_col.addWidget(self._name)
 
         self._status = QLabel()
         self._status.setObjectName("rowStatus")
+        self._status.setFixedWidth(_INFO_COL_WIDTH)
         text_col.addWidget(self._status)
-        row.addLayout(text_col, 0)
+        row.addWidget(text_widget)
 
-        self._workflow = QLabel("分解→拡大→結合")
-        self._workflow.setObjectName("rowWorkflow")
-        row.addWidget(self._workflow)
+        self._meta = QLabel()
+        self._meta.setObjectName("rowMeta")
+        self._meta.setFixedWidth(_META_COL_WIDTH)
+        self._meta.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row.addWidget(self._meta)
 
         self._bar = QProgressBar()
         self._bar.setRange(0, 100)
@@ -138,8 +142,16 @@ class QueueRow(QFrame):
             parts.append(f"{self.job.width}x{self.job.height}")
         return "  ".join(p for p in parts if p)
 
+    def _name_text(self) -> str:
+        return self._name.fontMetrics().elidedText(
+            self.job.name,
+            Qt.TextElideMode.ElideRight,
+            _INFO_COL_WIDTH,
+        )
+
     def refresh(self) -> None:
         """job の現在状態を行に反映する。"""
+        self._name.setText(self._name_text())
         self._meta.setText(self._meta_text())
         pct = int(round(self.job.progress * 100))
         self._bar.setValue(max(0, min(100, pct)))
@@ -147,7 +159,6 @@ class QueueRow(QFrame):
 
         msg = self.job.message or _STATUS_TEXT.get(self.job.status, "")
         self._status.setText(msg)
-        self._workflow.setVisible(self.job.kind == JobKind.VIDEO)
 
         # 状態に応じたツールチップ（出力先・エラー詳細）
         if self.job.status == JobStatus.DONE and self.job.output_path:

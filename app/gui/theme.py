@@ -231,6 +231,9 @@ QFrame#queueRow {{
     border: 1px solid {BORDER};
     border-radius: 7px;
 }}
+QWidget#rowText {{
+    background-color: transparent;
+}}
 QLabel#rowName {{
     color: {TEXT};
     font-size: 17px;
@@ -247,11 +250,6 @@ QLabel#rowMeta {{
 QLabel#rowStatus {{
     color: {TEXT_DIM};
     font-size: 12px;
-}}
-QLabel#rowWorkflow {{
-    color: {TEXT_DIM};
-    font-size: 14px;
-    min-width: 150px;
 }}
 QLabel#rowPercent {{
     color: {ACCENT};
@@ -329,11 +327,6 @@ QFrame#footer {{
 }}
 QLabel#footerIcon {{
     color: #a8b0bc;
-}}
-QLabel#statusDot {{
-    color: #36c451;
-    font-size: 16px;
-    font-weight: 800;
 }}
 """
 

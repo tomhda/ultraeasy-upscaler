@@ -246,13 +246,6 @@ class MainWindow(QWidget):
         row.setContentsMargins(0, 12, 0, 0)
         row.setSpacing(16)
 
-        dot = QLabel("●")
-        dot.setObjectName("statusDot")
-        row.addWidget(dot)
-
-        hint = QLabel("ローカル処理・GPU優先")
-        hint.setObjectName("hint")
-        row.addWidget(hint)
         row.addStretch(1)
 
         self.pause_btn = QPushButton("一時停止")
