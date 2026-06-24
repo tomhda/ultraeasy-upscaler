@@ -7,9 +7,6 @@ from pathlib import Path
 
 from . import media
 from .binaries import repo_root
-from .npu_runner import NpuRealEsrganRunner
-
-
 def _emit_progress(fraction: float, message: str) -> None:
     fraction = max(0.0, min(1.0, fraction))
     print(f"UEU_PROGRESS\t{fraction:.6f}\t{message}", flush=True)
@@ -30,22 +27,38 @@ def _cache_dir() -> Path:
 def _write_image(path: Path, img_bgr) -> None:
     import cv2
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ok = cv2.imwrite(str(path), img_bgr)
+    ext = path.suffix or ".png"
+    ok, encoded = cv2.imencode(ext, img_bgr)
     if not ok:
-        raise RuntimeError(f"画像を書き出せませんでした: {path}")
+        raise RuntimeError(f"画像をエンコードできませんでした: {path}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        encoded.tofile(str(path))
+    except OSError as exc:
+        raise RuntimeError(f"画像を書き出せませんでした: {path}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"画像を書き出せませんでした: {path}") from exc
 
 
 def _read_image(path: Path):
     import cv2
+    import numpy as np
 
-    img_bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    try:
+        data = np.fromfile(str(path), dtype=np.uint8)
+    except OSError as exc:
+        raise RuntimeError(f"画像を読めませんでした: {path}") from exc
+
+    img_bgr = cv2.imdecode(data, cv2.IMREAD_COLOR)
     if img_bgr is None:
         raise RuntimeError(f"画像を読めませんでした: {path}")
     return img_bgr
 
 
-def _build_runner() -> NpuRealEsrganRunner:
+def _build_runner():
+    from .npu_runner import NpuRealEsrganRunner
+
     model = _model_path()
     if not model.exists():
         raise RuntimeError(f"NPU ONNXモデルが見つかりません: {model}")
