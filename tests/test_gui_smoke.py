@@ -17,7 +17,7 @@ import pytest
 
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QLabel
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_IMAGE = REPO_ROOT / "vendor" / "realesrgan" / "input.jpg"
@@ -144,6 +144,48 @@ def test_build_settings_maps_widgets(app):
     assert s.tta_mode is True
     assert s.image_format == "webp"
     assert s.output_location == OutputLocation.SAME  # 既定は「元の場所」
+
+    win.close()
+    app.processEvents()
+
+
+def test_settings_drawer_uses_plain_language(app):
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.drawer.setVisible(True)
+    app.processEvents()
+
+    labels = [w.text() for w in win.drawer.findChildren(QLabel)]
+    checks = [w.text() for w in win.drawer.findChildren(QCheckBox)]
+    combo_items = [
+        child.itemText(i)
+        for child in win.drawer.findChildren(QComboBox)
+        for i in range(child.count())
+    ]
+    visible_text = "\n".join(labels + checks + combo_items)
+
+    assert "動画の保存形式" in labels
+    assert "動画の画質" in labels
+    assert "出力フォルダ名" in labels
+    assert "動画コンテナ" not in visible_text
+    assert "CRF" not in visible_text
+    assert "QP" not in visible_text
+    assert "サブフォルダ" not in visible_text
+    assert "HW" not in visible_text
+    assert "TTA" not in visible_text
+    assert win.drawer.hw_encode.objectName() == "clearCheck"
+    assert win.drawer.hw_encode.isChecked() is True
+    assert win.drawer.tta_mode.isChecked() is False
+
+    win.drawer.tta_mode.setChecked(True)
+    assert win.drawer.tta_mode.isChecked() is True
+
+    idx = win.drawer.video_quality.findData(28)
+    assert idx >= 0
+    win.drawer.video_quality.setCurrentIndex(idx)
+    s = win.build_settings()
+    assert s.video_quality == 28
 
     win.close()
     app.processEvents()

@@ -320,6 +320,22 @@ QCheckBox::indicator:checked {{
     background-color: {ACCENT};
     border-color: {ACCENT};
 }}
+QWidget#toggleWrap {{
+    background-color: transparent;
+}}
+QCheckBox#clearCheck {{
+    background-color: transparent;
+    border: none;
+    color: {TEXT};
+    min-height: 34px;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 600;
+}}
+QCheckBox#clearCheck::indicator {{
+    width: 0;
+    height: 0;
+}}
 
 QFrame#footer {{
     background-color: transparent;
