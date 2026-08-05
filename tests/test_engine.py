@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.core import engine, media, upscaler, video
+from app.core import engine, interpolator, media, upscaler, video
 from app.core.jobs import Job, JobKind
 from app.core.settings import UpscaleBackend, UpscaleSettings
 
@@ -56,3 +56,112 @@ def test_video_forces_vulkan_backend_when_settings_are_npu(monkeypatch, tmp_path
 
     assert out.exists()
     assert seen_backends == [UpscaleBackend.VULKAN]
+
+
+def test_video_can_interpolate_without_upscaling(monkeypatch, tmp_path: Path) -> None:
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"fake")
+    job = Job(input_path=src, kind=JobKind.VIDEO)
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        media, "probe",
+        lambda _path: media.MediaInfo(kind="video", width=16, height=16, fps=30.0),
+    )
+
+    def fake_extract(_src, out_dir, progress=None, cancel=None):
+        Path(out_dir, "frame_00000001.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
+        return 2
+
+    def fake_interpolate(in_dir, out_dir, settings, source_fps, progress=None, cancel=None):
+        calls.append("interpolate")
+        Path(out_dir, "frame_00000001.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000003.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000004.png").write_bytes(b"frame")
+        return 4, 60.0
+
+    def fake_reassemble(frames, _src, out_path, fps, _settings, progress=None, cancel=None):
+        calls.append(f"reassemble:{Path(frames).name}:{fps}")
+        Path(out_path).write_bytes(b"video")
+
+    monkeypatch.setattr(video, "extract_frames", fake_extract)
+    monkeypatch.setattr(interpolator, "interpolate_folder", fake_interpolate)
+    monkeypatch.setattr(
+        upscaler, "upscale_folder",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("upscaler must be skipped")),
+    )
+    monkeypatch.setattr(video, "reassemble", fake_reassemble)
+
+    settings = UpscaleSettings(
+        model=None,
+        interpolation_model="rife-v4.6",
+        output_location=engine.OutputLocation.CUSTOM,
+        output_dir=str(tmp_path),
+        create_subfolder=False,
+    )
+    out = engine.process_job(job, settings)
+
+    assert out.exists()
+    assert calls == ["interpolate", "reassemble:interp:60.0"]
+    assert "RIFE-v4.6_2xfps" in out.name
+
+
+def test_video_runs_interpolation_before_upscaling(monkeypatch, tmp_path: Path) -> None:
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"fake")
+    job = Job(input_path=src, kind=JobKind.VIDEO)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        media, "probe",
+        lambda _path: media.MediaInfo(kind="video", width=16, height=16, fps=30.0),
+    )
+
+    def fake_extract(_src, out_dir, progress=None, cancel=None):
+        Path(out_dir, "frame_00000001.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
+        return 2
+
+    def fake_interpolate(_in, out_dir, *_args, **_kwargs):
+        calls.append("interpolate")
+        Path(out_dir, "frame_00000001.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
+        return 2, 60.0
+
+    def fake_upscale(in_dir, out_dir, *_args, **_kwargs):
+        calls.append(f"upscale:{Path(in_dir).name}")
+        Path(out_dir, "frame_00000001.png").write_bytes(b"frame")
+        Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
+
+    def fake_reassemble(frames, _src, out_path, *_args, **_kwargs):
+        calls.append(f"reassemble:{Path(frames).name}")
+        Path(out_path).write_bytes(b"video")
+
+    monkeypatch.setattr(video, "extract_frames", fake_extract)
+    monkeypatch.setattr(interpolator, "interpolate_folder", fake_interpolate)
+    monkeypatch.setattr(upscaler, "upscale_folder", fake_upscale)
+    monkeypatch.setattr(video, "reassemble", fake_reassemble)
+
+    settings = UpscaleSettings(
+        model="realesr-animevideov3",
+        interpolation_model="rife-v4.6",
+        output_location=engine.OutputLocation.CUSTOM,
+        output_dir=str(tmp_path),
+        create_subfolder=False,
+    )
+    engine.process_job(job, settings)
+    assert calls == ["interpolate", "upscale:interp", "reassemble:up"]
+
+
+def test_video_rejects_no_operations(tmp_path: Path) -> None:
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"fake")
+    job = Job(input_path=src, kind=JobKind.VIDEO)
+    settings = UpscaleSettings(model=None, interpolation_model=None)
+    try:
+        engine.process_job(job, settings)
+    except ValueError as exc:
+        assert "モデル" in str(exc)
+    else:
+        raise AssertionError("no-op video must be rejected")

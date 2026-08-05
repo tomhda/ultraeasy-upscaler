@@ -72,8 +72,9 @@ class QueueWorker(QObject):
                     self.progress.emit(_jid, float(frac), msg or "")
 
                 try:
+                    job_settings = job.settings or self._settings
                     out = engine.process_job(
-                        job, self._settings, progress=_cb, cancel=cancel
+                        job, job_settings, progress=_cb, cancel=cancel
                     )
                     self.job_done.emit(job.id, str(out))
                 except Cancelled:

@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VENDOR = ROOT / "vendor" / "realesrgan"
 MODELS = VENDOR / "models"
+RIFE_VENDOR = ROOT / "vendor" / "rife"
 
 BASE_ZIP_URL = (
     "https://github.com/xinntao/Real-ESRGAN/releases/download/"
@@ -36,6 +37,10 @@ EXTRA_MODELS = [
     "realesr-general-wdn-x4v3.param",
     "realesr-general-wdn-x4v3.bin",
 ]
+RIFE_ZIP_URL = (
+    "https://github.com/nihui/rife-ncnn-vulkan/releases/download/"
+    "20221029/rife-ncnn-vulkan-20221029-windows.zip"
+)
 
 
 def _download(url: str) -> bytes:
@@ -69,6 +74,18 @@ def fetch_extra_models() -> None:
     print(f"models: {MODELS}")
 
 
+def fetch_rife() -> None:
+    candidates = list(RIFE_VENDOR.glob("**/rife-ncnn-vulkan.exe"))
+    if candidates and (candidates[0].parent / "rife-v4.6").is_dir():
+        print("rife: exe + rife-v4.6 あり -> スキップ")
+        return
+    print("rife: RIFE v4.6 一式を取得中…")
+    RIFE_VENDOR.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(_download(RIFE_ZIP_URL))) as zf:
+        zf.extractall(RIFE_VENDOR)
+    print(f"rife: 展開完了 -> {RIFE_VENDOR}")
+
+
 def main() -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -77,12 +94,15 @@ def main() -> int:
     print(f"取得先: {VENDOR}")
     fetch_base()
     fetch_extra_models()
+    fetch_rife()
     exe = VENDOR / "realesrgan-ncnn-vulkan.exe"
     params = sorted(p.stem for p in MODELS.glob("*.param")) if MODELS.exists() else []
     print("\n--- 結果 ---")
     print("exe   :", "OK" if exe.exists() else "なし", f"({exe})")
     print("models:", params)
-    return 0 if exe.exists() else 1
+    rife_ok = any(RIFE_VENDOR.glob("**/rife-v4.6/flownet.param"))
+    print("rife  :", "OK" if rife_ok else "なし")
+    return 0 if exe.exists() and rife_ok else 1
 
 
 if __name__ == "__main__":

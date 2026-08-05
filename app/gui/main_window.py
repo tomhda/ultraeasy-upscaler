@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QThread, QUrl
@@ -40,8 +41,6 @@ from .worker import QueueWorker
 
 # 倍率トグルに出す候補（モデルがサポートする倍率のみ有効化）
 _SCALE_CHOICES = (2, 4)
-# 動画の結合方法（現状は「自動で結合」のみ。将来拡張の余地を残す）
-_VIDEO_MODES = ["自動で結合"]
 _BACKEND_LABELS = {
     UpscaleBackend.VULKAN: "GPU (Vulkan)",
     UpscaleBackend.NPU: "NPU (画像 x4)",
@@ -77,6 +76,7 @@ class MainWindow(QWidget):
         self._scale = 4  # 現在の倍率（既定 4x）
         self._build()
         self._refresh_scale_enabled()
+        self._on_interpolation_changed()
 
     # ------------------------------------------------------------------ UI
     def _build(self) -> None:
@@ -175,8 +175,9 @@ class MainWindow(QWidget):
         scale_wrap.setLayout(scale_box)
         row.addLayout(self._field("倍率", scale_wrap))
 
-        # モデル
+        # アップスケーラーモデル
         self.model_combo = QComboBox()
+        self.model_combo.addItem("なし（拡大しない）", None)
         models = binaries.available_models()
         if models:
             for model in models:
@@ -188,10 +189,24 @@ class MainWindow(QWidget):
                 if idx >= 0:
                     self.model_combo.setCurrentIndex(idx)
         else:
-            self.model_combo.addItem("(モデル未検出)")
-            self.model_combo.setEnabled(False)
-        self.model_combo.currentTextChanged.connect(lambda _t: self._refresh_scale_enabled())
-        row.addLayout(self._field("モデル", self.model_combo), 1)
+            self.model_combo.addItem("モデル未検出", "__missing__")
+            self.model_combo.model().item(self.model_combo.count() - 1).setEnabled(False)
+        self.model_combo.currentIndexChanged.connect(lambda _i: self._refresh_scale_enabled())
+        row.addLayout(self._field("アップスケーラーモデル", self.model_combo), 1)
+
+        # フレーム補間モデル（アップスケールとは独立）
+        self.interpolation_combo = QComboBox()
+        self.interpolation_combo.addItem("なし（補間しない）", None)
+        for model in binaries.available_interpolation_models():
+            label = "RIFE v4.6" if model == "rife-v4.6" else model
+            self.interpolation_combo.addItem(label, model)
+        if self.interpolation_combo.count() == 1:
+            self.interpolation_combo.addItem("モデル未検出", "__missing__")
+            self.interpolation_combo.model().item(1).setEnabled(False)
+        self.interpolation_combo.currentIndexChanged.connect(
+            lambda _i: self._on_interpolation_changed()
+        )
+        row.addLayout(self._field("フレーム補間モデル", self.interpolation_combo), 1)
 
         # 出力先
         self.output_combo = QComboBox()
@@ -199,11 +214,6 @@ class MainWindow(QWidget):
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
         row.addLayout(self._field("出力先", self.output_combo), 1)
-
-        # 動画
-        self.video_combo = QComboBox()
-        self.video_combo.addItems(_VIDEO_MODES)
-        row.addLayout(self._field("動画", self.video_combo), 1)
 
         return panel
 
@@ -285,6 +295,8 @@ class MainWindow(QWidget):
                 job.has_audio = info.has_audio
             except Exception:
                 pass
+        # 現在の2モデル選択をこのファイル専用設定として固定する。
+        job.settings = replace(self.build_settings())
         self._jobs[job.id] = job
         self._order.append(job.id)
         self._cancel_events[job.id] = threading.Event()
@@ -333,6 +345,14 @@ class MainWindow(QWidget):
 
     def _refresh_scale_enabled(self) -> None:
         """選択モデルがサポートする倍率だけ有効化（v2 の 2x/4x トグル）。"""
+        model = self.model_combo.currentData()
+        upscale_enabled = model not in (None, "__missing__")
+        self.backend_combo.setEnabled(upscale_enabled and not self._running)
+        if not upscale_enabled:
+            for btn in self._scale_btns.values():
+                btn.setEnabled(False)
+            return
+
         backend = self._selected_backend()
         if backend == UpscaleBackend.NPU:
             self.model_combo.setEnabled(False)
@@ -341,8 +361,6 @@ class MainWindow(QWidget):
                 btn.setEnabled(s == 4)
             return
 
-        self.model_combo.setEnabled(self.model_combo.currentData() is not None)
-        model = self.model_combo.currentData() or self.model_combo.currentText()
         first_enabled: int | None = None
         for s, btn in self._scale_btns.items():
             try:
@@ -366,6 +384,11 @@ class MainWindow(QWidget):
 
     def _on_backend_changed(self) -> None:
         self._refresh_scale_enabled()
+
+    def _on_interpolation_changed(self) -> None:
+        model = self.interpolation_combo.currentData()
+        enabled = model not in (None, "__missing__")
+        self.drawer.set_interpolation_enabled(enabled)
 
     def _on_output_changed(self, index: int) -> None:
         # index 1 = 「フォルダ選択…」
@@ -394,8 +417,12 @@ class MainWindow(QWidget):
         s = UpscaleSettings()
         s.backend = self._selected_backend()
         s.scale = self._scale
-        if self.model_combo.isEnabled():
-            s.model = self.model_combo.currentData() or self.model_combo.currentText()
+        model = self.model_combo.currentData()
+        s.model = None if model in (None, "__missing__") else str(model)
+        interpolation = self.interpolation_combo.currentData()
+        s.interpolation_model = (
+            None if interpolation in (None, "__missing__") else str(interpolation)
+        )
         # 出力先
         if self.output_combo.currentIndex() == 1 and self._output_dir:
             s.output_location = OutputLocation.CUSTOM
@@ -430,6 +457,17 @@ class MainWindow(QWidget):
             return
 
         settings = self.build_settings()
+        for job in pending:
+            job_settings = job.settings or settings
+            if job.kind == JobKind.VIDEO:
+                if not job_settings.upscale_enabled and not job_settings.interpolation_enabled:
+                    self._flash_hint(
+                        "動画にはアップスケーラーかフレーム補間モデルを選択してください。"
+                    )
+                    return
+            elif not job_settings.upscale_enabled:
+                self._flash_hint("画像にはアップスケーラーモデルを選択してください。")
+                return
         self._pause.clear()
 
         # ワーカーを別スレッドへ
@@ -462,7 +500,7 @@ class MainWindow(QWidget):
         self.pause_btn.setEnabled(running)
         self.pause_btn.setText("一時停止")
         # 実行中は入力系をロック（モデル/倍率/出力先/追加）
-        for w in (self.backend_combo, self.model_combo, self.output_combo, self.video_combo,
+        for w in (self.backend_combo, self.model_combo, self.interpolation_combo, self.output_combo,
                   self.clear_btn, self.output_open_btn, self.settings_btn):
             w.setEnabled(not running)
         for btn in self._scale_btns.values():

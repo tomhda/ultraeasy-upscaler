@@ -27,6 +27,11 @@ _VIDEO_QUALITY_OPTIONS = [
     ("標準", 23),
     ("軽量（容量小）", 28),
 ]
+_TARGET_FPS_OPTIONS = [
+    ("元動画の2倍", None),
+    ("60 fps", 60.0),
+    ("120 fps", 120.0),
+]
 _TILE_OPTIONS = [
     ("自動", 0),
     ("メモリ節約", 128),
@@ -50,6 +55,7 @@ _HELP = {
     "keep_audio": "元動画の音声を、新しく作る動画にも入れます。",
     "tta": "TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。",
     "create_folder": "チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。",
+    "target_fps": "フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。",
 }
 
 
@@ -203,13 +209,13 @@ class SettingsDrawer(QFrame):
         row.addStretch(1)
         return wrap
 
-    def _combo_with_data(self, options: list[tuple[str, int]]) -> QComboBox:
+    def _combo_with_data(self, options: list[tuple[str, object]]) -> QComboBox:
         combo = QComboBox()
         for label, value in options:
             combo.addItem(label, value)
         return combo
 
-    def _set_combo_value(self, combo: QComboBox, value: int) -> None:
+    def _set_combo_value(self, combo: QComboBox, value: object) -> None:
         idx = combo.findData(value)
         combo.setCurrentIndex(idx if idx >= 0 else 0)
 
@@ -261,6 +267,11 @@ class SettingsDrawer(QFrame):
         grid.addWidget(self._label("出力フォルダ名", _HELP["subfolder"]), 2, 2)
         grid.addWidget(self.subfolder_name, 2, 3)
 
+        # --- フレーム補間後のfps ---
+        self.target_fps = self._combo_with_data(_TARGET_FPS_OPTIONS)
+        grid.addWidget(self._label("補間後のfps", _HELP["target_fps"]), 3, 0)
+        grid.addWidget(self.target_fps, 3, 1)
+
         root.addLayout(grid)
 
         # --- トグル群 ---
@@ -293,6 +304,7 @@ class SettingsDrawer(QFrame):
         self._set_combo_value(self.video_quality, s.video_quality)
         self._set_combo_value(self.tile_size, s.tile_size)
         self._set_combo_value(self.gpu_id, s.gpu_id)
+        self._set_combo_value(self.target_fps, s.target_fps)
         self.subfolder_name.setText(s.subfolder_name)
         self.hw_encode.setChecked(s.hw_encode)
         self.keep_audio.setChecked(s.keep_audio)
@@ -307,9 +319,14 @@ class SettingsDrawer(QFrame):
         s.video_quality = int(self.video_quality.currentData())
         s.tile_size = int(self.tile_size.currentData())
         s.gpu_id = int(self.gpu_id.currentData())
+        target = self.target_fps.currentData()
+        s.target_fps = float(target) if target is not None else None
         name = self.subfolder_name.text().strip() or "upscaled"
         s.subfolder_name = name
         s.hw_encode = self.hw_encode.isChecked()
         s.keep_audio = self.keep_audio.isChecked()
         s.tta_mode = self.tta_mode.isChecked()
         s.create_subfolder = self.create_subfolder.isChecked()
+
+    def set_interpolation_enabled(self, enabled: bool) -> None:
+        self.target_fps.setEnabled(enabled)

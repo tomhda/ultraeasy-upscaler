@@ -149,6 +149,58 @@ def test_build_settings_maps_widgets(app):
     app.processEvents()
 
 
+def test_upscale_and_interpolation_models_are_independent(app):
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+
+    win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
+    rife_index = win.interpolation_combo.findData("rife-v4.6")
+    assert rife_index >= 0
+    win.interpolation_combo.setCurrentIndex(rife_index)
+    app.processEvents()
+
+    settings = win.build_settings()
+    assert settings.model is None
+    assert settings.interpolation_model == "rife-v4.6"
+    assert all(not button.isEnabled() for button in win._scale_btns.values())
+    assert win.drawer.target_fps.isEnabled() is True
+
+    win.interpolation_combo.setCurrentIndex(0)
+    app.processEvents()
+    settings = win.build_settings()
+    assert settings.interpolation_model is None
+    assert win.drawer.target_fps.isEnabled() is False
+
+    win.close()
+    app.processEvents()
+
+
+def test_job_keeps_model_settings_selected_when_added(app):
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+    win.model_combo.setCurrentIndex(0)
+    rife_index = win.interpolation_combo.findData("rife-v4.6")
+    assert rife_index >= 0
+    win.interpolation_combo.setCurrentIndex(rife_index)
+
+    ok, _ = win.add_path(str(SAMPLE_IMAGE))
+    assert ok
+    job = next(iter(win._jobs.values()))
+    assert job.settings is not None
+    assert job.settings.model is None
+    assert job.settings.interpolation_model == "rife-v4.6"
+
+    # 追加後に上部UIを変えても、既存ジョブの組み合わせは変わらない。
+    win.interpolation_combo.setCurrentIndex(0)
+    assert job.settings.interpolation_model == "rife-v4.6"
+    win.close()
+    app.processEvents()
+
+
 def test_settings_drawer_explains_specialized_terms(app):
     from app.gui.main_window import MainWindow
 

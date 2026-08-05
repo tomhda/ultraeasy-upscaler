@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,6 +13,9 @@ class BinaryError(RuntimeError):
 
 
 def repo_root() -> Path:
+    # PyInstaller one-folder 版では vendor/ を exe と同じ階層に置く。
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
     # app/core/binaries.py -> リポジトリルート
     return Path(__file__).resolve().parents[2]
 
@@ -35,6 +39,14 @@ def models_dir() -> Path:
 
 
 def _which(name: str) -> str:
+    exe_name = name if name.lower().endswith(".exe") else f"{name}.exe"
+    local_candidates = (
+        repo_root() / "vendor" / "ffmpeg" / "bin" / exe_name,
+        repo_root() / "vendor" / "ffmpeg" / exe_name,
+    )
+    for candidate in local_candidates:
+        if candidate.exists():
+            return str(candidate)
     found = shutil.which(name)
     if found:
         return found
@@ -61,6 +73,44 @@ def available_models() -> list[str]:
     for p in d.glob("*.param"):
         names.add(re.sub(r"-x\d+$", "", p.stem))
     return sorted(names)
+
+
+def rife_exe() -> str:
+    """同梱された rife-ncnn-vulkan.exe を返す。"""
+    base = repo_root() / "vendor" / "rife"
+    candidates = (
+        base / "rife-ncnn-vulkan.exe",
+        base / "rife-ncnn-vulkan-20221029-windows" / "rife-ncnn-vulkan.exe",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    raise BinaryError(
+        "rife-ncnn-vulkan.exe が見つかりません: "
+        f"{base}\nモデル取得スクリプトを実行してください。"
+    )
+
+
+def rife_models_dir() -> Path:
+    return Path(rife_exe()).parent
+
+
+@lru_cache(maxsize=None)
+def available_interpolation_models() -> list[str]:
+    """利用可能なRIFEモデルを列挙する（初期対応はv4.6）。"""
+    try:
+        base = rife_models_dir()
+    except BinaryError:
+        return []
+    supported = ("rife-v4.6",)
+    return [name for name in supported if (base / name).is_dir()]
+
+
+def interpolation_model_dir(model: str) -> Path:
+    path = rife_models_dir() / model
+    if not path.is_dir():
+        raise BinaryError(f"フレーム補間モデルが見つかりません: {path}")
+    return path
 
 
 def model_supports_scale(model: str, scale: int) -> bool:

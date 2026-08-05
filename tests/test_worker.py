@@ -72,3 +72,27 @@ def test_worker_pause_stops_before_processing(monkeypatch, tmp_path):
 
     assert calls == []          # 一時停止中なので未処理
     assert finished == [True]   # それでも queue_finished は必ず出る
+
+
+def test_worker_uses_each_jobs_snapshot_settings(monkeypatch, tmp_path):
+    _ensure_app()
+    seen: list[str | None] = []
+
+    def fake_process(job, settings, progress=None, cancel=None):
+        seen.append(settings.interpolation_model)
+        return tmp_path / f"{job.id}.out"
+
+    monkeypatch.setattr(engine, "process_job", fake_process)
+    source = tmp_path / "a.mp4"
+    source.write_bytes(b"x")
+    j1 = Job(input_path=source, kind=JobKind.VIDEO)
+    j2 = Job(input_path=source, kind=JobKind.VIDEO)
+    j1.settings = UpscaleSettings(model=None, interpolation_model="rife-v4.6")
+    j2.settings = UpscaleSettings(model="realesrgan-x4plus", interpolation_model=None)
+    cancel_events = {j1.id: threading.Event(), j2.id: threading.Event()}
+
+    worker = QueueWorker(
+        [j1, j2], UpscaleSettings(), cancel_events, threading.Event()
+    )
+    worker.run()
+    assert seen == ["rife-v4.6", None]

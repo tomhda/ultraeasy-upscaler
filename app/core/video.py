@@ -102,11 +102,11 @@ def detect_hw_encoder(prefer: str = "auto") -> Optional[str]:
     available = _available_encoders()
 
     if prefer == "hevc":
-        order = _HEVC_CANDIDATES + _H264_CANDIDATES
+        order = _HEVC_CANDIDATES
     elif prefer == "h264":
-        order = _H264_CANDIDATES + _HEVC_CANDIDATES
-    else:  # auto: H.264 を優先（互換性が高い）
-        order = _H264_CANDIDATES + _HEVC_CANDIDATES
+        order = _H264_CANDIDATES
+    else:  # auto: Windows標準再生に必要なH.264だけを選ぶ
+        order = _H264_CANDIDATES
 
     for enc in order:
         if enc not in available:
@@ -295,7 +295,7 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
     # エンコーダ選択
     encoder = "libx264"
     if settings.hw_encode:
-        hw = detect_hw_encoder()
+        hw = detect_hw_encoder("h264")
         if hw:
             encoder = hw
 
@@ -319,8 +319,12 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
         cmd += ["-i", audio_source]
 
     # 映像エンコード設定
+    cmd += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"]
     cmd += _encoder_args(encoder, settings.video_quality)
-    cmd += ["-pix_fmt", "yuv420p", "-r", fps_str]
+    cmd += [
+        "-pix_fmt", "yuv420p", "-r", fps_str,
+        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+    ]
 
     if want_audio:
         # 映像は入力0、音声は入力1からマップ。
@@ -344,8 +348,12 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
                 "-i", in_pattern,
                 "-i", audio_source,
             ]
+            cmd2 += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"]
             cmd2 += _encoder_args(encoder, settings.video_quality)
-            cmd2 += ["-pix_fmt", "yuv420p", "-r", fps_str]
+            cmd2 += [
+                "-pix_fmt", "yuv420p", "-r", fps_str,
+                "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+            ]
             cmd2 += ["-map", "0:v:0", "-map", "1:a:0",
                      "-c:a", "aac", "-b:a", "192k"]
             cmd2 += [str(out), "-progress", "pipe:1", "-nostats"]

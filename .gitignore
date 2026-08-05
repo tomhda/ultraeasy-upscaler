@@ -3,7 +3,12 @@ __pycache__/
 *.pyc
 *.pyo
 /vendor/realesrgan/
+/vendor/rife/
+/vendor/ffmpeg/
 /tmp/
+/portable_build/
+/portable_dist/
+/ultraeasy-upscaler-portable-*.zip
 *.log
 .DS_Store
 Thumbs.db

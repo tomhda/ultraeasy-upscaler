@@ -5,7 +5,10 @@ import itertools
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from .settings import UpscaleSettings
 
 # 進捗コールバック: (fraction 0.0-1.0, 表示メッセージ)
 ProgressCb = Callable[[float, str], None]
@@ -52,6 +55,9 @@ class Job:
     frame_count: Optional[int] = None
     has_audio: bool = False
     size_bytes: int = 0
+
+    # キュー追加時の処理設定。ファイルごとにモデルの組み合わせを保持する。
+    settings: Optional["UpscaleSettings"] = None
 
     # 結果
     output_path: Optional[Path] = None

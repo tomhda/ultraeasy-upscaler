@@ -142,6 +142,14 @@ class QueueRow(QFrame):
             parts.append(f"{self.job.width}x{self.job.height}")
         return "  ".join(p for p in parts if p)
 
+    def _settings_text(self) -> str:
+        settings = self.job.settings
+        if settings is None:
+            return ""
+        upscale = settings.model or "なし"
+        interpolation = settings.interpolation_model or "なし"
+        return f"アップスケール: {upscale}\nフレーム補間: {interpolation}"
+
     def _name_text(self) -> str:
         return self._name.fontMetrics().elidedText(
             self.job.name,
@@ -153,6 +161,7 @@ class QueueRow(QFrame):
         """job の現在状態を行に反映する。"""
         self._name.setText(self._name_text())
         self._meta.setText(self._meta_text())
+        self._meta.setToolTip(self._settings_text())
         pct = int(round(self.job.progress * 100))
         self._bar.setValue(max(0, min(100, pct)))
         self._percent.setText(f"{pct}%")

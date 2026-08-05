@@ -11,7 +11,7 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
-from . import media, upscaler, video
+from . import interpolator, media, upscaler, video
 from .jobs import Cancelled, Job, JobKind, ProgressCb
 from .settings import OutputLocation, UpscaleBackend, UpscaleSettings
 
@@ -79,6 +79,8 @@ def process_job(job: Job, settings: UpscaleSettings,
 
 
 def _process_image(job, settings, progress, cancel) -> Path:
+    if not settings.upscale_enabled:
+        raise ValueError("画像にはアップスケーラーモデルを選択してください。")
     out = _image_output(job, settings)
     tmp = _part_path(out)
     progress(0.0, "アップスケール中…")
@@ -94,6 +96,8 @@ def _process_image(job, settings, progress, cancel) -> Path:
 
 
 def _process_folder(job, settings, progress, cancel) -> Path:
+    if not settings.upscale_enabled:
+        raise ValueError("画像フォルダにはアップスケーラーモデルを選択してください。")
     base = _output_base(job, settings)
     out_dir = base / f"{job.input_path.name}{settings.output_suffix()}"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -105,11 +109,15 @@ def _process_folder(job, settings, progress, cancel) -> Path:
 
 
 def _process_video(job, settings, progress, cancel) -> Path:
+    if not settings.upscale_enabled and not settings.interpolation_enabled:
+        raise ValueError(
+            "アップスケーラーモデルまたはフレーム補間モデルを選択してください。"
+        )
     tmp = Path(tempfile.mkdtemp(prefix="ueu_"))
     src_frames = tmp / "src"
+    interp_frames = tmp / "interp"
     up_frames = tmp / "up"
     src_frames.mkdir()
-    up_frames.mkdir()
     try:
         _check_cancel(cancel)
         progress(0.01, "動画を解析中…")
@@ -123,26 +131,51 @@ def _process_video(job, settings, progress, cancel) -> Path:
             cancel=cancel,
         )
 
-        # 中間フレームは常に PNG に固定する。
-        # 出力形式設定が jpg/webp でも、再結合側は frame_%08d.png 固定で読むため。
-        frame_settings = replace(
-            settings,
-            backend=UpscaleBackend.VULKAN,
-            image_format="png",
-        )
-        progress(0.20, "フレームをアップスケール中…")
-        upscaler.upscale_folder(
-            str(src_frames), str(up_frames), frame_settings,
-            progress=lambda f, m: progress(0.20 + 0.60 * f, m or "アップスケール中…"),
-            cancel=cancel,
-        )
+        current_frames = src_frames
+        output_fps = fps
+
+        # 高解像度へ拡大した後にRIFEへ渡すと、4K→8K等でVRAM/RAM消費が
+        # 極端に増える。両方を選んだ場合は補間→アップスケールの順にする。
+        if settings.interpolation_enabled:
+            interp_frames.mkdir()
+            interp_end = 0.45 if settings.upscale_enabled else 0.80
+            progress(0.20, "RIFEでフレーム補間中…")
+            _count, output_fps = interpolator.interpolate_folder(
+                str(current_frames), str(interp_frames), settings, fps,
+                progress=lambda f, m: progress(
+                    0.20 + (interp_end - 0.20) * f,
+                    m or "RIFEでフレーム補間中…",
+                ),
+                cancel=cancel,
+            )
+            current_frames = interp_frames
+
+        if settings.upscale_enabled:
+            up_frames.mkdir()
+            upscale_start = 0.45 if settings.interpolation_enabled else 0.20
+            # 中間フレームは常に PNG に固定する。
+            frame_settings = replace(
+                settings,
+                backend=UpscaleBackend.VULKAN,
+                image_format="png",
+            )
+            progress(upscale_start, "フレームをアップスケール中…")
+            upscaler.upscale_folder(
+                str(current_frames), str(up_frames), frame_settings,
+                progress=lambda f, m: progress(
+                    upscale_start + (0.80 - upscale_start) * f,
+                    m or "アップスケール中…",
+                ),
+                cancel=cancel,
+            )
+            current_frames = up_frames
 
         out = _video_output(job, settings)
         out_tmp = _part_path(out)
         progress(0.80, "動画を再結合中…")
         try:
             video.reassemble(
-                str(up_frames), str(job.input_path), str(out_tmp), fps, settings,
+                str(current_frames), str(job.input_path), str(out_tmp), output_fps, settings,
                 progress=lambda f, m: progress(0.80 + 0.20 * f, m or "再結合中…"),
                 cancel=cancel,
             )

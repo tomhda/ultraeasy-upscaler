@@ -17,6 +17,7 @@ class UpscaleBackend(str, Enum):
 
 # vendor 同梱の既定モデル
 DEFAULT_MODEL = "realesrgan-x4plus"
+DEFAULT_INTERPOLATION_MODEL = "rife-v4.6"
 
 
 @dataclass
@@ -26,7 +27,8 @@ class UpscaleSettings:
     # --- 基本 ---
     backend: UpscaleBackend = UpscaleBackend.VULKAN     # 実行経路
     scale: int = 4                                   # 倍率: 2 / 3 / 4
-    model: str = DEFAULT_MODEL                       # realesrgan モデル名（-n）
+    # None = アップスケールしない（動画で補間だけ行う場合に使う）
+    model: str | None = DEFAULT_MODEL                # realesrgan モデル名（-n）
     image_format: str = "png"                        # 画像出力形式: png / jpg / webp
 
     # --- 出力先 ---
@@ -48,10 +50,26 @@ class UpscaleSettings:
     video_format: str = "mp4"                        # 出力コンテナ
     video_quality: int = 18                          # 画質(CRF/QP 相当, 小さいほど高画質)
 
-    # --- フレーム補間（フェーズ2の布石・現状未使用） ---
-    interpolate: bool = False
+    # --- フレーム補間 ---
+    # None = 補間しない。target_fps=None のままモデルを選ぶと元fpsの2倍。
+    interpolation_model: str | None = None
     target_fps: float | None = None
 
     def output_suffix(self) -> str:
-        """出力ファイル名に付ける接尾辞（例 "_x4"）。"""
-        return f"_x{self.scale}"
+        """選択した処理を表す出力接尾辞を返す。"""
+        parts: list[str] = []
+        if self.model is not None:
+            parts.append(f"x{self.scale}")
+        if self.interpolation_model is not None:
+            model = self.interpolation_model.replace("rife-", "RIFE-")
+            fps = f"{self.target_fps:g}fps" if self.target_fps else "2xfps"
+            parts.extend((model, fps))
+        return "_" + "_".join(parts) if parts else "_processed"
+
+    @property
+    def upscale_enabled(self) -> bool:
+        return self.model is not None
+
+    @property
+    def interpolation_enabled(self) -> bool:
+        return self.interpolation_model is not None
