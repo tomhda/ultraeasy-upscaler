@@ -13,7 +13,12 @@ from pathlib import Path
 
 from . import interpolator, media, upscaler, video
 from .jobs import Cancelled, Job, JobKind, ProgressCb
-from .settings import OutputLocation, UpscaleBackend, UpscaleSettings
+from .settings import (
+    OutputLocation,
+    ProcessingOrder,
+    UpscaleBackend,
+    UpscaleSettings,
+)
 
 
 def _check_cancel(cancel) -> None:
@@ -134,41 +139,55 @@ def _process_video(job, settings, progress, cancel) -> Path:
         current_frames = src_frames
         output_fps = fps
 
-        # 高解像度へ拡大した後にRIFEへ渡すと、4K→8K等でVRAM/RAM消費が
-        # 極端に増える。両方を選んだ場合は補間→アップスケールの順にする。
-        if settings.interpolation_enabled:
+        def _run_interpolation(start: float, end: float) -> None:
+            nonlocal current_frames, output_fps
             interp_frames.mkdir()
-            interp_end = 0.45 if settings.upscale_enabled else 0.80
-            progress(0.20, "RIFEでフレーム補間中…")
+            progress(start, "RIFEでフレーム補間中…")
             _count, output_fps = interpolator.interpolate_folder(
                 str(current_frames), str(interp_frames), settings, fps,
                 progress=lambda f, m: progress(
-                    0.20 + (interp_end - 0.20) * f,
+                    start + (end - start) * f,
                     m or "RIFEでフレーム補間中…",
                 ),
                 cancel=cancel,
             )
             current_frames = interp_frames
 
-        if settings.upscale_enabled:
+        def _run_upscale(start: float, end: float) -> None:
+            nonlocal current_frames
             up_frames.mkdir()
-            upscale_start = 0.45 if settings.interpolation_enabled else 0.20
             # 中間フレームは常に PNG に固定する。
             frame_settings = replace(
                 settings,
                 backend=UpscaleBackend.VULKAN,
                 image_format="png",
             )
-            progress(upscale_start, "フレームをアップスケール中…")
+            progress(start, "フレームをアップスケール中…")
             upscaler.upscale_folder(
                 str(current_frames), str(up_frames), frame_settings,
                 progress=lambda f, m: progress(
-                    upscale_start + (0.80 - upscale_start) * f,
+                    start + (end - start) * f,
                     m or "アップスケール中…",
                 ),
                 cancel=cancel,
             )
             current_frames = up_frames
+
+        if settings.upscale_enabled and settings.interpolation_enabled:
+            # 既定はアプコン→補間: 重いESRGANの対象を補間前の元フレーム数に
+            # 抑えられるため合計時間が短い。拡大後の高解像度フレームをRIFEに
+            # 渡すとVRAM/RAM消費が増えるため、省メモリ順（補間→アプコン）も
+            # processing_order で選択できる。
+            if settings.processing_order == ProcessingOrder.INTERPOLATE_FIRST:
+                _run_interpolation(0.20, 0.45)
+                _run_upscale(0.45, 0.80)
+            else:
+                _run_upscale(0.20, 0.65)
+                _run_interpolation(0.65, 0.80)
+        elif settings.interpolation_enabled:
+            _run_interpolation(0.20, 0.80)
+        elif settings.upscale_enabled:
+            _run_upscale(0.20, 0.80)
 
         out = _video_output(job, settings)
         out_tmp = _part_path(out)

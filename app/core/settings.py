@@ -15,6 +15,13 @@ class UpscaleBackend(str, Enum):
     NPU = "npu"        # Ryzen AI NPU (VitisAI EP)
 
 
+class ProcessingOrder(str, Enum):
+    """動画でアップスケールと補間を両方行う場合の実行順。"""
+
+    UPSCALE_FIRST = "upscale_first"          # アプコン → 補間（速い・既定）
+    INTERPOLATE_FIRST = "interpolate_first"  # 補間 → アプコン（省メモリ）
+
+
 # vendor 同梱の既定モデル
 DEFAULT_MODEL = "realesrgan-x4plus"
 DEFAULT_INTERPOLATION_MODEL = "rife-v4.6"
@@ -54,6 +61,10 @@ class UpscaleSettings:
     # None = 補間しない。target_fps=None のままモデルを選ぶと元fpsの2倍。
     interpolation_model: str | None = None
     target_fps: float | None = None
+    # 両方有効時の実行順。重いESRGANを補間前の元フレーム数に抑えられる
+    # UPSCALE_FIRST が既定。高解像度出力でメモリが厳しい場合は
+    # INTERPOLATE_FIRST を選ぶ。
+    processing_order: ProcessingOrder = ProcessingOrder.UPSCALE_FIRST
 
     def output_suffix(self) -> str:
         """選択した処理を表す出力接尾辞を返す。"""

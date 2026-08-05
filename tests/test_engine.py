@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.core import engine, interpolator, media, upscaler, video
 from app.core.jobs import Job, JobKind
-from app.core.settings import UpscaleBackend, UpscaleSettings
+from app.core.settings import ProcessingOrder, UpscaleBackend, UpscaleSettings
 
 
 def test_video_forces_vulkan_backend_when_settings_are_npu(monkeypatch, tmp_path: Path) -> None:
@@ -108,7 +108,8 @@ def test_video_can_interpolate_without_upscaling(monkeypatch, tmp_path: Path) ->
     assert "RIFE-v4.6_2xfps" in out.name
 
 
-def test_video_runs_interpolation_before_upscaling(monkeypatch, tmp_path: Path) -> None:
+def _run_both_stages(monkeypatch, tmp_path: Path, **settings_kwargs) -> list[str]:
+    """アプコン+補間の両方を有効にした動画ジョブを実行し、呼び出し順を返す。"""
     src = tmp_path / "clip.mp4"
     src.write_bytes(b"fake")
     job = Job(input_path=src, kind=JobKind.VIDEO)
@@ -123,8 +124,8 @@ def test_video_runs_interpolation_before_upscaling(monkeypatch, tmp_path: Path) 
         Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
         return 2
 
-    def fake_interpolate(_in, out_dir, *_args, **_kwargs):
-        calls.append("interpolate")
+    def fake_interpolate(in_dir, out_dir, *_args, **_kwargs):
+        calls.append(f"interpolate:{Path(in_dir).name}")
         Path(out_dir, "frame_00000001.png").write_bytes(b"frame")
         Path(out_dir, "frame_00000002.png").write_bytes(b"frame")
         return 2, 60.0
@@ -149,9 +150,23 @@ def test_video_runs_interpolation_before_upscaling(monkeypatch, tmp_path: Path) 
         output_location=engine.OutputLocation.CUSTOM,
         output_dir=str(tmp_path),
         create_subfolder=False,
+        **settings_kwargs,
     )
     engine.process_job(job, settings)
-    assert calls == ["interpolate", "upscale:interp", "reassemble:up"]
+    return calls
+
+
+def test_video_defaults_to_upscale_then_interpolation(monkeypatch, tmp_path: Path) -> None:
+    calls = _run_both_stages(monkeypatch, tmp_path)
+    assert calls == ["upscale:src", "interpolate:up", "reassemble:interp"]
+
+
+def test_video_can_interpolate_before_upscaling(monkeypatch, tmp_path: Path) -> None:
+    calls = _run_both_stages(
+        monkeypatch, tmp_path,
+        processing_order=ProcessingOrder.INTERPOLATE_FIRST,
+    )
+    assert calls == ["interpolate:src", "upscale:interp", "reassemble:up"]
 
 
 def test_video_rejects_no_operations(tmp_path: Path) -> None:

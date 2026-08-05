@@ -60,7 +60,17 @@ class MainWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("ultraeasy-upscaler")
-        self.resize(1360, 780)
+        # 小さい画面（1366x768 や 1080p@125% 等）でもはみ出さないよう、
+        # 起動サイズは利用可能領域にクランプする
+        screen = QApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            self.resize(
+                min(1360, avail.width() - 80),
+                min(820, avail.height() - 80),
+            )
+        else:
+            self.resize(1360, 780)
 
         # ジョブ管理
         self._jobs: dict[int, Job] = {}
@@ -80,7 +90,15 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------------ UI
     def _build(self) -> None:
-        root = QVBoxLayout(self)
+        # ドロワー展開などで中身がウィンドウより高くなっても操作不能に
+        # ならないよう、ページ全体を QScrollArea で包む。
+        # QScrollArea は中身の最小サイズをウィンドウへ伝播しないため、
+        # 小さい画面でも溢れた分にスクロールで到達できる。
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        page = QWidget()
+        root = QVBoxLayout(page)
         root.setContentsMargins(20, 16, 20, 16)
         root.setSpacing(12)
 
@@ -98,6 +116,12 @@ class MainWindow(QWidget):
         root.addWidget(self.drawer)
 
         root.addWidget(self._build_footer())
+
+        page_scroll = QScrollArea()
+        page_scroll.setWidgetResizable(True)
+        page_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        page_scroll.setWidget(page)
+        outer.addWidget(page_scroll)
 
     def _build_header(self) -> QFrame:
         header = QFrame()
@@ -145,6 +169,15 @@ class MainWindow(QWidget):
         box.addWidget(widget)
         return box
 
+    @staticmethod
+    def _compact(combo: QComboBox) -> QComboBox:
+        """最長項目でなく一定幅を最小とし、5フィールド横並びでも収まるようにする。"""
+        combo.setMinimumContentsLength(8)
+        combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        return combo
+
     def _build_controls(self) -> QFrame:
         panel = QFrame()
         panel.setObjectName("controlPanel")
@@ -156,7 +189,7 @@ class MainWindow(QWidget):
         for backend, label in _BACKEND_LABELS.items():
             self.backend_combo.addItem(label, backend.value)
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
-        row.addLayout(self._field("処理", self.backend_combo))
+        row.addLayout(self._field("処理", self._compact(self.backend_combo)))
 
         # 倍率トグル（2x / 4x）
         scale_box = QHBoxLayout()
@@ -192,7 +225,7 @@ class MainWindow(QWidget):
             self.model_combo.addItem("モデル未検出", "__missing__")
             self.model_combo.model().item(self.model_combo.count() - 1).setEnabled(False)
         self.model_combo.currentIndexChanged.connect(lambda _i: self._refresh_scale_enabled())
-        row.addLayout(self._field("アップスケーラーモデル", self.model_combo), 1)
+        row.addLayout(self._field("アップスケーラーモデル", self._compact(self.model_combo)), 1)
 
         # フレーム補間モデル（アップスケールとは独立）
         self.interpolation_combo = QComboBox()
@@ -206,14 +239,14 @@ class MainWindow(QWidget):
         self.interpolation_combo.currentIndexChanged.connect(
             lambda _i: self._on_interpolation_changed()
         )
-        row.addLayout(self._field("フレーム補間モデル", self.interpolation_combo), 1)
+        row.addLayout(self._field("フレーム補間モデル", self._compact(self.interpolation_combo)), 1)
 
         # 出力先
         self.output_combo = QComboBox()
         self.output_combo.addItems(["元の場所", "フォルダ選択…"])
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
-        row.addLayout(self._field("出力先", self.output_combo), 1)
+        row.addLayout(self._field("出力先", self._compact(self.output_combo)), 1)
 
         return panel
 
@@ -246,6 +279,10 @@ class MainWindow(QWidget):
         scroll.setWidget(self.queue)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         lay.addWidget(scroll, 1)
+
+        # ページ全体を QScrollArea に入れた場合、stretch だけでは sizeHint の
+        # 高さまで潰れるため、キュー一覧の実用最小高を確保する
+        card.setMinimumHeight(260)
 
         return card
 

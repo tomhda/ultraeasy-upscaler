@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.settings import UpscaleSettings
+from app.core.settings import ProcessingOrder, UpscaleSettings
 
 _IMAGE_FORMATS = ["png", "jpg", "webp"]
 # mp4/mkv/mov は H.264(+AAC) を収容できる。webm は VP9/Opus が必要で
@@ -31,6 +31,10 @@ _TARGET_FPS_OPTIONS = [
     ("元動画の2倍", None),
     ("60 fps", 60.0),
     ("120 fps", 120.0),
+]
+_PROCESSING_ORDER_OPTIONS = [
+    ("アプコン → 補間（速い）", ProcessingOrder.UPSCALE_FIRST.value),
+    ("補間 → アプコン（省メモリ）", ProcessingOrder.INTERPOLATE_FIRST.value),
 ]
 _TILE_OPTIONS = [
     ("自動", 0),
@@ -56,6 +60,7 @@ _HELP = {
     "tta": "TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。",
     "create_folder": "チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。",
     "target_fps": "フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。",
+    "processing_order": "アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。",
 }
 
 
@@ -272,6 +277,11 @@ class SettingsDrawer(QFrame):
         grid.addWidget(self._label("補間後のfps", _HELP["target_fps"]), 3, 0)
         grid.addWidget(self.target_fps, 3, 1)
 
+        # --- 処理の順番（アプコン×補間 併用時） ---
+        self.processing_order = self._combo_with_data(_PROCESSING_ORDER_OPTIONS)
+        grid.addWidget(self._label("処理の順番", _HELP["processing_order"]), 3, 2)
+        grid.addWidget(self.processing_order, 3, 3)
+
         root.addLayout(grid)
 
         # --- トグル群 ---
@@ -305,6 +315,7 @@ class SettingsDrawer(QFrame):
         self._set_combo_value(self.tile_size, s.tile_size)
         self._set_combo_value(self.gpu_id, s.gpu_id)
         self._set_combo_value(self.target_fps, s.target_fps)
+        self._set_combo_value(self.processing_order, s.processing_order.value)
         self.subfolder_name.setText(s.subfolder_name)
         self.hw_encode.setChecked(s.hw_encode)
         self.keep_audio.setChecked(s.keep_audio)
@@ -321,6 +332,7 @@ class SettingsDrawer(QFrame):
         s.gpu_id = int(self.gpu_id.currentData())
         target = self.target_fps.currentData()
         s.target_fps = float(target) if target is not None else None
+        s.processing_order = ProcessingOrder(self.processing_order.currentData())
         name = self.subfolder_name.text().strip() or "upscaled"
         s.subfolder_name = name
         s.hw_encode = self.hw_encode.isChecked()
@@ -330,3 +342,5 @@ class SettingsDrawer(QFrame):
 
     def set_interpolation_enabled(self, enabled: bool) -> None:
         self.target_fps.setEnabled(enabled)
+        # 順番は補間とアプコンの併用時のみ意味を持つ
+        self.processing_order.setEnabled(enabled)
