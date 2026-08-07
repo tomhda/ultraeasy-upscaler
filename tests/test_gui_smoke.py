@@ -177,12 +177,14 @@ def test_upscale_and_interpolation_models_are_independent(app):
     app.processEvents()
 
 
-def test_job_keeps_model_settings_selected_when_added(app):
+def test_job_settings_apply_at_start_not_at_add(app):
+    """設定は追加時ではなく「開始」時点のUI値が全保留ジョブへ適用される。"""
+    from app.core.settings import DEFAULT_MODEL
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
-    win.model_combo.setCurrentIndex(0)
+    win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
     rife_index = win.interpolation_combo.findData("rife-v4.6")
     assert rife_index >= 0
     win.interpolation_combo.setCurrentIndex(rife_index)
@@ -190,13 +192,44 @@ def test_job_keeps_model_settings_selected_when_added(app):
     ok, _ = win.add_path(str(SAMPLE_IMAGE))
     assert ok
     job = next(iter(win._jobs.values()))
-    assert job.settings is not None
-    assert job.settings.model is None
-    assert job.settings.interpolation_model == "rife-v4.6"
+    # 追加時点では固定されない
+    assert job.settings is None
 
-    # 追加後に上部UIを変えても、既存ジョブの組み合わせは変わらない。
+    # 追加後にUIを変更 → 開始時の適用でその値になる
+    model_index = win.model_combo.findData(DEFAULT_MODEL)
+    assert model_index >= 0
+    win.model_combo.setCurrentIndex(model_index)
     win.interpolation_combo.setCurrentIndex(0)
-    assert job.settings.interpolation_model == "rife-v4.6"
+    app.processEvents()
+
+    win._apply_current_settings(win._pending_jobs())
+    assert job.settings is not None
+    assert job.settings.model == DEFAULT_MODEL
+    assert job.settings.interpolation_model is None
+    win.close()
+    app.processEvents()
+
+
+def test_model_combo_reenabled_after_leaving_npu(app):
+    """NPUでモデル選択が無効化されても、GPUに戻すと再度選べる。"""
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+
+    npu = win.backend_combo.findData(UpscaleBackend.NPU.value)
+    assert npu >= 0
+    win.backend_combo.setCurrentIndex(npu)
+    app.processEvents()
+    assert win.model_combo.isEnabled() is False
+
+    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+    assert vulkan >= 0
+    win.backend_combo.setCurrentIndex(vulkan)
+    app.processEvents()
+    assert win.model_combo.isEnabled() is True
+
     win.close()
     app.processEvents()
 

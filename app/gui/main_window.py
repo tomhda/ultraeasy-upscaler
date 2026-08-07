@@ -189,6 +189,10 @@ class MainWindow(QWidget):
         for backend, label in _BACKEND_LABELS.items():
             self.backend_combo.addItem(label, backend.value)
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
+        self.backend_combo.setToolTip(
+            "NPUは画像の4倍拡大専用です。\n"
+            "動画のフレーム拡大は、NPU選択時でも常にGPU (Vulkan) で処理されます。"
+        )
         row.addLayout(self._field("処理", self._compact(self.backend_combo)))
 
         # 倍率トグル（2x / 4x）
@@ -332,8 +336,8 @@ class MainWindow(QWidget):
                 job.has_audio = info.has_audio
             except Exception:
                 pass
-        # 現在の2モデル選択をこのファイル専用設定として固定する。
-        job.settings = replace(self.build_settings())
+        # 設定はここでは固定しない。「開始」時点のUI設定が全保留ジョブに
+        # 一括適用される（追加後にモデルを変えても反映されるように）。
         self._jobs[job.id] = job
         self._order.append(job.id)
         self._cancel_events[job.id] = threading.Event()
@@ -385,6 +389,9 @@ class MainWindow(QWidget):
         model = self.model_combo.currentData()
         upscale_enabled = model not in (None, "__missing__")
         self.backend_combo.setEnabled(upscale_enabled and not self._running)
+        # NPU選択中以外は常にモデルを選び直せるようにする
+        # （NPU分岐で無効化したままGPUに戻しても復帰しない事故の防止）
+        self.model_combo.setEnabled(not self._running)
         if not upscale_enabled:
             for btn in self._scale_btns.values():
                 btn.setEnabled(False)
@@ -485,6 +492,14 @@ class MainWindow(QWidget):
                     out.append(job)
         return out
 
+    def _apply_current_settings(self, pending: list[Job]) -> UpscaleSettings:
+        """開始時点のUI設定を保留ジョブすべてに適用して返す。"""
+        settings = self.build_settings()
+        for job in pending:
+            job.settings = replace(settings)
+            self.queue.refresh(job.id)
+        return settings
+
     def _on_start(self) -> None:
         if self._running:
             return
@@ -493,18 +508,23 @@ class MainWindow(QWidget):
             self._flash_hint("処理するジョブがありません。")
             return
 
-        settings = self.build_settings()
-        for job in pending:
-            job_settings = job.settings or settings
-            if job.kind == JobKind.VIDEO:
-                if not job_settings.upscale_enabled and not job_settings.interpolation_enabled:
-                    self._flash_hint(
-                        "動画にはアップスケーラーかフレーム補間モデルを選択してください。"
-                    )
-                    return
-            elif not job_settings.upscale_enabled:
-                self._flash_hint("画像にはアップスケーラーモデルを選択してください。")
-                return
+        settings = self._apply_current_settings(pending)
+        kinds = {job.kind for job in pending}
+        if kinds & {JobKind.IMAGE, JobKind.FOLDER} and not settings.upscale_enabled:
+            self._flash_hint("画像にはアップスケーラーモデルを選択してください。")
+            return
+        if (JobKind.VIDEO in kinds and not settings.upscale_enabled
+                and not settings.interpolation_enabled):
+            self._flash_hint(
+                "動画にはアップスケーラーかフレーム補間モデルを選択してください。"
+            )
+            return
+        if (JobKind.VIDEO in kinds and settings.upscale_enabled
+                and settings.backend == UpscaleBackend.NPU):
+            # エンジン側で動画のフレーム拡大は常に Vulkan に強制される
+            self._flash_hint(
+                "NPUは画像専用のため、動画のフレーム拡大はGPU (Vulkan)で処理します。"
+            )
         self._pause.clear()
 
         # ワーカーを別スレッドへ
