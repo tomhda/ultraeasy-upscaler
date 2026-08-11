@@ -38,6 +38,48 @@ def models_dir() -> Path:
     return realesrgan_dir() / "models"
 
 
+def npu_dir() -> Path:
+    return repo_root() / "vendor" / "amd-npu"
+
+
+def npu_models_dir() -> Path:
+    return npu_dir() / "onnx-models"
+
+
+def npu_cache_dir() -> Path:
+    # VitisAI EP の modelcachekey_* フォルダは ONNX と同じ vendor/amd-npu 直下
+    return npu_dir()
+
+
+# NPU対応モデルのレジストリ。キーは Vulkan 側と同じモデル名（settings.model）。
+# 値は (ONNXファイル名, sr_scale)。ONNXの stem がそのままキャッシュキーになる
+# （modelcachekey_<stem>/ を隣に置くこと）。
+NPU_MODELS: dict[str, tuple[str, int]] = {
+    "realesrgan-x4plus": ("realesrgan_nchw_256x256_u8s8.onnx", 4),
+    "realesr-animevideov3": ("animevideov3_nchw_256x256_u8s8.onnx", 4),
+}
+DEFAULT_NPU_MODEL = "realesrgan-x4plus"
+
+
+@lru_cache(maxsize=None)
+def available_npu_models() -> list[str]:
+    """ONNX が実在するNPU対応モデル名の一覧。"""
+    d = npu_models_dir()
+    return [name for name, (fname, _s) in NPU_MODELS.items() if (d / fname).exists()]
+
+
+def npu_model_spec(model: str | None) -> tuple[Path, int]:
+    """モデル名から (ONNXパス, sr_scale) を返す。未対応名は BinaryError。"""
+    key = model or DEFAULT_NPU_MODEL
+    if key not in NPU_MODELS:
+        raise BinaryError(
+            f"モデル '{key}' はNPUバックエンドに対応していません。"
+            "GPU (Vulkan) を選ぶか、NPU対応モデルに切り替えてください。"
+        )
+    fname, scale = NPU_MODELS[key]
+    return npu_models_dir() / fname, scale
+
+
 def _which(name: str) -> str:
     exe_name = name if name.lower().endswith(".exe") else f"{name}.exe"
     local_candidates = (

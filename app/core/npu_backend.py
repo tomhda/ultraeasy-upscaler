@@ -41,6 +41,11 @@ def _conda_exe() -> str:
 def _check_npu_settings(settings: UpscaleSettings) -> None:
     if int(settings.scale) != 4:
         raise ValueError("NPU backend は現在 x4 のみ対応です。倍率を 4x にしてください。")
+    # conda 起動（数秒）前に未対応モデルを弾く。BinaryError を ValueError として上げる
+    try:
+        binaries.npu_model_spec(settings.model)
+    except binaries.BinaryError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _fmt(value: str) -> str:
@@ -142,6 +147,7 @@ def upscale_image(
         "--input", in_path,
         "--output", out_path,
         "--image-format", _fmt(out.suffix.lstrip(".") or settings.image_format),
+        "--model", settings.model or binaries.DEFAULT_NPU_MODEL,
     ], progress, cancel)
 
     if not out.exists():
@@ -173,6 +179,7 @@ def upscale_folder(
         "--input", in_dir,
         "--output", out_dir,
         "--image-format", _fmt(settings.image_format),
+        "--model", settings.model or binaries.DEFAULT_NPU_MODEL,
     ], progress, cancel)
 
     done = sum(

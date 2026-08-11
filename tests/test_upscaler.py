@@ -202,3 +202,16 @@ def test_upscale_folder_npu_dispatch(monkeypatch, tmp_path: Path) -> None:
 
     assert len(calls) == 1
     assert calls[0][2].backend == UpscaleBackend.NPU
+
+
+def test_npu_rejects_unsupported_model(tmp_path: Path) -> None:
+    """NPU非対応モデルは conda 起動前に ValueError で弾かれる。"""
+    from app.core import npu_backend
+
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.NPU, scale=4, model="realesr-general-x4v3"
+    )
+    with pytest.raises(ValueError, match="NPU"):
+        npu_backend.upscale_image(
+            str(tmp_path / "a.png"), str(tmp_path / "b.png"), settings
+        )

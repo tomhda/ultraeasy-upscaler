@@ -5,23 +5,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import media
-from .binaries import repo_root
+from . import binaries, media
+
+
 def _emit_progress(fraction: float, message: str) -> None:
     fraction = max(0.0, min(1.0, fraction))
     print(f"UEU_PROGRESS\t{fraction:.6f}\t{message}", flush=True)
-
-
-def _npu_root() -> Path:
-    return repo_root() / "vendor" / "amd-npu"
-
-
-def _model_path() -> Path:
-    return _npu_root() / "onnx-models" / "realesrgan_nchw_256x256_u8s8.onnx"
-
-
-def _cache_dir() -> Path:
-    return _npu_root()
 
 
 def _write_image(path: Path, img_bgr) -> None:
@@ -56,17 +45,26 @@ def _read_image(path: Path):
     return img_bgr
 
 
-def _build_runner():
+def _build_runner(model_name: str | None):
     from .npu_runner import NpuRealEsrganRunner
 
-    model = _model_path()
+    model, sr_scale = binaries.npu_model_spec(model_name)
     if not model.exists():
-        raise RuntimeError(f"NPU ONNXモデルが見つかりません: {model}")
-    return NpuRealEsrganRunner(model, _cache_dir(), sr_scale=4, tile_overlap=16)
+        raise RuntimeError(
+            f"NPU ONNXモデルが見つかりません ({model_name or 'default'}): {model}"
+        )
+    cache = binaries.npu_cache_dir() / f"modelcachekey_{model.stem}"
+    if not cache.is_dir():
+        # キャッシュ不在でも動くが、初回はVitisAI EPの再コンパイルで数分かかる
+        print(f"NPU compile cache not found: {cache} (first run will be slow)",
+              flush=True)
+    return NpuRealEsrganRunner(
+        model, binaries.npu_cache_dir(), sr_scale=sr_scale, tile_overlap=16
+    )
 
 
-def _run_image(input_path: Path, output_path: Path) -> None:
-    runner = _build_runner()
+def _run_image(input_path: Path, output_path: Path, model_name: str | None) -> None:
+    runner = _build_runner(model_name)
     _emit_progress(0.01, "画像を読み込み中…")
     img_bgr = _read_image(input_path)
     sr_bgr = runner.run(img_bgr, _emit_progress)
@@ -75,8 +73,9 @@ def _run_image(input_path: Path, output_path: Path) -> None:
     _emit_progress(1.0, "完了")
 
 
-def _run_folder(input_dir: Path, output_dir: Path, image_format: str) -> None:
-    runner = _build_runner()
+def _run_folder(input_dir: Path, output_dir: Path, image_format: str,
+                model_name: str | None) -> None:
+    runner = _build_runner(model_name)
     images = [
         p for p in sorted(input_dir.iterdir())
         if p.is_file() and p.suffix.lower() in media.IMAGE_EXTS
@@ -111,15 +110,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--image-format", default="png", choices=["png", "jpg", "webp"])
+    # choices は付けない: 未対応名は binaries.npu_model_spec の日本語エラーで返す
+    parser.add_argument("--model", default=None)
     args = parser.parse_args(argv)
 
     try:
         input_path = Path(args.input)
         output_path = Path(args.output)
         if args.mode == "image":
-            _run_image(input_path, output_path)
+            _run_image(input_path, output_path, args.model)
         else:
-            _run_folder(input_path, output_path, args.image_format)
+            _run_folder(input_path, output_path, args.image_format, args.model)
     except Exception as exc:
         print(f"UEU_ERROR\t{exc}", file=sys.stderr, flush=True)
         return 1

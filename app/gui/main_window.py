@@ -43,7 +43,7 @@ from .worker import QueueWorker
 _SCALE_CHOICES = (2, 4)
 _BACKEND_LABELS = {
     UpscaleBackend.VULKAN: "GPU (Vulkan)",
-    UpscaleBackend.NPU: "NPU (画像 x4)",
+    UpscaleBackend.NPU: "NPU (x4)",
 }
 _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
@@ -190,7 +190,8 @@ class MainWindow(QWidget):
             self.backend_combo.addItem(label, backend.value)
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
         self.backend_combo.setToolTip(
-            "NPUはRyzen AI専用モデルによる4倍拡大です（モデル・倍率は固定）。\n"
+            "NPUはRyzen AIによる4倍拡大です（倍率は4x固定）。\n"
+            "モデルはNPU対応のもののみ選択できます。\n"
             "画像も動画のフレーム拡大もNPUで処理されます。"
         )
         row.addLayout(self._field("処理", self._compact(self.backend_combo)))
@@ -399,11 +400,14 @@ class MainWindow(QWidget):
 
         backend = self._selected_backend()
         if backend == UpscaleBackend.NPU:
-            self.model_combo.setEnabled(False)
+            self._apply_npu_model_filter(True)
             self._set_scale(4)
             for s, btn in self._scale_btns.items():
                 btn.setEnabled(s == 4)
             return
+
+        # GPUに戻ったら全モデルを再有効化（忘れると無効のまま残る）
+        self._apply_npu_model_filter(False)
 
         first_enabled: int | None = None
         for s, btn in self._scale_btns.items():
@@ -418,6 +422,32 @@ class MainWindow(QWidget):
         cur_btn = self._scale_btns.get(self._scale)
         if cur_btn is not None and not cur_btn.isEnabled() and first_enabled is not None:
             self._set_scale(first_enabled)
+
+    def _apply_npu_model_filter(self, npu: bool) -> None:
+        """NPU選択中はNPU対応モデルのみ選択可能にする（コンボ自体は有効のまま）。"""
+        combo = self.model_combo
+        supported = set(binaries.available_npu_models())
+        item_model = combo.model()
+        for i in range(combo.count()):
+            data = combo.itemData(i)
+            if data == "__missing__":
+                continue  # 常に無効のプレースホルダ
+            item = item_model.item(i)
+            if item is None:
+                continue
+            if data is None:
+                item.setEnabled(True)  # 「なし」は補間のみ運用のため常に選べる
+            else:
+                item.setEnabled(not npu or data in supported)
+        # NPUで非対応モデルが選択中なら既定NPUモデルへ寄せる
+        cur = combo.currentData()
+        if npu and cur is not None and cur != "__missing__" and cur not in supported:
+            idx = combo.findData(binaries.DEFAULT_NPU_MODEL)
+            if idx >= 0:
+                # currentIndexChanged→_refresh_scale_enabled の再帰を防ぐ
+                combo.blockSignals(True)
+                combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
 
     def _selected_backend(self) -> UpscaleBackend:
         value = self.backend_combo.currentData() if hasattr(self, "backend_combo") else None

@@ -210,8 +210,9 @@ def test_job_settings_apply_at_start_not_at_add(app):
     app.processEvents()
 
 
-def test_model_combo_reenabled_after_leaving_npu(app):
-    """NPUでモデル選択が無効化されても、GPUに戻すと再度選べる。"""
+def test_model_combo_filters_npu_supported_models(app):
+    """NPU選択中もコンボは有効のまま、非対応モデルの項目だけ無効になる。"""
+    from app.core import binaries
     from app.core.settings import UpscaleBackend
     from app.gui.main_window import MainWindow
 
@@ -222,13 +223,29 @@ def test_model_combo_reenabled_after_leaving_npu(app):
     assert npu >= 0
     win.backend_combo.setCurrentIndex(npu)
     app.processEvents()
-    assert win.model_combo.isEnabled() is False
+
+    assert win.model_combo.isEnabled() is True
+    supported = set(binaries.available_npu_models())
+    assert binaries.DEFAULT_NPU_MODEL in supported
+    item_model = win.model_combo.model()
+    for i in range(win.model_combo.count()):
+        data = win.model_combo.itemData(i)
+        if data in (None, "__missing__"):
+            continue
+        assert item_model.item(i).isEnabled() == (data in supported)
+    # 選択は必ずNPU対応モデルに寄る
+    assert win.model_combo.currentData() in supported
 
     vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
     assert vulkan >= 0
     win.backend_combo.setCurrentIndex(vulkan)
     app.processEvents()
     assert win.model_combo.isEnabled() is True
+    for i in range(win.model_combo.count()):
+        data = win.model_combo.itemData(i)
+        if data in (None, "__missing__"):
+            continue
+        assert item_model.item(i).isEnabled() is True
 
     win.close()
     app.processEvents()
