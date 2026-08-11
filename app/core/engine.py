@@ -16,7 +16,6 @@ from .jobs import Cancelled, Job, JobKind, ProgressCb
 from .settings import (
     OutputLocation,
     ProcessingOrder,
-    UpscaleBackend,
     UpscaleSettings,
 )
 
@@ -156,10 +155,10 @@ def _process_video(job, settings, progress, cancel) -> Path:
         def _run_upscale(start: float, end: float) -> None:
             nonlocal current_frames
             up_frames.mkdir()
-            # 中間フレームは常に PNG に固定する。
+            # 中間フレームは常に PNG に固定する。バックエンドは選択どおり
+            # （NPU選択時は動画フレームもNPUで処理する）。
             frame_settings = replace(
                 settings,
-                backend=UpscaleBackend.VULKAN,
                 image_format="png",
             )
             progress(start, "フレームをアップスケール中…")

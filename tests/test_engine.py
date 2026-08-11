@@ -8,8 +8,8 @@ from app.core.jobs import Job, JobKind
 from app.core.settings import ProcessingOrder, UpscaleBackend, UpscaleSettings
 
 
-def test_video_forces_vulkan_backend_when_settings_are_npu(monkeypatch, tmp_path: Path) -> None:
-    """動画は当面NPU非対応なので、フレーム拡大時はVulkanへ戻す。"""
+def test_video_keeps_npu_backend_for_frames(monkeypatch, tmp_path: Path) -> None:
+    """NPU選択時は動画のフレーム拡大もNPUで処理される。"""
     src = tmp_path / "clip.mp4"
     src.write_bytes(b"fake")
     job = Job(input_path=src, kind=JobKind.VIDEO)
@@ -55,7 +55,7 @@ def test_video_forces_vulkan_backend_when_settings_are_npu(monkeypatch, tmp_path
     out = engine.process_job(job, settings)
 
     assert out.exists()
-    assert seen_backends == [UpscaleBackend.VULKAN]
+    assert seen_backends == [UpscaleBackend.NPU]
 
 
 def test_video_can_interpolate_without_upscaling(monkeypatch, tmp_path: Path) -> None:

@@ -190,8 +190,8 @@ class MainWindow(QWidget):
             self.backend_combo.addItem(label, backend.value)
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
         self.backend_combo.setToolTip(
-            "NPUは画像の4倍拡大専用です。\n"
-            "動画のフレーム拡大は、NPU選択時でも常にGPU (Vulkan) で処理されます。"
+            "NPUはRyzen AI専用モデルによる4倍拡大です（モデル・倍率は固定）。\n"
+            "画像も動画のフレーム拡大もNPUで処理されます。"
         )
         row.addLayout(self._field("処理", self._compact(self.backend_combo)))
 
@@ -519,12 +519,6 @@ class MainWindow(QWidget):
                 "動画にはアップスケーラーかフレーム補間モデルを選択してください。"
             )
             return
-        if (JobKind.VIDEO in kinds and settings.upscale_enabled
-                and settings.backend == UpscaleBackend.NPU):
-            # エンジン側で動画のフレーム拡大は常に Vulkan に強制される
-            self._flash_hint(
-                "NPUは画像専用のため、動画のフレーム拡大はGPU (Vulkan)で処理します。"
-            )
         self._pause.clear()
 
         # ワーカーを別スレッドへ
@@ -549,6 +543,10 @@ class MainWindow(QWidget):
             self._pause.set()
             self.pause_btn.setEnabled(False)
             self.pause_btn.setText("停止中…")
+            # 動画1本の途中では長時間効かないため、即時中止の手段を案内する
+            self._flash_hint(
+                "現在のジョブ完了後に停止します。今すぐ中止するには行の × を押してください。"
+            )
 
     def _set_running(self, running: bool) -> None:
         self._running = running
