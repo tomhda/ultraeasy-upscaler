@@ -20,7 +20,7 @@ import torch.nn.functional as F
 REPO = Path(__file__).resolve().parents[2]
 WEIGHTS = REPO / "tmp" / "npu-anime" / "realesr-animevideov3.pth"
 OUT_DIR = REPO / "tmp" / "npu-anime"
-TILE = 256
+TILE = int(sys.argv[sys.argv.index("--tile") + 1]) if "--tile" in sys.argv else 256
 SCALE = 4
 
 

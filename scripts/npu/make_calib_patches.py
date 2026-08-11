@@ -21,8 +21,8 @@ SOURCES = [
     REPO / "tmp" / "rife-v4.6-eval-b-20260802",
     REPO / "tmp" / "rife-v4.6-live-action-20260802",
 ]
-OUT = REPO / "tmp" / "npu-anime" / "calib"
-PATCH = 256
+PATCH = int(sys.argv[sys.argv.index("--patch") + 1]) if "--patch" in sys.argv else 256
+OUT = REPO / "tmp" / "npu-anime" / ("calib" if PATCH == 256 else f"calib{PATCH}")
 COUNT = 200
 SEED = 20260812
 
@@ -51,7 +51,11 @@ def main() -> int:
             continue
         h, w = img.shape[:2]
         if h < PATCH or w < PATCH:
-            continue
+            # フレームがパッチより小さい場合は反射パディングで埋める
+            pad_h = max(0, PATCH - h)
+            pad_w = max(0, PATCH - w)
+            img = cv2.copyMakeBorder(img, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT_101)
+            h, w = img.shape[:2]
         y = rng.randrange(0, h - PATCH + 1)
         x = rng.randrange(0, w - PATCH + 1)
         patch = img[y:y + PATCH, x:x + PATCH]
