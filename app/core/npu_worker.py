@@ -95,11 +95,11 @@ def _run_folder(input_dir: Path, output_dir: Path, image_format: str) -> None:
         def file_progress(frac: float, msg: str) -> None:
             _emit_progress(base + span * frac, f"{index}/{total} 枚: {msg}")
 
-        file_progress(0.01, f"{src.name} を読み込み中…")
+        file_progress(0.01, "読み込み中…")
         img_bgr = _read_image(src)
         sr_bgr = runner.run(img_bgr, file_progress)
         out = output_dir / f"{src.stem}.{image_format}"
-        file_progress(0.98, f"{out.name} を書き出し中…")
+        file_progress(0.98, "書き出し中…")
         _write_image(out, sr_bgr)
 
     _emit_progress(1.0, f"{total}/{total} 枚")

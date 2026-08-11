@@ -212,7 +212,7 @@ class NpuRealEsrganRunner:
                 sr_tile = np.transpose(sr_tile, [2, 0, 1])
             sr_tiles_chw.append(sr_tile)
 
-            progress(0.08 + 0.84 * (idx / total), f"NPU推論中… {idx}/{total} タイル")
+            progress(0.08 + 0.84 * (idx / total), f"{idx}/{total} タイル")
 
         progress(0.94, "NPU後処理中…")
         sr_orig_hw = (orig_hw[0] * self.sr_scale, orig_hw[1] * self.sr_scale)
