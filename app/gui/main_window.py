@@ -83,6 +83,11 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
         "速○ 画△",
         "NPUでは Real-ESRGAN と同速のため利点薄。ギザギザが出やすい。",
     ),
+    (UpscaleBackend.NPU, "realesrgan-x4plus-anime"): (
+        "速○ 画◎",
+        "NPUのアニメ向け本命。GPU+Anime Video v3 に迫る画質のまま、"
+        "GPUを使わず発熱少なく並走できる。",
+    ),
 }
 
 
