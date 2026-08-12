@@ -74,6 +74,25 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 - Real-ESRGAN の GPU/NPU は「GPU=ノイズ少・線ハッキリ（塗り強め）/ NPU=自然だが
   細部にAI感」で一長一短、実用上は好みの範囲。
 
+### 比較画像
+
+列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
+
+トゥーンCG — Big Buck Bunny (480p):
+
+![Big Buck Bunny](docs/benchmarks/quality_matrix_bigbuckbunny.png)
+
+セル画アニメ — Superman (1941, 320x240):
+
+![Superman 1941](docs/benchmarks/quality_matrix_superman1941.png)
+
+実写 — Tears of Steel (720p):
+
+![Tears of Steel](docs/benchmarks/quality_matrix_tearsofsteel.png)
+
+素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)
+© Blender Foundation (CC-BY 3.0)、Superman (1941) はパブリックドメイン。
+
 ## ポータブル版
 PowerShellで次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6を同梱したzipを作成する。
 ```
