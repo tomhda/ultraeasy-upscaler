@@ -53,12 +53,11 @@ _MODEL_LABELS = {
     "realesr-general-wdn-x4v3": "General Video v3 (Denoise)",
 }
 
-# (backend, model) → (バッジ, 説明)。秒数は実測値（2026-08、このマシン、→4x 1フレーム）。
+# (backend, model) → (バッジ, 説明)
 _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     (UpscaleBackend.VULKAN, "realesr-animevideov3"): (
         "速◎ 画◎",
-        "最速（実測: 480p 1.2秒・720p 2.5秒/枚）。アニメ調に強く、実写はのっぺり"
-        "しがち。GPUをフル占有するので発熱大。",
+        "最速。アニメ調に強く、実写はのっぺりしがち。GPUをフル占有するので発熱大。",
     ),
     (UpscaleBackend.VULKAN, "realesr-general-x4v3"): (
         "速◎ 画○",
@@ -70,7 +69,7 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     ),
     (UpscaleBackend.VULKAN, "realesrgan-x4plus"): (
         "速✕ 画◎",
-        "最高画質だが最遅（実測: 480p 17秒・720p 47秒/枚）。動画には不向き。",
+        "最高画質だが最遅。動画には不向き。",
     ),
     (UpscaleBackend.VULKAN, "realesrgan-x4plus-anime"): (
         "速✕ 画◎",
@@ -78,12 +77,11 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     ),
     (UpscaleBackend.NPU, "realesrgan-x4plus"): (
         "速○ 画◎",
-        "画質と速度のバランス◎（実測: 480p 約3秒・720p 約10秒/枚）。"
-        "GPUを使わないため発熱が少なく、他の作業と並走できる。",
+        "画質と速度のバランス◎。GPUを使わないため発熱が少なく、他の作業と並走できる。",
     ),
     (UpscaleBackend.NPU, "realesr-animevideov3"): (
         "速○ 画△",
-        "NPUでは Real-ESRGAN と同速のため利点薄。int8化でギザギザが出やすい。",
+        "NPUでは Real-ESRGAN と同速のため利点薄。ギザギザが出やすい。",
     ),
 }
 
