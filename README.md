@@ -27,12 +27,13 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 - `vendor/rife/` に rife-ncnn-vulkan.exe + rife-v4.6
 
 ## NPU バックエンド
-- 画像/画像フォルダの **4x** アップスケールのみ対応。
-- 動画は当面 `GPU (Vulkan)` 経路を使う。
+- **4x固定**。モデルは Real-ESRGAN（AMD公式int8）と Anime Video v3（自前量子化int8、
+  `scripts/npu/` のパイプラインで作成）の2つから選べる。
+- 画像（単枚/フォルダ）も動画のフレーム拡大もNPUで処理される。
 - Ryzen AI Software 1.7.1 の conda 環境 `ryzen-ai-1.7.1` が必要。
-- NPU モデルと VitisAI キャッシュは `vendor/amd-npu/` に配置済み。
+- NPU モデルと VitisAI キャッシュは `vendor/amd-npu/` に配置済み（こちらは git 管理内）。
 - 通常の GUI は `.venv` で起動し、NPU処理だけ `conda run -n ryzen-ai-1.7.1` のサブプロセスで実行する。
-  - `vendor/` は git 管理外。初回・再クローン時は `.venv\Scripts\python.exe scripts\get_models.py` で本体＋追加モデル（汎用動画モデル含む）を一括取得。
+  - `vendor/realesrgan・rife・ffmpeg` は git 管理外。初回・再クローン時は `.venv\Scripts\python.exe scripts\get_models.py` で本体＋追加モデル（汎用動画モデル含む）を一括取得。
 
 ## 動画の処理
 - 「アップスケーラーモデル」と「フレーム補間モデル」は独立して選択でき、双方に「なし」がある。
@@ -41,12 +42,40 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
   （重いESRGANの対象フレーム数を補間前に抑えられるため速い）。高解像度出力で
   メモリが厳しい場合のみ「補間→アプコン」（省メモリ）を選ぶ。
 - 動画は再生互換性を優先してH.264で出力し、元音声を維持する。
-- **NPUバックエンドはRyzen AI専用モデルの4倍拡大固定**（モデル・倍率は選択不可）。
-  画像（単枚/フォルダ）も動画のフレーム拡大もNPUで処理される。
+- **NPUバックエンドは4倍拡大固定**。NPU選択中はモデルコンボにNPU対応モデルだけが
+  有効表示され、動画のフレーム拡大もNPUで処理される。
 - 「一時停止」は現在のジョブ完了後に停止する（動画1本の途中では効かない）。
   実行中ジョブを今すぐ中止するにはキュー行の × を押す。
 - 設定（モデル・倍率・出力先・詳細設定）は「開始」を押した時点のUI値が
   保留中の全ジョブへ一括適用される。追加時点の値は使われない。
+
+## ベンチマークと画質比較（2026-08 実測）
+
+実測環境: Ryzen AI 7 PRO 350（NPU: XDNA2）/ Radeon 860M（iGPU）/ 32GB LPDDR5。
+いずれも →4x、1フレームあたりの実測値。
+
+| 構成 | 480p | 720p | 特徴 |
+|---|---|---|---|
+| GPU + Anime Video v3 | 1.2秒 | 2.5秒 | 最速。アニメ調に強いが実写はのっぺり。GPUフル占有＝発熱大 |
+| NPU + Anime Video v3 | 約3秒 | 約9秒 | int8化でギザギザが出やすい。NPUでは速度利点も無し |
+| NPU + Real-ESRGAN | 約3秒 | 約10秒 | 画質・速度バランス◎。GPUフリーで他作業と並走可 |
+| GPU + Real-ESRGAN | 17秒 | 47秒 | 最高画質だが動画には不向き |
+
+### NPUの特性（実測からの知見）
+- このNPUは**帯域律速で約4.2MP/s が上限**。モデルの軽さ（RRDB vs SRVGGNetCompact
+  ≒演算量10倍差）でもタイルサイズ（256→512）でも速度はほぼ変わらない。
+- 裏返すと「重い Real-ESRGAN がタダで使える」ため、NPUではモデルを画質だけで選べばよい。
+- int8量子化（Quark XINT8 / u8s8）の劣化: fp32比でパッチPSNR平均38dB。目視では
+  エッジのギザギザ（Anime Video v3 で顕著）としてあらわれる。
+
+### 目視評
+
+- アニメ/CG系は **GPU+Anime Video v3 が最良**。実写では Anime Video v3 系はのっぺりしやすい。
+- Real-ESRGAN の GPU/NPU は「GPU=ノイズ少・線ハッキリ（塗り強め）/ NPU=自然だが
+  細部にAI感」で一長一短、実用上は好みの範囲。
+
+※比較シート画像は検証素材の著作権のためリポジトリには含めない。
+`tmp/npu-anime/make_full_matrix.py` 等のスクリプトで、手元の素材からローカル再生成できる。
 
 ## ポータブル版
 PowerShellで次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6を同梱したzipを作成する。
