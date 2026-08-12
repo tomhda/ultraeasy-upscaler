@@ -53,6 +53,40 @@ _MODEL_LABELS = {
     "realesr-general-wdn-x4v3": "General Video v3 (Denoise)",
 }
 
+# (backend, model) → (バッジ, 説明)。秒数は実測値（2026-08、このマシン、→4x 1フレーム）。
+_MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
+    (UpscaleBackend.VULKAN, "realesr-animevideov3"): (
+        "速◎ 画◎",
+        "最速（実測: 480p 1.2秒・720p 2.5秒/枚）。アニメ調に強く、実写はのっぺり"
+        "しがち。GPUをフル占有するので発熱大。",
+    ),
+    (UpscaleBackend.VULKAN, "realesr-general-x4v3"): (
+        "速◎ 画○",
+        "Anime Video v3 と同系の高速汎用モデル。GPUをフル占有。",
+    ),
+    (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"): (
+        "速◎ 画○",
+        "高速汎用（ノイズ除去控えめ版）。GPUをフル占有。",
+    ),
+    (UpscaleBackend.VULKAN, "realesrgan-x4plus"): (
+        "速✕ 画◎",
+        "最高画質だが最遅（実測: 480p 17秒・720p 47秒/枚）。動画には不向き。",
+    ),
+    (UpscaleBackend.VULKAN, "realesrgan-x4plus-anime"): (
+        "速✕ 画◎",
+        "アニメ向け高画質・低速。動画には不向き。",
+    ),
+    (UpscaleBackend.NPU, "realesrgan-x4plus"): (
+        "速○ 画◎",
+        "画質と速度のバランス◎（実測: 480p 約3秒・720p 約10秒/枚）。"
+        "GPUを使わないため発熱が少なく、他の作業と並走できる。",
+    ),
+    (UpscaleBackend.NPU, "realesr-animevideov3"): (
+        "速○ 画△",
+        "NPUでは Real-ESRGAN と同速のため利点薄。int8化でギザギザが出やすい。",
+    ),
+}
+
 
 class MainWindow(QWidget):
     """ultraeasy-upscaler のメイン画面。"""
@@ -181,9 +215,12 @@ class MainWindow(QWidget):
     def _build_controls(self) -> QFrame:
         panel = QFrame()
         panel.setObjectName("controlPanel")
-        row = QHBoxLayout(panel)
-        row.setContentsMargins(18, 12, 18, 12)
+        outer = QVBoxLayout(panel)
+        outer.setContentsMargins(18, 12, 18, 12)
+        outer.setSpacing(6)
+        row = QHBoxLayout()
         row.setSpacing(20)
+        outer.addLayout(row)
 
         self.backend_combo = QComboBox()
         for backend, label in _BACKEND_LABELS.items():
@@ -252,6 +289,12 @@ class MainWindow(QWidget):
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
         row.addLayout(self._field("出力先", self._compact(self.output_combo)), 1)
+
+        # 選択中の 処理×モデル の速度/画質サマリ（実測値ベース）
+        self.model_hint = QLabel("")
+        self.model_hint.setObjectName("fieldLabel")
+        self.model_hint.setWordWrap(True)
+        outer.addWidget(self.model_hint)
 
         return panel
 
@@ -396,6 +439,7 @@ class MainWindow(QWidget):
         if not upscale_enabled:
             for btn in self._scale_btns.values():
                 btn.setEnabled(False)
+            self._update_model_info()
             return
 
         backend = self._selected_backend()
@@ -404,10 +448,12 @@ class MainWindow(QWidget):
             self._set_scale(4)
             for s, btn in self._scale_btns.items():
                 btn.setEnabled(s == 4)
+            self._update_model_info()
             return
 
         # GPUに戻ったら全モデルを再有効化（忘れると無効のまま残る）
         self._apply_npu_model_filter(False)
+        self._update_model_info()
 
         first_enabled: int | None = None
         for s, btn in self._scale_btns.items():
@@ -422,6 +468,25 @@ class MainWindow(QWidget):
         cur_btn = self._scale_btns.get(self._scale)
         if cur_btn is not None and not cur_btn.isEnabled() and first_enabled is not None:
             self._set_scale(first_enabled)
+
+    def _update_model_info(self) -> None:
+        """モデルコンボのバッジ（速/画）と、選択中構成の説明行を更新する。"""
+        if not hasattr(self, "model_hint"):
+            return
+        backend = self._selected_backend()
+        for i in range(self.model_combo.count()):
+            data = self.model_combo.itemData(i)
+            if data in (None, "__missing__"):
+                continue
+            base = _MODEL_LABELS.get(data, data)
+            badge, _hint = _MODEL_INFO.get((backend, data), ("", ""))
+            self.model_combo.setItemText(i, f"{base}｜{badge}" if badge else base)
+        cur = self.model_combo.currentData()
+        if cur in (None, "__missing__"):
+            self.model_hint.setText("アップスケールなし（フレーム補間のみ実行できます）")
+            return
+        _badge, hint = _MODEL_INFO.get((backend, cur), ("", ""))
+        self.model_hint.setText(hint)
 
     def _apply_npu_model_filter(self, npu: bool) -> None:
         """NPU選択中はNPU対応モデルのみ選択可能にする（コンボ自体は有効のまま）。"""

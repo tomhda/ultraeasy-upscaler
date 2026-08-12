@@ -332,3 +332,37 @@ def test_backend_combo_maps_to_npu_and_locks_scale(app):
 
     win.close()
     app.processEvents()
+
+
+def test_model_picker_shows_speed_quality_info(app):
+    """モデルコンボにバッジ、下段に選択構成の実測ベース説明が出る。"""
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+
+    # GPU + 既定モデル(realesrgan-x4plus): バッジと説明
+    idx = win.model_combo.findData("realesrgan-x4plus")
+    assert idx >= 0
+    assert "速" in win.model_combo.itemText(idx)
+    gpu_hint = win.model_hint.text()
+    assert "最高画質" in gpu_hint
+
+    # NPUに切替 → 同じモデルでも説明とバッジが変わる
+    npu = win.backend_combo.findData(UpscaleBackend.NPU.value)
+    win.backend_combo.setCurrentIndex(npu)
+    app.processEvents()
+    assert win.model_hint.text() != gpu_hint
+    assert "GPUを使わない" in win.model_hint.text()
+
+    # モデル「なし」では補間のみの案内
+    win.backend_combo.setCurrentIndex(
+        win.backend_combo.findData(UpscaleBackend.VULKAN.value))
+    app.processEvents()
+    win.model_combo.setCurrentIndex(0)
+    app.processEvents()
+    assert "フレーム補間のみ" in win.model_hint.text()
+
+    win.close()
+    app.processEvents()
