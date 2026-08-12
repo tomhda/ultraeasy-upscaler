@@ -74,9 +74,6 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 - Real-ESRGAN の GPU/NPU は「GPU=ノイズ少・線ハッキリ（塗り強め）/ NPU=自然だが
   細部にAI感」で一長一短、実用上は好みの範囲。
 
-※比較シート画像は検証素材の著作権のためリポジトリには含めない。
-`tmp/npu-anime/make_full_matrix.py` 等のスクリプトで、手元の素材からローカル再生成できる。
-
 ## ポータブル版
 PowerShellで次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6を同梱したzipを作成する。
 ```
