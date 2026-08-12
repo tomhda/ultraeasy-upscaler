@@ -21,10 +21,15 @@ from onnxruntime.quantization.calibrate import CalibrationDataReader
 
 REPO = Path(__file__).resolve().parents[2]
 TILE = int(sys.argv[sys.argv.index("--tile") + 1]) if "--tile" in sys.argv else 256
-SRC = REPO / "tmp" / "npu-anime" / f"animevideov3_nchw_{TILE}x{TILE}_fp32.onnx"
-DST = REPO / "tmp" / "npu-anime" / f"animevideov3_nchw_{TILE}x{TILE}_u8s8.onnx"
-CALIB_DIR = REPO / "tmp" / "npu-anime" / ("calib" if TILE == 256 else f"calib{TILE}")
-CALIB_N = 100
+PREFIX = (sys.argv[sys.argv.index("--prefix") + 1]
+          if "--prefix" in sys.argv else "animevideov3")
+SRC = REPO / "tmp" / "npu-anime" / f"{PREFIX}_nchw_{TILE}x{TILE}_fp32.onnx"
+DST = REPO / "tmp" / "npu-anime" / f"{PREFIX}_nchw_{TILE}x{TILE}_u8s8.onnx"
+if "--calib" in sys.argv:
+    CALIB_DIR = REPO / "tmp" / "npu-anime" / sys.argv[sys.argv.index("--calib") + 1]
+else:
+    CALIB_DIR = REPO / "tmp" / "npu-anime" / ("calib" if TILE == 256 else f"calib{TILE}")
+CALIB_N = int(sys.argv[sys.argv.index("--n") + 1]) if "--n" in sys.argv else 100
 
 
 class TileDataReader(CalibrationDataReader):
@@ -51,7 +56,7 @@ def main() -> int:
         print(f"fp32 ONNX がありません: {SRC}（先に export_animevideov3.py を実行）")
         return 1
     reader = TileDataReader(CALIB_DIR)
-    if len(reader.data) < 50:
+    if len(reader.data) < min(CALIB_N, 50):
         print(f"キャリブレーション画像不足: {len(reader.data)} 枚"
               "（先に make_calib_patches.py を実行）")
         return 1

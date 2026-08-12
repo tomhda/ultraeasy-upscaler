@@ -22,8 +22,13 @@ SOURCES = [
     REPO / "tmp" / "rife-v4.6-live-action-20260802",
 ]
 PATCH = int(sys.argv[sys.argv.index("--patch") + 1]) if "--patch" in sys.argv else 256
-OUT = REPO / "tmp" / "npu-anime" / ("calib" if PATCH == 256 else f"calib{PATCH}")
-COUNT = 200
+if "--src" in sys.argv:
+    SOURCES = [Path(sys.argv[sys.argv.index("--src") + 1])]
+if "--out" in sys.argv:
+    OUT = REPO / "tmp" / "npu-anime" / sys.argv[sys.argv.index("--out") + 1]
+else:
+    OUT = REPO / "tmp" / "npu-anime" / ("calib" if PATCH == 256 else f"calib{PATCH}")
+COUNT = int(sys.argv[sys.argv.index("--count") + 1]) if "--count" in sys.argv else 200
 SEED = 20260812
 
 
@@ -66,7 +71,7 @@ def main() -> int:
         saved += 1
 
     print(f"{saved} 枚のパッチを {OUT} に保存")
-    return 0 if saved >= 50 else 1
+    return 0 if saved >= min(COUNT, 50) else 1
 
 
 if __name__ == "__main__":
