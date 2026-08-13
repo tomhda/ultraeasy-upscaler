@@ -116,3 +116,13 @@ powershell -ExecutionPolicy Bypass -File scripts\build_portable.ps1
 ```
 .venv\Scripts\python.exe -m pytest        # コアの単体テスト
 ```
+
+## ライセンス
+
+- 本リポジトリのコード: [MIT](LICENSE)
+- `vendor/amd-npu/` の Real-ESRGAN NPUモデル: AMD公式モデル由来のため
+  [Research-only RAIL-MS](vendor/amd-npu/LICENSE)（研究用途限定）
+- その他のNPUモデル（Anime Video v3 / Real-ESRGAN Anime）: BSD-3-Clause の
+  [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) 重みから変換
+- ベンチマーク画像の素材: Big Buck Bunny / Tears of Steel
+  （© Blender Foundation, CC-BY 3.0）、Superman (1941) はパブリックドメイン
