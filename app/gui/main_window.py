@@ -49,24 +49,25 @@ _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
     "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
     "realesr-animevideov3": "Anime Video v3",
-    "realesr-general-x4v3": "General Video v3",
-    "realesr-general-wdn-x4v3": "General Video v3 (Denoise)",
+    "realesr-general-x4v3": "General Video v3（ノイズ除去強）",
+    "realesr-general-wdn-x4v3": "General Video v3（ノイズ除去弱）",
 }
 
 # (backend, model) → (バッジ, 説明)
 _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     (UpscaleBackend.VULKAN, "realesr-animevideov3"): (
         "速◎ 画◎",
-        "最速。アニメ調に強く、実写はのっぺりしがち。GPUをフル占有するので発熱大。",
+        "全構成で最速。アニメ調に強く、実写はのっぺりしがち。"
+        "処理中はGPUが埋まり発熱大。",
     ),
     (UpscaleBackend.VULKAN, "realesr-general-x4v3"): (
         "速◎ 画○",
-        "高速汎用（ノイズ除去強め）。実写で Anime Video v3 ほどのっぺりしない。"
-        "GPUをフル占有。",
+        "高速。ノイズを消してすっきり仕上げる汎用タイプ。実写でものっぺりしにくい。"
+        "処理中はGPUが埋まる。",
     ),
     (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"): (
         "速◎ 画○",
-        "ノイズ除去弱め版。原本の質感を保つ自然な仕上がりで実写向き。GPUをフル占有。",
+        "高速。元の質感を残す自然な仕上がりで実写向き。処理中はGPUが埋まる。",
     ),
     (UpscaleBackend.VULKAN, "realesrgan-x4plus"): (
         "速✕ 画◎",
@@ -78,7 +79,8 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     ),
     (UpscaleBackend.NPU, "realesrgan-x4plus"): (
         "速◎ 画◎",
-        "NPU最速（bf16）。GPU実行並みの画質のまま、GPUを使わず発熱少なく並走できる。",
+        "NPUで最速。最高クラスの画質のまま、GPUを使わないので発熱が少なく、"
+        "他の作業と並走できる。",
     ),
     (UpscaleBackend.NPU, "realesr-animevideov3"): (
         "速○ 画△",
@@ -86,8 +88,7 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     ),
     (UpscaleBackend.NPU, "realesrgan-x4plus-anime"): (
         "速○ 画◎",
-        "NPUの本命（bf16）。GPU実行とほぼ同じ画質のまま、"
-        "GPUを使わず発熱少なく並走できる。",
+        "アニメ向けの最高画質。GPUを使わないので発熱が少なく、他の作業と並走できる。",
     ),
 }
 
