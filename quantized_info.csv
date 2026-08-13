@@ -1,0 +1,11 @@
+tmp/npu-anime/x4plus_anime_nchw_256x256_fp32.onnx quantization quantization info,2026-08-13 17:14:17
+quantization stage,time consumed(s),sub stage,time consumed(s)
+pre process,0.54
+static quantization,10.91
+post process(including finetuning),0.20
+e2e,12.2881258999696
+
+Node Name,Op Type,Activation,Weights,Bias
+
+Op Type,Activation,Weights,Bias
+

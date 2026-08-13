@@ -85,7 +85,7 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     ),
     (UpscaleBackend.NPU, "realesrgan-x4plus-anime"): (
         "速○ 画◎",
-        "NPUのアニメ向け本命。GPU+Anime Video v3 に迫る画質のまま、"
+        "NPUの本命（bf16）。GPU実行とほぼ同じ画質のまま、"
         "GPUを使わず発熱少なく並走できる。",
     ),
 }
