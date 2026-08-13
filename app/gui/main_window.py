@@ -61,11 +61,12 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
     ),
     (UpscaleBackend.VULKAN, "realesr-general-x4v3"): (
         "速◎ 画○",
-        "Anime Video v3 と同系の高速汎用モデル。GPUをフル占有。",
+        "高速汎用（ノイズ除去強め）。実写で Anime Video v3 ほどのっぺりしない。"
+        "GPUをフル占有。",
     ),
     (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"): (
         "速◎ 画○",
-        "高速汎用（ノイズ除去控えめ版）。GPUをフル占有。",
+        "ノイズ除去弱め版。原本の質感を保つ自然な仕上がりで実写向き。GPUをフル占有。",
     ),
     (UpscaleBackend.VULKAN, "realesrgan-x4plus"): (
         "速✕ 画◎",
