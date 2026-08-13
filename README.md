@@ -27,8 +27,9 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 - `vendor/rife/` に rife-ncnn-vulkan.exe + rife-v4.6
 
 ## NPU バックエンド
-- **4x固定**。モデルは Real-ESRGAN（AMD公式int8）と Anime Video v3（自前量子化int8、
-  `scripts/npu/` のパイプラインで作成）の2つから選べる。
+- **4x固定**。モデルは Real-ESRGAN（bf16）/ Real-ESRGAN Anime（bf16）/
+  Anime Video v3（int8）の3つ。変換・量子化パイプラインは `scripts/npu/`、
+  経緯と知見は [docs/npu-research.md](docs/npu-research.md)。
 - 画像（単枚/フォルダ）も動画のフレーム拡大もNPUで処理される。
 - Ryzen AI Software 1.7.1 の conda 環境 `ryzen-ai-1.7.1` が必要。
 - NPU モデルと VitisAI キャッシュは `vendor/amd-npu/` に配置済み（こちらは git 管理内）。
@@ -60,20 +61,26 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 | NPU + Real-ESRGAN (bf16) | 約1.5秒 | 約4秒 | GPU実行並みの画質でNPU最速。GPUフリーで他作業と並走可 |
 | NPU + Real-ESRGAN Anime (bf16) | 約2.4秒 | 約6秒 | アニメ向け高画質。GPUフリー |
 | NPU + Anime Video v3 (int8) | 約3秒 | 約9秒 | int8のギザギザが出やすく、NPUでは利点薄 |
+| GPU + General Video v3（強/弱） | — | 約3秒 | 高速汎用。弱（wdn）は原本の質感を残す自然系で実写向き |
 | GPU + Real-ESRGAN | 17秒 | 47秒 | 最高画質だが動画には不向き |
 
 ### NPUの特性（実測からの知見）
-- このNPUは**帯域律速で約4.2MP/s が上限**。モデルの軽さ（RRDB vs SRVGGNetCompact
-  ≒演算量10倍差）でもタイルサイズ（256→512）でも速度はほぼ変わらない。
-- 裏返すと「重い Real-ESRGAN がタダで使える」ため、NPUではモデルを画質だけで選べばよい。
-- int8量子化（Quark XINT8 / u8s8）の劣化: fp32比でパッチPSNR平均38dB。目視では
-  エッジのギザギザ（Anime Video v3 で顕著）としてあらわれる。
+- **bf16（VAIMLフロー）が本命**: キャリブレーション不要で int8 より速く
+  （Real-ESRGAN: 335→168ms/タイル）、fp32忠実度も高い（min +2.3dB）。
+- int8（XIRフロー）はQ/DQ変換とサブグラフ分割のオーバーヘッドが支配的で、
+  演算量10倍差のモデルが同速に見える「見かけの帯域天井（約4.2MP/s）」を作る。
+- 例外: Anime Video v3（PReLU+DepthToSpace構成）はVAIML bf16が無音で
+  誤コンパイルし出力が崩壊するため int8 を維持。ギザギザが出やすい。
+- 詳細は [docs/npu-research.md](docs/npu-research.md)。
 
 ### 目視評
 
-- アニメ/CG系は **GPU+Anime Video v3 が最良**。実写では Anime Video v3 系はのっぺりしやすい。
+- アニメ/CG系は **GPU+Anime Video v3 が最良**。NPU+Real-ESRGAN Anime (bf16) が
+  肉薄し、好みの差の範囲。実写では Anime Video v3 系はのっぺりしやすい。
 - Real-ESRGAN の GPU(fp16) と NPU(bf16) は目視でほぼ区別不能（差分35dB超）。
   実用上は同格で、速度と発熱で NPU が有利。
+- General Video v3（ノイズ除去弱）は原本の質感を残す忠実系で実写が自然。
+  Real-ESRGAN は輪郭を立てる知覚系で「加工感」が出る。忠実 vs 知覚の好み。
 
 ### 比較画像
 
