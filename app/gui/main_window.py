@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -243,8 +244,15 @@ class MainWindow(QWidget):
         scale_wrap.setLayout(scale_box)
         row.addLayout(self._field("倍率", scale_wrap))
 
-        # アップスケーラーモデル
+        # アップスケーラーモデル（このアプリの主役なので1段目の残り幅を全部使う）
         self.model_combo = QComboBox()
+        self.model_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self.model_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         self.model_combo.addItem("なし（拡大しない）", None)
         models = binaries.available_models()
         if models:
@@ -260,7 +268,12 @@ class MainWindow(QWidget):
             self.model_combo.addItem("モデル未検出", "__missing__")
             self.model_combo.model().item(self.model_combo.count() - 1).setEnabled(False)
         self.model_combo.currentIndexChanged.connect(lambda _i: self._refresh_scale_enabled())
-        row.addLayout(self._field("アップスケーラーモデル", self._compact(self.model_combo)), 1)
+        row.addLayout(self._field("アップスケーラーモデル", self.model_combo), 1)
+
+        # 2段目: フレーム補間モデル / 出力先
+        row2 = QHBoxLayout()
+        row2.setSpacing(20)
+        outer.addLayout(row2)
 
         # フレーム補間モデル（アップスケールとは独立）
         self.interpolation_combo = QComboBox()
@@ -274,14 +287,14 @@ class MainWindow(QWidget):
         self.interpolation_combo.currentIndexChanged.connect(
             lambda _i: self._on_interpolation_changed()
         )
-        row.addLayout(self._field("フレーム補間モデル", self._compact(self.interpolation_combo)), 1)
+        row2.addLayout(self._field("フレーム補間モデル", self._compact(self.interpolation_combo)), 1)
 
         # 出力先
         self.output_combo = QComboBox()
         self.output_combo.addItems(["元の場所", "フォルダ選択…"])
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
-        row.addLayout(self._field("出力先", self._compact(self.output_combo)), 1)
+        row2.addLayout(self._field("出力先", self._compact(self.output_combo)), 1)
 
         # 選択中の 処理×モデル の速度/画質サマリ（実測値ベース）
         self.model_hint = QLabel("")
@@ -462,36 +475,57 @@ class MainWindow(QWidget):
         if cur_btn is not None and not cur_btn.isEnabled() and first_enabled is not None:
             self._set_scale(first_enabled)
 
+    @staticmethod
+    def _compose_model_hint(backend: UpscaleBackend, data: str) -> str:
+        info = _MODEL_INFO.get((backend, data))
+        if info is None:
+            return ""
+        speed, quality, anime, live, star = info
+        parts = [f"速度{speed}", f"画質{quality}", f"アニメ{anime}・実写{live}"]
+        if star:
+            parts.append(f"★{star}に推奨")
+        return "／".join(parts)
+
     def _update_model_info(self) -> None:
-        """モデルコンボのバッジ（速/画/★推奨）と、選択中構成の説明行を更新する。"""
+        """モデルコンボのバッジ（速度/画質/★推奨）と、選択中構成の説明行を更新する。"""
         if not hasattr(self, "model_hint"):
             return
         backend = self._selected_backend()
+        item_model = self.model_combo.model()
         for i in range(self.model_combo.count()):
             data = self.model_combo.itemData(i)
             if data in (None, "__missing__"):
                 continue
             base = _MODEL_LABELS.get(data, data)
             info = _MODEL_INFO.get((backend, data))
+            item = item_model.item(i)
             if info is None:
                 self.model_combo.setItemText(i, base)
+                if item is not None:
+                    item.setToolTip("")
                 continue
             speed, quality, _anime, _live, star = info
             badge = f"速度{speed} 画質{quality}" + (f" ★{star}" if star else "")
             self.model_combo.setItemText(i, f"{base}｜{badge}")
+            if item is not None:
+                item.setToolTip(self._compose_model_hint(backend, data))
+        # 閉じた状態はコンパクト幅のままでよいが、開いたリストは全文が
+        # 収まる幅へ広げる（切れて読めない問題の対策）
+        view = self.model_combo.view()
+        fm = view.fontMetrics()
+        widest = max((fm.horizontalAdvance(self.model_combo.itemText(i))
+                      for i in range(self.model_combo.count())), default=0)
+        view.setMinimumWidth(widest + 48)
+
         cur = self.model_combo.currentData()
         if cur in (None, "__missing__"):
             self.model_hint.setText("アップスケールなし（フレーム補間のみ実行できます）")
             return
-        info = _MODEL_INFO.get((backend, cur))
-        if info is None:
+        hint = self._compose_model_hint(backend, cur)
+        if not hint:
             self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】")
             return
-        speed, quality, anime, live, star = info
-        parts = [f"速度{speed}", f"画質{quality}", f"アニメ{anime}・実写{live}"]
-        if star:
-            parts.append(f"★{star}に推奨")
-        self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】" + "／".join(parts))
+        self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】{hint}")
 
     def _apply_npu_model_filter(self, npu: bool) -> None:
         """NPU選択中はNPU対応モデルのみ選択可能にする（コンボ自体は有効のまま）。"""
