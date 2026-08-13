@@ -22,6 +22,9 @@ WEIGHTS = REPO / "tmp" / "npu-anime" / "realesr-animevideov3.pth"
 OUT_DIR = REPO / "tmp" / "npu-anime"
 TILE = int(sys.argv[sys.argv.index("--tile") + 1]) if "--tile" in sys.argv else 256
 SCALE = 4
+# VAIML bf16 は実重みの PReLU で誤コンパイルするため、等価分解して回避する
+# （PReLU(x) = ReLU(x) - w * ReLU(-x)。詳細は docs/npu-research.md）
+DECOMPOSE_PRELU = "--decompose-prelu" in sys.argv
 
 
 class SRVGGNetCompact(nn.Module):
@@ -59,6 +62,18 @@ class SRVGGNetCompact(nn.Module):
         return out + base
 
 
+class DecomposedPReLU(nn.Module):
+    """PReLU(x) = ReLU(x) - w * ReLU(-x)（数学的等価・PReLUカーネル回避）。"""
+
+    def __init__(self, weight: torch.Tensor):
+        super().__init__()
+        self.weight = nn.Parameter(weight.clone())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        w = self.weight.view(1, -1, 1, 1)
+        return F.relu(x) - w * F.relu(-x)
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     if not WEIGHTS.exists():
@@ -69,12 +84,18 @@ def main() -> int:
     params = state.get("params", state)
     model = SRVGGNetCompact(upscale=SCALE)
     model.load_state_dict(params, strict=True)
+    if DECOMPOSE_PRELU:
+        for i, layer in enumerate(model.body):
+            if isinstance(layer, nn.PReLU):
+                model.body[i] = DecomposedPReLU(layer.weight.data)
+        print("PReLU を分解形に置換")
     model.eval()
     print(f"重み読込OK: {len(params)} tensors")
 
+    prefix = "animevideov3dp" if DECOMPOSE_PRELU else "animevideov3"
     dummy = torch.rand(1, 3, TILE, TILE, dtype=torch.float32)
-    raw_path = OUT_DIR / f"animevideov3_nchw_{TILE}x{TILE}_fp32_raw.onnx"
-    out_path = OUT_DIR / f"animevideov3_nchw_{TILE}x{TILE}_fp32.onnx"
+    raw_path = OUT_DIR / f"{prefix}_nchw_{TILE}x{TILE}_fp32_raw.onnx"
+    out_path = OUT_DIR / f"{prefix}_nchw_{TILE}x{TILE}_fp32.onnx"
 
     torch.onnx.export(
         model, dummy, str(raw_path),

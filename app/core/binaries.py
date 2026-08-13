@@ -56,7 +56,7 @@ def npu_cache_dir() -> Path:
 # （modelcachekey_<stem>/ を隣に置くこと）。
 NPU_MODELS: dict[str, tuple[str, int]] = {
     "realesrgan-x4plus": ("realesrgan_nchw_256x256_bf16cast.onnx", 4),
-    "realesr-animevideov3": ("animevideov3_nchw_256x256_u8s8.onnx", 4),
+    "realesr-animevideov3": ("animevideov3dp_nchw_256x256_bf16cast.onnx", 4),
     "realesrgan-x4plus-anime": ("x4plus_anime_nchw_256x256_bf16cast.onnx", 4),
 }
 DEFAULT_NPU_MODEL = "realesrgan-x4plus"

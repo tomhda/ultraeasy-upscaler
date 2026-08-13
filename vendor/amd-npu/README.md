@@ -16,9 +16,14 @@ NPU backend.
   256x256 fp32 ONNX) -> `scripts/npu/quantize_animevideov3.py` (Quark XINT8
   u8s8, calibrated on local frames) -> first VitisAI session compiles into
   `modelcachekey_animevideov3_nchw_256x256_u8s8/`
-- Model: `onnx-models/animevideov3_nchw_256x256_u8s8.onnx`
-- Stays int8: the VAIML BF16 flow miscompiles this architecture
-  (PReLU/DepthToSpace) and silently produces garbage output.
+- Model: `onnx-models/animevideov3dp_nchw_256x256_bf16cast.onnx`
+- "dp" = decomposed PReLU (ReLU(x) - w*ReLU(-x)): the VAIML BF16 flow
+  silently miscompiles trained PReLU weights (negative slopes); the
+  equivalent decomposition avoids the PReLU kernel entirely.
+  Export with `scripts/npu/export_animevideov3.py --decompose-prelu`.
+- Cache: `modelcachekey_animevideov3dp_nchw_256x256_bf16cast/` (VAIML flow).
+  This one exceeds GitHub's 100MB file limit and is NOT committed; the
+  first NPU run after a fresh clone recompiles it (about 5 minutes).
 
 ## x4plus_anime (self-converted BF16, 2026-08)
 - Source weights: xinntao/Real-ESRGAN `RealESRGAN_x4plus_anime_6B.pth`

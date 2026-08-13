@@ -16,9 +16,9 @@ GPU とほぼ同画質の 4x アップスケールを GPU 占有ゼロで実行�
 | 構成 | 精度 | タイル速度 | 480p/枚 | 720p/枚 |
 |---|---|---|---|---|
 | GPU + Anime Video v3 | fp16 | — | **1.2秒** | 2.5秒 |
+| NPU + Anime Video v3 | bf16(分解) | **151ms** | 約1.4秒 | 約4秒 |
 | NPU + Real-ESRGAN | bf16 | 168ms | 約1.5秒 | 約4秒 |
 | NPU + Real-ESRGAN Anime | bf16 | 262ms | 約2.4秒 | 約6秒 |
-| NPU + Anime Video v3 | int8 | 323ms | 約3秒 | 約9秒 |
 | GPU + General Video v3（強/弱） | fp16 | — | — | 約3秒 |
 | GPU + Real-ESRGAN | fp16 | — | 17秒 | 47秒 |
 
@@ -50,13 +50,27 @@ Cast ベースの bf16 に変換すると、VitisAI EP が VAIML フローで
 （カスタムop）を出力し、環境にカスタムopライブラリが無く動かない。
 tools の変換スクリプト（標準opのみ）を使うこと。
 
-### 3. VAIML bf16 は SRVGGNetCompact を無音で誤コンパイルする
+### 3. VAIML bf16 の無音誤コンパイル: 犯人は「実学習済み重みのPReLU」
 
-animevideov3（PReLU + DepthToSpace 構成）の bf16 は正常にコンパイル・
-高速実行（98ms/タイル）されるが**出力が崩壊する（PSNR 5dB）**。
-エラーは一切出ない。このため animevideov3 のみ int8 を維持。
-将来の回避案: fp32 段階で PReLU を `ReLU(x) − w⊙ReLU(−x)` に分解してから
-bf16 変換（数学的に等価、未検証）。
+animevideov3（SRVGGNetCompact）の bf16 はエラーなくコンパイル・高速実行
+されるが**出力が数値爆発する（PSNR −40dB、max|diff|>1500、決定論的）**。
+4段階の二分探索で原因を特定した:
+
+| phase | 実験 | 結果 |
+|---|---|---|
+| 1 | 単体op 5種（PReLU/PixelShuffle/Resize+Add等） | 全てOK → 単体opはシロ |
+| 2 | 同構造を深さ2/8/16・活性化3種（slope=0.25） | 全てOK → 構造・深さもシロ |
+| 3 | 実重み vs onnxsim有無 vs 合成+onnxsim | **実重みのみBROKEN** → onnxsimはシロ |
+| 4 | 合成+負slope / 実重み+PReLU分解 | 負slopeで忠実度59→35dBに劣化・コンパイル38→1005秒に爆増。**分解版はOK（38.4dB）** |
+
+結論: 実モデルの PReLU slope（min −1.38 / max +1.69、負値・1超えを含む）が
+VAIML の PReLU 処理を異常経路に追い込む。完全な爆発には実重みのもう一要素
+（巨大バイアス等との複合）が関与するとみられる。
+
+**回避策（採用済み）**: fp32 段階で `PReLU(x) = ReLU(x) − w⊙ReLU(−x)` に等価
+分解してから bf16 変換（`export_animevideov3.py --decompose-prelu`）。
+分解版 animevideov3 bf16 は **151ms/タイル（7.0MP/s）で NPU 最速**、
+fp32忠実度 38.4dB。再現実験は `scripts/npu/bisect_vaiml_bf16*.py`。
 
 ### 4. int8 キャリブレーションの知見（bf16 移行前の記録）
 

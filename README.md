@@ -21,9 +21,9 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 - `vendor/rife/` に rife-ncnn-vulkan.exe + rife-v4.6
 
 ## NPU バックエンド
-- **4x固定**。モデルは Real-ESRGAN（bf16）/ Real-ESRGAN Anime（bf16）/
-  Anime Video v3（int8）の3つ。変換・量子化パイプラインは `scripts/npu/`、
-  経緯と知見は [docs/npu-research.md](docs/npu-research.md)。
+- **4x固定**。モデルは Real-ESRGAN / Real-ESRGAN Anime / Anime Video v3 の3つ
+  （すべてbf16）。変換パイプラインは `scripts/npu/`、経緯と知見は
+  [docs/npu-research.md](docs/npu-research.md)。
 - 画像（単枚/フォルダ）も動画のフレーム拡大もNPUで処理される。
 - Ryzen AI Software 1.7.1 の conda 環境 `ryzen-ai-1.7.1` が必要。
 - NPU モデルと VitisAI キャッシュは `vendor/amd-npu/` に配置済み（こちらは git 管理内）。
@@ -54,7 +54,7 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 | GPU + Anime Video v3 | 1.2秒 | 2.5秒 | 最速。アニメ調に強いが実写はのっぺり。GPUフル占有＝発熱大 |
 | NPU + Real-ESRGAN (bf16) | 約1.5秒 | 約4秒 | GPU実行並みの画質でNPU最速。GPUフリーで他作業と並走可 |
 | NPU + Real-ESRGAN Anime (bf16) | 約2.4秒 | 約6秒 | アニメ向け高画質。GPUフリー |
-| NPU + Anime Video v3 (int8) | 約3秒 | 約9秒 | int8のギザギザが出やすく、NPUでは利点薄 |
+| NPU + Anime Video v3 (bf16) | 約1.4秒 | 約4秒 | NPU最速（PReLU分解でbf16化）。アニメ向き |
 | GPU + General Video v3（強/弱） | — | 約3秒 | 高速汎用。弱（wdn）は原本の質感を残す自然系で実写向き |
 | GPU + Real-ESRGAN | 17秒 | 47秒 | 最高画質だが動画には不向き |
 
@@ -63,8 +63,9 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
   （Real-ESRGAN: 335→168ms/タイル）、fp32忠実度も高い（min +2.3dB）。
 - int8（XIRフロー）はQ/DQ変換とサブグラフ分割のオーバーヘッドが支配的で、
   演算量10倍差のモデルが同速に見える「見かけの帯域天井（約4.2MP/s）」を作る。
-- 例外: Anime Video v3（PReLU+DepthToSpace構成）はVAIML bf16が無音で
-  誤コンパイルし出力が崩壊するため int8 を維持。ギザギザが出やすい。
+- VAIML bf16 は**実学習済み重みのPReLU**で無音の誤コンパイル（出力の数値爆発）を
+  起こす。`PReLU(x)=ReLU(x)−w⊙ReLU(−x)` の等価分解で回避でき、分解版
+  Anime Video v3 は151ms/タイルの**NPU最速**になった。
 - 詳細は [docs/npu-research.md](docs/npu-research.md)。
 
 ### 目視評
