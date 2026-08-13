@@ -72,8 +72,8 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 ### 目視評
 
 - アニメ/CG系は **GPU+Anime Video v3 が最良**。実写では Anime Video v3 系はのっぺりしやすい。
-- Real-ESRGAN の GPU/NPU は「GPU=ノイズ少・線ハッキリ（塗り強め）/ NPU=自然だが
-  細部にAI感」で一長一短、実用上は好みの範囲。
+- Real-ESRGAN の GPU(fp16) と NPU(bf16) は目視でほぼ区別不能（差分35dB超）。
+  実用上は同格で、速度と発熱で NPU が有利。
 
 ### 比較画像
 
