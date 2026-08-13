@@ -53,43 +53,31 @@ _MODEL_LABELS = {
     "realesr-general-wdn-x4v3": "General Video v3（ノイズ除去弱）",
 }
 
-# (backend, model) → (バッジ, 説明)
-_MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
-    (UpscaleBackend.VULKAN, "realesr-animevideov3"): (
-        "速◎ 画◎",
-        "全構成で最速。アニメ調に強く、実写はのっぺりしがち。"
-        "処理中はGPUが埋まり発熱大。",
-    ),
-    (UpscaleBackend.VULKAN, "realesr-general-x4v3"): (
-        "速◎ 画○",
-        "高速。ノイズを消してすっきり仕上げる汎用タイプ。実写でものっぺりしにくい。"
-        "処理中はGPUが埋まる。",
-    ),
-    (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"): (
-        "速◎ 画○",
-        "高速。元の質感を残す自然な仕上がりで実写向き。処理中はGPUが埋まる。",
-    ),
-    (UpscaleBackend.VULKAN, "realesrgan-x4plus"): (
-        "速✕ 画◎",
-        "最高画質だが最遅。動画には不向き。",
-    ),
-    (UpscaleBackend.VULKAN, "realesrgan-x4plus-anime"): (
-        "速✕ 画◎",
-        "アニメ向け高画質・低速。動画には不向き。",
-    ),
-    (UpscaleBackend.NPU, "realesrgan-x4plus"): (
-        "速◎ 画◎",
-        "NPUで最速。最高クラスの画質のまま、GPUを使わないので発熱が少なく、"
-        "他の作業と並走できる。",
-    ),
-    (UpscaleBackend.NPU, "realesr-animevideov3"): (
-        "速○ 画△",
-        "NPUでは Real-ESRGAN と同速のため利点薄。ギザギザが出やすい。",
-    ),
-    (UpscaleBackend.NPU, "realesrgan-x4plus-anime"): (
-        "速○ 画◎",
-        "アニメ向けの最高画質。GPUを使わないので発熱が少なく、他の作業と並走できる。",
-    ),
+# バックエンド自体の説明（選択に連動して説明行の先頭に出す）
+_BACKEND_DESC = {
+    UpscaleBackend.VULKAN: "GPU：最速クラス。処理中は他の作業と競合し発熱大",
+    UpscaleBackend.NPU: "NPU：GPUを使わないので静かで、他の作業と並走できる",
+}
+
+# (backend, model) → (速度, 画質, アニメ適性, 実写適性, 推奨タグ or None)
+_MODEL_INFO: dict[tuple[UpscaleBackend, str],
+                  tuple[str, str, str, str, str | None]] = {
+    (UpscaleBackend.VULKAN, "realesr-animevideov3"):
+        ("◎", "◎", "◎", "△", "アニメ"),
+    (UpscaleBackend.VULKAN, "realesr-general-x4v3"):
+        ("◎", "○", "○", "○", None),
+    (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"):
+        ("◎", "○", "○", "◎", "実写"),
+    (UpscaleBackend.VULKAN, "realesrgan-x4plus"):
+        ("✕", "◎", "○", "◎", None),
+    (UpscaleBackend.VULKAN, "realesrgan-x4plus-anime"):
+        ("✕", "◎", "◎", "○", None),
+    (UpscaleBackend.NPU, "realesrgan-x4plus"):
+        ("◎", "◎", "○", "◎", "実写"),
+    (UpscaleBackend.NPU, "realesrgan-x4plus-anime"):
+        ("○", "◎", "◎", "○", "アニメ"),
+    (UpscaleBackend.NPU, "realesr-animevideov3"):
+        ("○", "△", "△", "△", None),
 }
 
 
@@ -475,7 +463,7 @@ class MainWindow(QWidget):
             self._set_scale(first_enabled)
 
     def _update_model_info(self) -> None:
-        """モデルコンボのバッジ（速/画）と、選択中構成の説明行を更新する。"""
+        """モデルコンボのバッジ（速/画/★推奨）と、選択中構成の説明行を更新する。"""
         if not hasattr(self, "model_hint"):
             return
         backend = self._selected_backend()
@@ -484,14 +472,26 @@ class MainWindow(QWidget):
             if data in (None, "__missing__"):
                 continue
             base = _MODEL_LABELS.get(data, data)
-            badge, _hint = _MODEL_INFO.get((backend, data), ("", ""))
-            self.model_combo.setItemText(i, f"{base}｜{badge}" if badge else base)
+            info = _MODEL_INFO.get((backend, data))
+            if info is None:
+                self.model_combo.setItemText(i, base)
+                continue
+            speed, quality, _anime, _live, star = info
+            badge = f"速度{speed} 画質{quality}" + (f" ★{star}" if star else "")
+            self.model_combo.setItemText(i, f"{base}｜{badge}")
         cur = self.model_combo.currentData()
         if cur in (None, "__missing__"):
             self.model_hint.setText("アップスケールなし（フレーム補間のみ実行できます）")
             return
-        _badge, hint = _MODEL_INFO.get((backend, cur), ("", ""))
-        self.model_hint.setText(hint)
+        info = _MODEL_INFO.get((backend, cur))
+        if info is None:
+            self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】")
+            return
+        speed, quality, anime, live, star = info
+        parts = [f"速度{speed}", f"画質{quality}", f"アニメ{anime}・実写{live}"]
+        if star:
+            parts.append(f"★{star}に推奨")
+        self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】" + "／".join(parts))
 
     def _apply_npu_model_filter(self, npu: bool) -> None:
         """NPU選択中はNPU対応モデルのみ選択可能にする（コンボ自体は有効のまま）。"""

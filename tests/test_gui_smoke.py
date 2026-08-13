@@ -347,7 +347,8 @@ def test_model_picker_shows_speed_quality_info(app):
     assert idx >= 0
     assert "速" in win.model_combo.itemText(idx)
     gpu_hint = win.model_hint.text()
-    assert "最高画質" in gpu_hint
+    assert gpu_hint.startswith("【GPU")
+    assert "速度" in gpu_hint and "画質" in gpu_hint
 
     # NPUに切替 → 同じモデルでも説明とバッジが変わる
     npu = win.backend_combo.findData(UpscaleBackend.NPU.value)
