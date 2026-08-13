@@ -57,8 +57,9 @@ real-esrgan-gui の不便を解消する、Windows ローカル専用の「か�
 | 構成 | 480p | 720p | 特徴 |
 |---|---|---|---|
 | GPU + Anime Video v3 | 1.2秒 | 2.5秒 | 最速。アニメ調に強いが実写はのっぺり。GPUフル占有＝発熱大 |
-| NPU + Anime Video v3 | 約3秒 | 約9秒 | int8化でギザギザが出やすい。NPUでは速度利点も無し |
-| NPU + Real-ESRGAN | 約3秒 | 約10秒 | 画質・速度バランス◎。GPUフリーで他作業と並走可 |
+| NPU + Real-ESRGAN (bf16) | 約1.5秒 | 約4秒 | GPU実行並みの画質でNPU最速。GPUフリーで他作業と並走可 |
+| NPU + Real-ESRGAN Anime (bf16) | 約2.4秒 | 約6秒 | アニメ向け高画質。GPUフリー |
+| NPU + Anime Video v3 (int8) | 約3秒 | 約9秒 | int8のギザギザが出やすく、NPUでは利点薄 |
 | GPU + Real-ESRGAN | 17秒 | 47秒 | 最高画質だが動画には不向き |
 
 ### NPUの特性（実測からの知見）

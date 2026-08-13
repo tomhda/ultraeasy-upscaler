@@ -76,8 +76,8 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str], tuple[str, str]] = {
         "アニメ向け高画質・低速。動画には不向き。",
     ),
     (UpscaleBackend.NPU, "realesrgan-x4plus"): (
-        "速○ 画◎",
-        "画質と速度のバランス◎。GPUを使わないため発熱が少なく、他の作業と並走できる。",
+        "速◎ 画◎",
+        "NPU最速（bf16）。GPU実行並みの画質のまま、GPUを使わず発熱少なく並走できる。",
     ),
     (UpscaleBackend.NPU, "realesr-animevideov3"): (
         "速○ 画△",

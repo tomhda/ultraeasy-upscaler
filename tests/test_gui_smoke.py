@@ -354,7 +354,7 @@ def test_model_picker_shows_speed_quality_info(app):
     win.backend_combo.setCurrentIndex(npu)
     app.processEvents()
     assert win.model_hint.text() != gpu_hint
-    assert "GPUを使わない" in win.model_hint.text()
+    assert "GPUを使わ" in win.model_hint.text()
 
     # モデル「なし」では補間のみの案内
     win.backend_combo.setCurrentIndex(
