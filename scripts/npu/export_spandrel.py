@@ -42,24 +42,10 @@ class ModelOutputAdapter(nn.Module):
         return output
 
 
-class ExplicitSiLU(nn.Module):
-    """SiLU を Sigmoid/Mul に展開し、TorchとORTの比較を同じ演算列にする。"""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x * torch.sigmoid(x)
-
-
-def replace_silu(module: nn.Module) -> int:
-    """モデル内のネイティブSiLUを等価な明示演算へ置き換える。"""
-
-    replaced = 0
-    for name, child in list(module.named_children()):
-        if isinstance(child, nn.SiLU):
-            setattr(module, name, ExplicitSiLU())
-            replaced += 1
-        else:
-            replaced += replace_silu(child)
-    return replaced
+# ⚠️ SiLU→x*sigmoid(x) のモジュール置換は行わないこと。
+# spandrelのSPANは nn.SiLU(inplace=True) のインプレース副作用に依存しており、
+# 数学的に等価な非インプレース置換でもデータフローが変わり出力が崩壊する
+# （purephoto実測でPSNR22dB）。SiLUはONNXエクスポータが正しく展開する。
 
 
 def parse_size(value: str) -> tuple[int, int]:
@@ -120,30 +106,37 @@ def main() -> int:
     # この2重量みでは正規化・NHWC変換は不要なので、modelをそのままアダプタへ渡す。
     # SiLUだけは、ネイティブTorch実装とORTのSigmoid/Mul展開で極端値の丸め差が
     # 最大差へ増幅されるため、意味を変えない明示演算へ先に置き換える。
-    silu_count = replace_silu(descriptor.model)
     model = ModelOutputAdapter(descriptor.model).eval()
     scale = int(descriptor.scale)
     print(
         "モデル: "
         f"{descriptor.architecture.name if hasattr(descriptor.architecture, 'name') else descriptor.architecture}, "
         f"scale={scale}, tags={descriptor.tags}, "
-        "入力アダプタ=RGB[0,1] NCHW identity, "
-        f"SiLU明示展開={silu_count}"
+        "入力アダプタ=RGB[0,1] NCHW identity"
     )
 
-    # 白色ノイズは本モデルの反復残差を過大増幅し、実画像では現れない
-    # 数値丸め差だけを最大差として拾うため、0.5中心の低振幅入力を使う。
+    # ⚠️ export前のforwardに inference_mode を使ってはいけない。
+    # SPAN系(Conv3XC)はforward中に update_params() で .data 直接代入するため、
+    # inference_mode製テンソルがモジュールへ混入し、直後のONNXトレースが
+    # 「見た目は成功・出力は誤り(実画像でPSNR22dB)」の壊れたグラフになる。
+    # ここでは no_grad のウォームアップのみ行い、参照出力は export後に
+    # 「別途フレッシュにロードしたモデル」から取る（トレースで変異した
+    # 同一オブジェクトと比較すると壊れを見逃すため）。
+    # 検証入力は0.5中心の低振幅ノイズ。SPAN系は白色ノイズで再パラメータ化の
+    # 数値差が増幅され、正しいグラフでも max_diff が1e-4を超えるため
+    # （実画像ではPSNR 139dBで一致することを確認済み）。壊れたグラフは
+    # フレッシュ参照との比較なら低振幅でも大差になるので検出できる。
     rng = np.random.default_rng(12345)
-    x_np = 0.5 + 0.01 * rng.standard_normal((1, 3, in_h, in_w), dtype=np.float32)
-    x_np = np.clip(x_np, 0.0, 1.0).astype(np.float32, copy=False)
+    x_np = np.clip(0.5 + 0.05 * rng.standard_normal((1, 3, in_h, in_w)), 0.0, 1.0).astype(np.float32)
     x = torch.from_numpy(x_np)
-    with torch.inference_mode():
-        reference = model(x).cpu().numpy()
+    with torch.no_grad():
+        warm = model(x)
     expected_shape = (1, 3, in_h * scale, in_w * scale)
-    if tuple(reference.shape) != expected_shape:
-        print(f"Torch出力形状NG: got={tuple(reference.shape)}, expected={expected_shape}")
+    if tuple(warm.shape) != expected_shape:
+        print(f"Torch出力形状NG: got={tuple(warm.shape)}, expected={expected_shape}")
         return 1
-    print(f"入力仕様確認OK: Torch出力形状={tuple(reference.shape)}")
+    del warm
+    print(f"入力仕様確認OK: 出力形状={expected_shape}")
 
     try:
         torch.onnx.export(
@@ -180,6 +173,13 @@ def main() -> int:
     try:
         import onnxruntime as ort
 
+        # 参照はフレッシュなモデルインスタンスから取得（上のコメント参照）
+        fresh = ModelLoader(device="cpu").load_from_file(weights)
+        fresh_model = ModelOutputAdapter(fresh.model).eval()
+        with torch.no_grad():
+            fresh_model(x)  # 再パラメータ化の状態安定用
+            reference = fresh_model(x).cpu().numpy()
+
         session = ort.InferenceSession(str(out_path), providers=["CPUExecutionProvider"])
         input_name = session.get_inputs()[0].name
         got = session.run(None, {input_name: x_np})[0]
@@ -188,7 +188,7 @@ def main() -> int:
         return 1
 
     diff = float(np.abs(reference - got).max())
-    print(f"ORT出力形状: {tuple(got.shape)}, torch/ORT最大差: {diff:.3e}")
+    print(f"ORT出力形状: {tuple(got.shape)}, torch(fresh)/ORT最大差: {diff:.3e}")
     if tuple(got.shape) != expected_shape or diff > 1e-4:
         print(f"検証NG: expected_shape={expected_shape}, max_diff<=1e-4")
         return 1
