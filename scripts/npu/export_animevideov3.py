@@ -21,6 +21,12 @@ REPO = Path(__file__).resolve().parents[2]
 WEIGHTS = REPO / "tmp" / "npu-anime" / "realesr-animevideov3.pth"
 OUT_DIR = REPO / "tmp" / "npu-anime"
 TILE = int(sys.argv[sys.argv.index("--tile") + 1]) if "--tile" in sys.argv else 256
+# --size WxH で非正方形の固定入力（例: 854x480 = フレームぴったり・タイル分割不要）
+if "--size" in sys.argv:
+    _w, _h = sys.argv[sys.argv.index("--size") + 1].lower().split("x")
+    IN_W, IN_H = int(_w), int(_h)
+else:
+    IN_W = IN_H = TILE
 SCALE = 4
 # VAIML bf16 は実重みの PReLU で誤コンパイルするため、等価分解して回避する
 # （PReLU(x) = ReLU(x) - w * ReLU(-x)。詳細は docs/npu-research.md）
@@ -93,9 +99,9 @@ def main() -> int:
     print(f"重み読込OK: {len(params)} tensors")
 
     prefix = "animevideov3dp" if DECOMPOSE_PRELU else "animevideov3"
-    dummy = torch.rand(1, 3, TILE, TILE, dtype=torch.float32)
-    raw_path = OUT_DIR / f"{prefix}_nchw_{TILE}x{TILE}_fp32_raw.onnx"
-    out_path = OUT_DIR / f"{prefix}_nchw_{TILE}x{TILE}_fp32.onnx"
+    dummy = torch.rand(1, 3, IN_H, IN_W, dtype=torch.float32)
+    raw_path = OUT_DIR / f"{prefix}_nchw_{IN_W}x{IN_H}_fp32_raw.onnx"
+    out_path = OUT_DIR / f"{prefix}_nchw_{IN_W}x{IN_H}_fp32.onnx"
 
     torch.onnx.export(
         model, dummy, str(raw_path),
@@ -118,13 +124,13 @@ def main() -> int:
     # 検証: torch と onnxruntime(CPU) の出力一致
     import onnxruntime as ort
     sess = ort.InferenceSession(str(out_path), providers=["CPUExecutionProvider"])
-    x = np.random.rand(1, 3, TILE, TILE).astype(np.float32)
+    x = np.random.rand(1, 3, IN_H, IN_W).astype(np.float32)
     with torch.no_grad():
         ref = model(torch.from_numpy(x)).numpy()
     got = sess.run(None, {"input": x})[0]
     diff = float(np.abs(ref - got).max())
     print(f"出力形状: {got.shape}, torch/ORT 最大差: {diff:.3e}")
-    if got.shape != (1, 3, TILE * SCALE, TILE * SCALE) or diff > 1e-4:
+    if got.shape != (1, 3, IN_H * SCALE, IN_W * SCALE) or diff > 1e-4:
         print("検証NG")
         return 1
     print("検証OK")

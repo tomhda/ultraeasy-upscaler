@@ -96,6 +96,44 @@ fp32忠実度 38.4dB。再現実験は `scripts/npu/bisect_vaiml_bf16*.py`。
   Real-ESRGAN は輪郭強調の知覚系で「加工感」。忠実 vs 知覚の好みで選ぶ
 - int8 の劣化はエッジのギザギザとして現れる（bf16 で解消）
 
+## Windows ML 経由の実行（2026-08-14〜15 追記）
+
+Ryzen AI SW 直叩きの代わりに、OS標準の Windows ML（ONNX Runtime +
+EPカタログ）経由で同じモデルを実行する検証。実装は姉妹リポジトリ
+`ultraeasy-upscaler-winai/tools/winml-sr-poc`（C#コンソール、MSIX不要・
+unpackaged動作）。**fp32 ONNX を投げるだけで、量子化・bf16変換・
+キャッシュ管理は全て EP 側が自動化**する。
+
+実測（854x480→4x、PSNRは同モデルCPU fp32比）:
+
+| 構成 | ms/タイル | 1枚(推論) | PSNR |
+|---|---|---|---|
+| Anime Video v3 × DML (GPU) | 52ms/256 | **0.63秒** | 101dB |
+| Anime Video v3 dp × VitisAI (NPU) 512タイル | 512ms/512 | **1.02秒** | 51.6dB |
+| Real-ESRGAN (RRDB) × VitisAI (NPU) | 170ms/256 | 2.06秒 | 47.2dB |
+| Real-ESRGAN (RRDB) × DML (GPU) | 231ms/256 | 2.78秒 | 94.9dB |
+
+主要な発見:
+
+- **WU配信の VitisAI EP 1.8 では PReLU bf16 誤コンパイル（発見4）が
+  発生しない**（非分解モデルで PSNR 59.7dB）。ただし分解版(dp)の方が
+  依然約2倍速い（256タイルで 133ms vs 274ms）ため分解は高速化技として有効
+- **NPU時間は処理ピクセル数にほぼ線形**（dp bf16 で約2.0µs/px、
+  タイル毎固定費は約7msのみ）。よってタイルサイズは「パディング＋
+  オーバーラップの捨てピクセル最小」で選ぶ。854x480 は core 480 の
+  512タイル（縦ピッタリ・2枚）で捨て28%まで減り 1.02秒/枚
+- **フレームぴったり（854x480一発）は不成立**: VAIML コンパイルは通るが
+  実行時に XRT の単一ディスパッチ時間制限超過（ERT_CMD_STATE_TIMEOUT）。
+  タイル分割はランタイム制約としても必須
+- DML (DirectML) は同じ 860M を使う realesrgan-ncnn-vulkan より約2倍速い。
+  MIGraphX (69ms) / RyzenAILight (227ms) は DML (52ms) に劣り不採用
+- EP は Microsoft Store でなく **Windows Update 経由で配信**されるため、
+  WU 一時停止中はダウンロード不可（公式既知事項）。取得後は停止中も動作
+- 初回の VAIML コンパイル（1〜9分）は EP が自動で永続キャッシュし、
+  以後のセッション生成は 0.1〜1.2秒
+- 常駐 serve モード（stdin/stdout 生ピクセルパイプ）で、フレームI/O
+  オーバーヘッドを 1.2〜1.4秒 → 約50〜60ms/枚 に短縮
+
 ## 用途別の推奨
 
 | 用途 | 構成 |
@@ -109,7 +147,7 @@ fp32忠実度 38.4dB。再現実験は `scripts/npu/bisect_vaiml_bf16*.py`。
 ## 再現手順（scripts/npu/）
 
 ```text
-export_animevideov3.py   SRVGGNetCompact → 固定256x256 fp32 ONNX（--tile で512可）
+export_animevideov3.py   SRVGGNetCompact → 固定256x256 fp32 ONNX（--tile で512可・--size WxH で非正方形可）
 export_x4plus_anime.py   RRDBNet(6B) → 同上
 make_calib_patches.py    フレーム → 256pxキャリブパッチ（int8用・--src/--out/--count）
 quantize_animevideov3.py Quark XINT8 量子化（int8用・--prefix/--calib/--n）
