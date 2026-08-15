@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 class OutputLocation(str, Enum):
@@ -11,8 +12,20 @@ class OutputLocation(str, Enum):
 
 
 class UpscaleBackend(str, Enum):
-    VULKAN = "vulkan"  # realesrgan-ncnn-vulkan
-    NPU = "npu"        # Ryzen AI NPU (VitisAI EP)
+    # GUIの「自動（GPU優先）」は、設定へはWINML_GPUとして正規化する。
+    WINML_GPU = "winml_gpu"    # UEU helper / DirectML GPU
+    NPU_NATIVE = "npu_native"  # UEU helper / Ryzen AI VitisAI EP
+    VULKAN = "vulkan"          # realesrgan-ncnn-vulkan fallback
+    # 旧GUI/API互換用。新しいGUIのNPU選択はNPU_NATIVEへ寄せる。
+    NPU = "npu"                # deprecated: legacy npu_worker route
+
+
+class ModelFamily(str, Enum):
+    """新AIヘルパーが提供する3系統のモデル。"""
+
+    ANIME = "anime"
+    PHOTO = "photo"
+    REALESRGAN = "realesrgan"
 
 
 class ProcessingOrder(str, Enum):
@@ -25,6 +38,44 @@ class ProcessingOrder(str, Enum):
 # vendor 同梱の既定モデル
 DEFAULT_MODEL = "realesrgan-x4plus"
 DEFAULT_INTERPOLATION_MODEL = "rife-v4.6"
+DEFAULT_MODEL_FAMILY = ModelFamily.ANIME
+
+# 新AIヘルパー用ONNXモデル。キーはタイルの一辺。
+# NPU_NATIVEはアニメ/質感系を512、Real-ESRGANを256で実行する。
+HELPER_MODEL_FILES = {
+    UpscaleBackend.WINML_GPU: {
+        ModelFamily.ANIME: {
+            256: "animevideov3_nchw_256x256_fp32.onnx",
+            512: "animevideov3_nchw_512x512_fp32.onnx",
+        },
+        ModelFamily.PHOTO: {
+            256: "purephoto_nchw_256x256_fp32.onnx",
+            512: "purephoto_nchw_512x512_fp32.onnx",
+        },
+        ModelFamily.REALESRGAN: {
+            256: "realesrgan_nchw_256x256_fp32.onnx",
+        },
+    },
+    UpscaleBackend.NPU_NATIVE: {
+        ModelFamily.ANIME: {
+            512: "animevideov3dp_nchw_512x512_bf16cast.onnx",
+        },
+        ModelFamily.PHOTO: {
+            512: "purephoto_nchw_512x512_bf16cast.onnx",
+        },
+        ModelFamily.REALESRGAN: {
+            256: "realesrgan_nchw_256x256_bf16cast.onnx",
+        },
+    },
+}
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# マシン固有の絶対パスは使わず、リポジトリ相対の既定値にする。
+# 実運用ではUEU_MODELS_DIR / UEU_NPU_CACHEで上書きできる。
+DEFAULT_MODELS_DIR = _REPO_ROOT / "tmp" / "npu-anime"
+DEFAULT_VENDOR_MODELS_DIR = _REPO_ROOT / "vendor" / "amd-npu" / "onnx-models"
+DEFAULT_NPU_CACHE_DIR = _REPO_ROOT / "vendor" / "amd-npu-1.8"
 
 
 @dataclass
@@ -32,10 +83,11 @@ class UpscaleSettings:
     """1ジョブ分のアップスケール設定。"""
 
     # --- 基本 ---
-    backend: UpscaleBackend = UpscaleBackend.VULKAN     # 実行経路
-    scale: int = 4                                   # 倍率: 2 / 3 / 4
+    backend: UpscaleBackend = UpscaleBackend.WINML_GPU # 自動（GPU優先）を正規化した値
+    scale: int = 4                                   # 倍率: 2 / 3 / 4（新ヘルパーは4固定）
     # None = アップスケールしない（動画で補間だけ行う場合に使う）
     model: str | None = DEFAULT_MODEL                # realesrgan モデル名（-n）
+    model_family: ModelFamily = DEFAULT_MODEL_FAMILY # 新AIヘルパーのモデル系統
     image_format: str = "png"                        # 画像出力形式: png / jpg / webp
 
     # --- 出力先 ---

@@ -100,7 +100,7 @@ fp32忠実度 38.4dB。再現実験は `scripts/npu/bisect_vaiml_bf16*.py`。
 
 Ryzen AI SW 直叩きの代わりに、OS標準の Windows ML（ONNX Runtime +
 EPカタログ）経由で同じモデルを実行する検証。実装は姉妹リポジトリ
-`ultraeasy-upscaler-winai/tools/winml-sr-poc`（C#コンソール、MSIX不要・
+`tools/winml-sr`（C#コンソール、MSIX不要・
 unpackaged動作）。**fp32 ONNX を投げるだけで、量子化・bf16変換・
 キャッシュ管理は全て EP 側が自動化**する。
 

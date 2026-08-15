@@ -121,12 +121,23 @@ def upscale_image(in_path: str, out_path: str, settings: UpscaleSettings,
         [-t <tile>] [-g <gpu>] [-j <threads>] [-x] -f <fmt> -m <models_dir>
     進捗は stderr の "xx.xx%" を解析する。out_path の親フォルダは事前に作成すること。
     """
+    progress = progress or _noop
+
+    # 旧API互換。新GUIのNPU選択は下のNPU_NATIVEへ寄せる。
     if settings.backend == UpscaleBackend.NPU:
         from . import npu_backend
         npu_backend.upscale_image(in_path, out_path, settings, progress, cancel)
         return
 
-    progress = progress or _noop
+    if settings.backend in {UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE}:
+        from . import helper_backend
+
+        try:
+            helper_backend.upscale_image(in_path, out_path, settings, progress, cancel)
+            return
+        except helper_backend.HelperBackendUnavailable as exc:
+            # DirectML/NPUのモデル不在・helper起動失敗時は、既存のVulkan資産へ退避する。
+            progress(0.0, f"AIヘルパーを起動できないためVulkanへ切替… ({exc})")
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -195,12 +206,22 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
     進捗は out_dir の生成ファイル数 / in_dir の画像数 で算出するのが堅実
     （別スレッドでポーリング）。out_dir は事前に作成しておくこと。
     """
+    progress = progress or _noop
+
+    # 旧API互換。新GUIのNPU選択は下のNPU_NATIVEへ寄せる。
     if settings.backend == UpscaleBackend.NPU:
         from . import npu_backend
         npu_backend.upscale_folder(in_dir, out_dir, settings, progress, cancel)
         return
 
-    progress = progress or _noop
+    if settings.backend in {UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE}:
+        from . import helper_backend
+
+        try:
+            helper_backend.upscale_folder(in_dir, out_dir, settings, progress, cancel)
+            return
+        except helper_backend.HelperBackendUnavailable as exc:
+            progress(0.0, f"AIヘルパーを起動できないためVulkanへ切替… ({exc})")
 
     in_p = Path(in_dir)
     out_p = Path(out_dir)

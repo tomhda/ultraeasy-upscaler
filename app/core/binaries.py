@@ -1,6 +1,7 @@
 """外部バイナリ（realesrgan-ncnn-vulkan / ffmpeg / ffprobe）の探索とモデル列挙。"""
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import sys
@@ -47,8 +48,11 @@ def npu_models_dir() -> Path:
 
 
 def npu_cache_dir() -> Path:
-    # VitisAI EP の modelcachekey_* フォルダは ONNX と同じ vendor/amd-npu 直下
-    return npu_dir()
+    """VitisAIキャッシュの場所を返す（UEU_NPU_CACHEで上書き可能）。"""
+    override = os.environ.get("UEU_NPU_CACHE")
+    if override:
+        return Path(override).expanduser()
+    return repo_root() / "vendor" / "amd-npu-1.8"
 
 
 # NPU対応モデルのレジストリ。キーは Vulkan 側と同じモデル名（settings.model）。

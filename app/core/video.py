@@ -9,9 +9,11 @@
 from __future__ import annotations
 
 import re
+import queue
 import subprocess
 import tempfile
 import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -318,8 +320,8 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
     if want_audio:
         cmd += ["-i", audio_source]
 
-    # 映像エンコード設定
-    cmd += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"]
+    # 映像エンコード設定。元実装と同じBT.709/TVレンジを明示する。
+    cmd += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
     cmd += _encoder_args(encoder, settings.video_quality)
     cmd += [
         "-pix_fmt", "yuv420p", "-r", fps_str,
@@ -348,7 +350,7 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
                 "-i", in_pattern,
                 "-i", audio_source,
             ]
-            cmd2 += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"]
+            cmd2 += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
             cmd2 += _encoder_args(encoder, settings.video_quality)
             cmd2 += [
                 "-pix_fmt", "yuv420p", "-r", fps_str,
@@ -363,3 +365,229 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
 
     if progress:
         progress(1.0, "再結合完了")
+
+
+def _read_raw_frame(stream, size: int) -> bytes | None:
+    """rawvideoから1フレームを厳密に読む。正常EOFはNone。"""
+    buf = bytearray()
+    while len(buf) < size:
+        chunk = stream.read(size - len(buf))
+        if not chunk:
+            if not buf:
+                return None
+            raise EOFError(f"rawvideo frame ended early ({len(buf)}/{size} bytes)")
+        buf += chunk
+    return bytes(buf)
+
+
+def upscale_video_piped(
+    in_path: str,
+    out_path: str,
+    settings: UpscaleSettings,
+    progress: Optional[ProgressCb] = None,
+    cancel=None,
+) -> None:
+    """ffmpeg rawvideo → UEU helper → ffmpegをPNG無しで直結する。"""
+    import numpy as np
+
+    from . import helper_backend, media
+
+    progress = progress or (lambda _fraction, _message: None)
+    info = media.probe(in_path)
+    width, height = info.width, info.height
+    fps = info.fps or 30.0
+    total_frames = info.frame_count
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"動画の解像度を取得できません: {in_path}")
+
+    progress(0.0, "AI準備中…")
+    session = helper_backend.open_session(settings, width, height, progress, cancel)
+    out_width = width * session.scale
+    out_height = height * session.scale
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    decoder_cmd = [
+        binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-i", in_path, "-map", "0:v:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+    ]
+
+    encoder = "libx264"
+    if settings.hw_encode:
+        encoder = detect_hw_encoder("h264") or "libx264"
+    fps_str = repr(float(fps))
+    encoder_cmd = [
+        binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "rawvideo", "-pix_fmt", "rgb24",
+        "-s:v", f"{out_width}x{out_height}", "-r", fps_str, "-i", "pipe:0",
+    ]
+    want_audio = bool(settings.keep_audio and info.has_audio)
+    if want_audio:
+        encoder_cmd += ["-i", in_path]
+    encoder_cmd += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+    encoder_cmd += _encoder_args(encoder, settings.video_quality)
+    encoder_cmd += [
+        "-pix_fmt", "yuv420p", "-r", fps_str,
+        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+    ]
+    if want_audio:
+        # pipe処理は再試行できないため、コンテナ互換性が安定するAACでmuxする。
+        encoder_cmd += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-b:a", "192k"]
+    else:
+        encoder_cmd += ["-map", "0:v:0"]
+    encoder_cmd += [str(out)]
+
+    decoder: subprocess.Popen | None = None
+    encoder_proc: subprocess.Popen | None = None
+    errors: list[BaseException] = []
+    error_lock = threading.Lock()
+    stop = threading.Event()
+    decoded: queue.Queue[object] = queue.Queue(maxsize=2)
+    upscaled: queue.Queue[object] = queue.Queue(maxsize=2)
+    sentinel = object()
+    decoder_stderr: list[str] = []
+    encoder_stderr: list[str] = []
+
+    def _fail(exc: BaseException) -> None:
+        with error_lock:
+            if not errors:
+                errors.append(exc)
+        stop.set()
+
+    def _queue_put(target: queue.Queue[object], value: object) -> bool:
+        while not stop.is_set():
+            try:
+                target.put(value, timeout=0.1)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def _drain(stream, target: list[str]) -> None:
+        try:
+            for raw in iter(stream.readline, b""):
+                target.append(raw.decode("utf-8", errors="replace").rstrip())
+        except Exception:
+            pass
+
+    try:
+        decoder = subprocess.Popen(
+            decoder_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            bufsize=0,
+            creationflags=_NO_WINDOW,
+        )
+        encoder_proc = subprocess.Popen(
+            encoder_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+            creationflags=_NO_WINDOW,
+        )
+        assert decoder.stdout is not None and decoder.stderr is not None
+        assert encoder_proc.stdin is not None and encoder_proc.stderr is not None
+
+        decoder_drain = threading.Thread(
+            target=_drain, args=(decoder.stderr, decoder_stderr), name="ueu-decode-stderr", daemon=True
+        )
+        encoder_drain = threading.Thread(
+            target=_drain, args=(encoder_proc.stderr, encoder_stderr), name="ueu-encode-stderr", daemon=True
+        )
+        decoder_drain.start()
+        encoder_drain.start()
+        frame_bytes = width * height * 3
+
+        def _decode() -> None:
+            try:
+                while not stop.is_set():
+                    raw = _read_raw_frame(decoder.stdout, frame_bytes)
+                    if raw is None:
+                        _queue_put(decoded, sentinel)
+                        return
+                    frame = np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3).copy()
+                    if not _queue_put(decoded, frame):
+                        return
+            except BaseException as exc:
+                _fail(exc)
+
+        def _infer() -> None:
+            try:
+                while not stop.is_set():
+                    try:
+                        item = decoded.get(timeout=0.1)
+                    except queue.Empty:
+                        continue
+                    if item is sentinel:
+                        _queue_put(upscaled, sentinel)
+                        return
+                    result = session.upscale(item)  # type: ignore[arg-type]
+                    if not _queue_put(upscaled, result):
+                        return
+            except BaseException as exc:
+                _fail(exc)
+
+        processed = 0
+
+        def _encode() -> None:
+            nonlocal processed
+            try:
+                while not stop.is_set():
+                    try:
+                        item = upscaled.get(timeout=0.1)
+                    except queue.Empty:
+                        continue
+                    if item is sentinel:
+                        encoder_proc.stdin.close()
+                        return
+                    encoder_proc.stdin.write(np.ascontiguousarray(item).tobytes())
+                    processed += 1
+                    fraction = min(0.999, processed / total_frames) if total_frames else 0.0
+                    suffix = f" {processed}/{total_frames}フレーム" if total_frames else f" {processed}フレーム"
+                    progress(fraction, "動画をアップスケール中…" + suffix)
+            except BaseException as exc:
+                _fail(exc)
+
+        threads = [
+            threading.Thread(target=_decode, name="ueu-video-read", daemon=True),
+            threading.Thread(target=_infer, name="ueu-video-ai", daemon=True),
+            threading.Thread(target=_encode, name="ueu-video-write", daemon=True),
+        ]
+        for thread in threads:
+            thread.start()
+
+        while any(thread.is_alive() for thread in threads):
+            if cancel is not None and cancel.is_set():
+                _fail(Cancelled())
+            if stop.is_set():
+                _terminate(decoder)
+                _terminate(encoder_proc)
+                session.close(force=True)
+                break
+            time.sleep(0.05)
+        for thread in threads:
+            thread.join(timeout=5)
+
+        if not stop.is_set():
+            decoder_ret = decoder.wait(timeout=10)
+            encoder_ret = encoder_proc.wait(timeout=60)
+            decoder_drain.join(timeout=2)
+            encoder_drain.join(timeout=2)
+            if decoder_ret != 0:
+                raise RuntimeError("動画デコードに失敗しました:\n" + "\n".join(decoder_stderr[-15:]))
+            if encoder_ret != 0:
+                raise RuntimeError("動画エンコードに失敗しました:\n" + "\n".join(encoder_stderr[-15:]))
+
+        if errors:
+            raise errors[0]
+        if not out.is_file() or out.stat().st_size == 0:
+            raise RuntimeError(f"動画出力が生成されませんでした: {out}")
+        progress(1.0, "完了")
+    finally:
+        if decoder is not None and decoder.poll() is None:
+            _terminate(decoder)
+        if encoder_proc is not None and encoder_proc.poll() is None:
+            _terminate(encoder_proc)
+        session.close(force=bool(errors) or (cancel is not None and cancel.is_set()))

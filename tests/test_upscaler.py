@@ -40,7 +40,10 @@ def test_upscale_image(tmp_path: Path) -> None:
     _require_assets()
     out = tmp_path / "out.png"
     rec = _ProgressRecorder()
-    settings = UpscaleSettings(scale=4, model="realesrgan-x4plus", image_format="png")
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.VULKAN,
+        scale=4, model="realesrgan-x4plus", image_format="png",
+    )
 
     upscaler.upscale_image(str(INPUT_JPG), str(out), settings, progress=rec)
 
@@ -61,7 +64,10 @@ def test_upscale_image_jpg_format(tmp_path: Path) -> None:
     """出力拡張子に応じて -f が選ばれ、jpg でも書き出せること。"""
     _require_assets()
     out = tmp_path / "out.jpg"
-    settings = UpscaleSettings(scale=4, model="realesrgan-x4plus", image_format="jpg")
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.VULKAN,
+        scale=4, model="realesrgan-x4plus", image_format="jpg",
+    )
 
     upscaler.upscale_image(str(INPUT_JPG), str(out), settings)
 
@@ -80,7 +86,10 @@ def test_upscale_folder(tmp_path: Path) -> None:
     shutil.copy(INPUT2_JPG, in_dir / "input2.jpg")
 
     rec = _ProgressRecorder()
-    settings = UpscaleSettings(scale=4, model="realesrgan-x4plus", image_format="png")
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.VULKAN,
+        scale=4, model="realesrgan-x4plus", image_format="png",
+    )
 
     upscaler.upscale_folder(str(in_dir), str(out_dir), settings, progress=rec)
 
@@ -97,7 +106,10 @@ def test_upscale_image_animevideov3_scale2(tmp_path: Path) -> None:
     """multi-scale モデルでスケール接尾辞選択が効くこと（animevideov3 x2）。"""
     _require_assets()
     out = tmp_path / "av3_x2.png"
-    settings = UpscaleSettings(scale=2, model="realesr-animevideov3", image_format="png")
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.VULKAN,
+        scale=2, model="realesr-animevideov3", image_format="png",
+    )
 
     upscaler.upscale_image(str(INPUT_JPG), str(out), settings)
 
@@ -153,7 +165,10 @@ def test_upscale_image_cancel(tmp_path: Path) -> None:
     """事前セットされた cancel で即座に Cancelled が送出されること。"""
     _require_assets()
     out = tmp_path / "cancel.png"
-    settings = UpscaleSettings(scale=4, model="realesrgan-x4plus", image_format="png")
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.VULKAN,
+        scale=4, model="realesrgan-x4plus", image_format="png",
+    )
 
     cancel = threading.Event()
     cancel.set()  # 開始前からキャンセル状態
@@ -183,6 +198,73 @@ def test_upscale_image_npu_dispatch(monkeypatch, tmp_path: Path) -> None:
     assert calls[0][0] == "in.png"
     assert calls[0][1] == str(out)
     assert calls[0][2].backend == UpscaleBackend.NPU
+
+
+def test_upscale_image_new_gpu_dispatch(monkeypatch, tmp_path: Path) -> None:
+    """WINML_GPUは新しい常駐ヘルパーへ委譲する。"""
+    from app.core import helper_backend
+
+    calls: list[tuple[str, str, UpscaleSettings]] = []
+    out = tmp_path / "out.png"
+
+    def fake_helper(in_path, out_path, settings, progress=None, cancel=None):
+        del cancel
+        calls.append((in_path, out_path, settings))
+        Path(out_path).write_bytes(b"ok")
+        if progress:
+            progress(1.0, "完了")
+
+    monkeypatch.setattr(helper_backend, "upscale_image", fake_helper)
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, scale=4)
+    upscaler.upscale_image("in.png", str(out), settings)
+
+    assert calls == [("in.png", str(out), settings)]
+
+
+def test_upscale_image_new_helper_failure_falls_back_to_vulkan(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """新ヘルパー起動失敗時は既存Vulkanコマンドへフォールバックする。"""
+    from app.core import helper_backend
+
+    class FakeProc:
+        def __init__(self):
+            self.stderr = iter(["100%\n"])
+            self._returncode = None
+
+        def poll(self):
+            return self._returncode
+
+        def wait(self, timeout=None):
+            del timeout
+            self._returncode = 0
+            return 0
+
+        def terminate(self):
+            self._returncode = -15
+
+        def kill(self):
+            self._returncode = -9
+
+    def unavailable(*_args, **_kwargs):
+        raise helper_backend.HelperBackendUnavailable("helper missing")
+
+    def fake_build(*_args, **_kwargs):
+        return ["fake-vulkan", "-o", str(tmp_path / "out.png")]
+
+    def fake_spawn(_cmd):
+        (tmp_path / "out.png").write_bytes(b"ok")
+        return FakeProc()
+
+    monkeypatch.setattr(helper_backend, "upscale_image", unavailable)
+    monkeypatch.setattr(upscaler, "_build_cmd", fake_build)
+    monkeypatch.setattr(upscaler, "_spawn", fake_spawn)
+    out = tmp_path / "out.png"
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, scale=4)
+
+    upscaler.upscale_image("in.png", str(out), settings)
+
+    assert out.read_bytes() == b"ok"
 
 
 def test_upscale_folder_npu_dispatch(monkeypatch, tmp_path: Path) -> None:

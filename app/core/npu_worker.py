@@ -1,4 +1,8 @@
-"""Subprocess entrypoint for Ryzen AI NPU image upscaling."""
+"""Legacy subprocess entrypoint for Ryzen AI NPU image upscaling.
+
+Deprecated: GUIのNPUジョブは ``NPU_NATIVE`` と常駐 ``npu_serve`` へ移行した。
+既存スクリプトと旧API互換のため、画像I/Oとrunnerの基盤として削除せず残している。
+"""
 from __future__ import annotations
 
 import argparse

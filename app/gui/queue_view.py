@@ -146,9 +146,18 @@ class QueueRow(QFrame):
         settings = self.job.settings
         if settings is None:
             return ""
-        upscale = settings.model or "なし"
+        backend = getattr(settings.backend, "value", str(settings.backend))
+        family = getattr(settings.model_family, "value", str(settings.model_family))
+        if backend in {"winml_gpu", "npu_native"}:
+            upscale = f"{family}（4x）"
+        else:
+            upscale = settings.model or "なし"
         interpolation = settings.interpolation_model or "なし"
-        return f"アップスケール: {upscale}\nフレーム補間: {interpolation}"
+        return (
+            f"AI実行先: {backend}\n"
+            f"アップスケール: {upscale}\n"
+            f"フレーム補間: {interpolation}"
+        )
 
     def _name_text(self) -> str:
         return self._name.fontMetrics().elidedText(

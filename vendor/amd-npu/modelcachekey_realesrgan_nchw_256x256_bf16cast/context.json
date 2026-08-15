@@ -1595,14 +1595,14 @@
   },
   "onnxPath": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu\\onnx-models\\realesrgan_nchw_256x256_bf16cast.onnx",
   "sessionOptions": {
-   "cache_key": "modelcachekey_realesrgan_nchw_256x256_bf16cast",
-   "xlnx_enable_old_qdq": "1",
    "enable_txn_elf": "1",
    "dd_use_elf_flow": "1",
-   "is_preemptible": "1",
+   "xlnx_enable_old_qdq": "1",
    "enable_preemption": "1",
-   "session_options": "2537271397720",
+   "is_preemptible": "1",
    "cache_dir": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu",
+   "cache_key": "modelcachekey_realesrgan_nchw_256x256_bf16cast",
+   "session_options": "2473775257016",
    "enable_cache_file_io_in_mem": "0"
   },
   "targets": [
@@ -1615,14 +1615,8 @@
     "xclbin": "AMD_AIE2P_4x4_Overlay.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "dump_subgraph_ops": {
-       "boolValue": false
-      },
       "debug_mode": {
        "stringValue": "performance"
-      },
-      "disable_std_quant": {
-       "boolValue": false
       },
       "opt_level": {
        "uintValue": 2
@@ -1630,18 +1624,24 @@
       "enable_fast_pm": {
        "boolValue": true
       },
+      "disable_std_quant": {
+       "boolValue": false
+      },
       "profile": {
        "uintValue": 0
       },
       "dpu_subgraph_num": {
        "uintValue": 1000
+      },
+      "dump_subgraph_ops": {
+       "boolValue": false
       }
      }
     },
     "py3Round": true,
     "providerOptions": {
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
      "enable_preemption": "1",
      "enable_txn_elf": "1"
     }
@@ -1658,19 +1658,19 @@
       "dpu_subgraph_num": {
        "uintValue": 1000
       },
-      "debug_mode": {
-       "stringValue": "performance"
-      },
       "opt_level": {
        "uintValue": 65536
       },
-      "dump_subgraph_ops": {
+      "disable_std_quant": {
        "boolValue": false
+      },
+      "debug_mode": {
+       "stringValue": "performance"
       },
       "profile": {
        "uintValue": 0
       },
-      "disable_std_quant": {
+      "dump_subgraph_ops": {
        "boolValue": false
       },
       "enable_fast_pm": {
@@ -1693,26 +1693,26 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_fast_pm": {
-       "boolValue": true
-      },
       "disable_std_quant": {
-       "boolValue": false
-      },
-      "enable_matmul_to_conv": {
        "boolValue": false
       },
       "opt_level": {
        "uintValue": 65536
       },
+      "enable_fast_pm": {
+       "boolValue": true
+      },
       "reserve_const_data": {
+       "boolValue": false
+      },
+      "dump_subgraph_ops": {
+       "boolValue": false
+      },
+      "enable_matmul_to_conv": {
        "boolValue": false
       },
       "dpu_subgraph_num": {
        "uintValue": 500
-      },
-      "dump_subgraph_ops": {
-       "boolValue": false
       },
       "debug_mode": {
        "stringValue": "performance"
@@ -1722,10 +1722,10 @@
     "shareHwContext": true,
     "py3Round": true,
     "providerOptions": {
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
      "enable_txn_elf": "1",
-     "is_preemptible": "1"
+     "enable_preemption": "1"
     }
    },
    {
@@ -1736,29 +1736,29 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "opt_level": {
-       "uintValue": 65536
+      "reserve_const_data": {
+       "boolValue": false
       },
       "enable_fast_pm": {
        "boolValue": true
       },
-      "dump_subgraph_ops": {
+      "enable_matmul_to_conv": {
+       "boolValue": false
+      },
+      "debug_mode": {
+       "stringValue": "performance"
+      },
+      "disable_std_quant": {
        "boolValue": false
       },
       "dpu_subgraph_num": {
        "uintValue": 500
       },
-      "enable_matmul_to_conv": {
-       "boolValue": false
+      "opt_level": {
+       "uintValue": 65536
       },
-      "disable_std_quant": {
+      "dump_subgraph_ops": {
        "boolValue": false
-      },
-      "reserve_const_data": {
-       "boolValue": false
-      },
-      "debug_mode": {
-       "stringValue": "performance"
       }
      }
     },
@@ -1779,14 +1779,8 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "opt_level": {
-       "uintValue": 65536
-      },
-      "enable_fast_pm": {
-       "boolValue": true
-      },
-      "dpu_subgraph_num": {
-       "uintValue": 500
+      "disable_std_quant": {
+       "boolValue": false
       },
       "debug_mode": {
        "stringValue": "performance"
@@ -1794,14 +1788,20 @@
       "enable_matmul_to_conv": {
        "boolValue": false
       },
+      "enable_fast_pm": {
+       "boolValue": true
+      },
+      "opt_level": {
+       "uintValue": 65536
+      },
       "dump_subgraph_ops": {
        "boolValue": false
       },
       "reserve_const_data": {
        "boolValue": false
       },
-      "disable_std_quant": {
-       "boolValue": false
+      "dpu_subgraph_num": {
+       "uintValue": 500
       }
      }
     },
@@ -1810,8 +1810,8 @@
     "providerOptions": {
      "dd_use_elf_flow": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1",
-     "enable_txn_elf": "1"
+     "enable_txn_elf": "1",
+     "is_preemptible": "1"
     }
    },
    {
@@ -1823,14 +1823,17 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "dump_subgraph_ops": {
-       "boolValue": false
-      },
-      "enable_matmul_to_conv": {
-       "boolValue": false
-      },
       "disable_std_quant": {
        "boolValue": false
+      },
+      "reserve_const_data": {
+       "boolValue": false
+      },
+      "dpu_subgraph_num": {
+       "uintValue": 500
+      },
+      "enable_fast_pm": {
+       "boolValue": true
       },
       "debug_mode": {
        "stringValue": "performance"
@@ -1838,17 +1841,14 @@
       "enable_matmul_add_fusion": {
        "boolValue": false
       },
+      "enable_matmul_to_conv": {
+       "boolValue": false
+      },
       "opt_level": {
        "uintValue": 65536
       },
-      "enable_fast_pm": {
-       "boolValue": true
-      },
-      "reserve_const_data": {
+      "dump_subgraph_ops": {
        "boolValue": false
-      },
-      "dpu_subgraph_num": {
-       "uintValue": 500
       }
      }
     },
@@ -1856,9 +1856,9 @@
     "py3Round": true,
     "providerOptions": {
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
      "is_preemptible": "1",
-     "enable_txn_elf": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -1869,32 +1869,32 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "dump_subgraph_ops": {
-       "boolValue": false
-      },
-      "reserve_const_data": {
-       "boolValue": false
-      },
       "debug_mode": {
        "stringValue": "performance"
       },
       "enable_matmul_add_fusion": {
        "boolValue": false
       },
-      "disable_std_quant": {
+      "enable_fast_pm": {
+       "boolValue": true
+      },
+      "dump_subgraph_ops": {
+       "boolValue": false
+      },
+      "reserve_const_data": {
        "boolValue": false
       },
       "opt_level": {
        "uintValue": 65536
       },
-      "enable_fast_pm": {
+      "enable_matmul_to_conv": {
        "boolValue": true
       },
       "dpu_subgraph_num": {
        "uintValue": 500
       },
-      "enable_matmul_to_conv": {
-       "boolValue": true
+      "disable_std_quant": {
+       "boolValue": false
       }
      }
     },
@@ -1902,8 +1902,8 @@
     "py3Round": true,
     "providerOptions": {
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
      "enable_txn_elf": "1",
+     "enable_preemption": "1",
      "is_preemptible": "1"
     }
    },
@@ -1915,14 +1915,8 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "opt_level": {
-       "uintValue": 65536
-      },
-      "enable_fast_pm": {
-       "boolValue": true
-      },
-      "dpu_subgraph_num": {
-       "uintValue": 500
+      "enable_matmul_add_fusion": {
+       "boolValue": false
       },
       "enable_matmul_to_conv": {
        "boolValue": true
@@ -1930,11 +1924,17 @@
       "dump_subgraph_ops": {
        "boolValue": false
       },
+      "dpu_subgraph_num": {
+       "uintValue": 500
+      },
       "debug_mode": {
        "stringValue": "performance"
       },
-      "enable_matmul_add_fusion": {
-       "boolValue": false
+      "opt_level": {
+       "uintValue": 65536
+      },
+      "enable_fast_pm": {
+       "boolValue": true
       },
       "reserve_const_data": {
        "boolValue": false
@@ -1947,10 +1947,10 @@
     "shareHwContext": true,
     "py3Round": true,
     "providerOptions": {
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
      "enable_txn_elf": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_preemption": "1"
     }
    },
    {
@@ -1962,51 +1962,51 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_qdq_force_xint": {
-       "boolValue": true
-      },
-      "opt_level": {
-       "uintValue": 3
-      },
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
-      },
       "mladf_options": {
        "stringValue": "control-opt=1"
       },
-      "advanced_opt": {
+      "enable_qdq_force_xint": {
        "boolValue": true
-      },
-      "enable_matmul_to_conv": {
-       "boolValue": false
-      },
-      "target": {
-       "stringValues": [
-        "AMD_AIE2P_4x8_CMC_Overlay"
-       ]
-      },
-      "global_round_mode": {
-       "stringValue": "DPU_ROUND"
       },
       "enable_mladf_in_memory_compile": {
        "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
       },
       "enable_weights_prefetch": {
        "boolValue": true
       },
       "enable_x2_ge": {
        "boolValue": true
+      },
+      "global_round_mode": {
+       "stringValue": "DPU_ROUND"
+      },
+      "advanced_opt": {
+       "boolValue": true
+      },
+      "target": {
+       "stringValues": [
+        "AMD_AIE2P_4x8_CMC_Overlay"
+       ]
+      },
+      "opt_level": {
+       "uintValue": 3
+      },
+      "enable_matmul_to_conv": {
+       "boolValue": false
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "0",
-     "is_preemptible": "0"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2017,17 +2017,11 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_weights_prefetch": {
-       "boolValue": true
-      },
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
       "mladf_options": {
        "stringValue": "control-opt=1"
       },
-      "global_round_mode": {
-       "stringValue": "DPU_ROUND"
+      "enable_qdq_force_xint": {
+       "boolValue": true
       },
       "advanced_opt": {
        "boolValue": true
@@ -2035,33 +2029,39 @@
       "enable_vaiml_flow_compile": {
        "boolValue": false
       },
+      "global_round_mode": {
+       "stringValue": "DPU_ROUND"
+      },
+      "enable_weights_prefetch": {
+       "boolValue": true
+      },
+      "opt_level": {
+       "uintValue": 3
+      },
+      "enable_x2_ge": {
+       "boolValue": true
+      },
       "target": {
        "stringValues": [
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
       },
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
+      },
       "enable_matmul_to_conv": {
        "boolValue": false
-      },
-      "enable_qdq_force_xint": {
-       "boolValue": true
-      },
-      "enable_x2_ge": {
-       "boolValue": true
-      },
-      "opt_level": {
-       "uintValue": 3
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "is_preemptible": "0",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "0",
-     "is_preemptible": "0"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2072,51 +2072,51 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_matmul_to_conv": {
-       "boolValue": false
-      },
-      "global_round_mode": {
-       "stringValue": "DPU_ROUND"
-      },
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
-      },
-      "enable_x2_ge": {
-       "boolValue": true
-      },
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
-      "enable_qdq_force_xint": {
+      "advanced_opt": {
        "boolValue": true
       },
       "opt_level": {
        "uintValue": 3
       },
-      "enable_weights_prefetch": {
+      "enable_x2_ge": {
        "boolValue": true
       },
-      "mladf_options": {
-       "stringValue": "control-opt=1"
-      },
-      "advanced_opt": {
-       "boolValue": true
+      "global_round_mode": {
+       "stringValue": "DPU_ROUND"
       },
       "target": {
        "stringValues": [
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
+      },
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
+      },
+      "enable_matmul_to_conv": {
+       "boolValue": false
+      },
+      "enable_qdq_force_xint": {
+       "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
+      },
+      "mladf_options": {
+       "stringValue": "control-opt=1"
+      },
+      "enable_weights_prefetch": {
+       "boolValue": true
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "0",
-     "is_preemptible": "0"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2132,8 +2132,8 @@
     ],
     "providerOptions": {
      "dd_use_elf_flow": "0",
-     "enable_txn_elf": "0",
      "enable_preemption": "1",
+     "enable_txn_elf": "0",
      "is_preemptible": "1"
     }
    },
@@ -2157,11 +2157,11 @@
     "oldQdq": false,
     "py3Round": true,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_txn_elf": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_preemption": "1"
     }
    },
    {
@@ -2173,21 +2173,21 @@
     "xclbin": "AMD_AIE2P_4x4_Overlay.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_fast_pm": {
-       "boolValue": true
-      },
       "opt_level": {
        "uintValue": 65536
+      },
+      "enable_fast_pm": {
+       "boolValue": true
       }
      }
     },
     "oldQdq": true,
     "py3Round": true,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "1",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "1",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2200,20 +2200,20 @@
     "xclbin": "AMD_AIE2P_4x4_Overlay.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_fast_pm": {
-       "boolValue": true
-      },
       "opt_level": {
        "uintValue": 65536
+      },
+      "enable_fast_pm": {
+       "boolValue": true
       }
      }
     },
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2226,7 +2226,7 @@
     "xclbin": "AMD_AIE2P_8x4x1_Overlay.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_fast_pm": {
+      "enable_convert_three_term_to_two_term": {
        "boolValue": true
       },
       "opt_level": {
@@ -2235,17 +2235,17 @@
       "uint16_qconv_leaky_fusion": {
        "boolValue": true
       },
-      "enable_convert_three_term_to_two_term": {
+      "enable_fast_pm": {
        "boolValue": true
       }
      }
     },
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2258,39 +2258,39 @@
     "xclbin": "AMD_AIE2P_2x4x1_Overlay.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
+      "enable_fast_pm": {
+       "boolValue": true
+      },
+      "enable_weights_prefetch": {
+       "boolValue": true
+      },
+      "enable_cost_model_tiling": {
+       "boolValue": true
+      },
+      "dpu_subgraph_num": {
+       "uintValue": 1000
+      },
       "profile": {
        "uintValue": 0
       },
       "enable_mergesync": {
        "boolValue": true
       },
-      "enable_fast_pm": {
-       "boolValue": true
-      },
       "enable_matmul_add_fusion": {
        "boolValue": false
       },
-      "enable_cost_model_tiling": {
-       "boolValue": true
-      },
-      "enable_weights_prefetch": {
-       "boolValue": true
-      },
       "opt_level": {
        "uintValue": 3
-      },
-      "dpu_subgraph_num": {
-       "uintValue": 1000
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2303,30 +2303,30 @@
     "xclbin": "1x4.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "profile": {
-       "uintValue": 0
-      },
       "debug_mode": {
        "stringValue": "performance"
-      },
-      "disable_std_quant": {
-       "boolValue": false
       },
       "dpu_subgraph_num": {
        "uintValue": 16
       },
-      "dump_subgraph_ops": {
+      "disable_std_quant": {
        "boolValue": false
       },
       "opt_level": {
+       "uintValue": 0
+      },
+      "dump_subgraph_ops": {
+       "boolValue": false
+      },
+      "profile": {
        "uintValue": 0
       }
      }
     },
     "providerOptions": {
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2352,8 +2352,8 @@
     },
     "providerOptions": {
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2369,26 +2369,26 @@
       "advanced_opt": {
        "boolValue": true
       },
-      "dpu_subgraph_num": {
-       "uintValue": 1000
+      "enable_fast_pm": {
+       "boolValue": true
       },
       "debug_mode": {
        "stringValue": "performance"
       },
-      "enable_fast_pm": {
-       "boolValue": true
-      },
       "opt_level": {
        "uintValue": 65536
+      },
+      "dpu_subgraph_num": {
+       "uintValue": 1000
       }
      }
     },
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2401,8 +2401,8 @@
     "xclbin": "4x2_psf_model_a8w8_qdq.xclbin",
     "providerOptions": {
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
      "enable_preemption": "1",
+     "enable_txn_elf": "1",
      "is_preemptible": "1"
     }
    },
@@ -2415,11 +2415,11 @@
     ],
     "xclbin": "llama2_mladf_2x4x4_v1_gemmbfp16_silu_mul_mha_rms_rope.xclbin",
     "providerOptions": {
-     "enable_cache_file_io_in_mem": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "enable_cache_file_io_in_mem": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2430,10 +2430,10 @@
     ],
     "xclbin": "8x4_wcr_a16w8_qdq.xclbin",
     "providerOptions": {
-     "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "dd_use_elf_flow": "1",
+     "enable_preemption": "1",
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2444,11 +2444,11 @@
     ],
     "xclbin": "8x4_waic_a16w8_qdq.xclbin",
     "providerOptions": {
-     "WBFLOW": "true",
-     "dd_use_elf_flow": "1",
      "enable_txn_elf": "1",
+     "enable_preemption": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "WBFLOW": "true",
+     "dd_use_elf_flow": "1"
     }
    },
    {
@@ -2460,13 +2460,13 @@
     "xclbin": "8x4_psp1_a16w8_qdq.xclbin",
     "shareHwContext": true,
     "providerOptions": {
-     "dd_use_elf_flow": "1",
-     "rm_share_in_bo": "1",
+     "is_preemptible": "1",
      "rm_share_out_bo": "1",
+     "rm_share_in_bo": "1",
      "enable_txn_elf": "1",
-     "rm_share_sc_bo": "1",
+     "dd_use_elf_flow": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "rm_share_sc_bo": "1"
     }
    },
    {
@@ -2478,9 +2478,9 @@
     "xclbin": "8x4_psl_a16w8_qdq.xclbin",
     "providerOptions": {
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2491,10 +2491,10 @@
     ],
     "xclbin": "8x4_pso3_a16w8_qdq.xclbin",
     "providerOptions": {
-     "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "is_preemptible": "1",
+     "dd_use_elf_flow": "1"
     }
    },
    {
@@ -2505,10 +2505,10 @@
     ],
     "xclbin": "8x4_psu_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2519,10 +2519,10 @@
     ],
     "xclbin": "8x4_llama_3_2_1b_model_a16w8_qdq.xclbin",
     "providerOptions": {
+     "enable_preemption": "1",
      "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "dd_use_elf_flow": "1"
     }
    },
    {
@@ -2533,10 +2533,10 @@
     ],
     "xclbin": "8x4_hfds_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
+     "is_preemptible": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2547,10 +2547,10 @@
     ],
     "xclbin": "4x4_psw_v1.0_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2562,11 +2562,11 @@
     "xclbin": "4x2_psi_integrated_model_a16w8_qdq.xclbin",
     "shareHwContext": true,
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
-     "buffer_reuse_version": "v2",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
+     "enable_preemption": "1",
+     "buffer_reuse_version": "v2"
     }
    },
    {
@@ -2577,9 +2577,9 @@
     ],
     "xclbin": "4x2_psj_model_a8w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2591,9 +2591,9 @@
     ],
     "xclbin": "llama2_mladf_2x4x4_v1_gemmbfp16_silu_mul_mha_rms_rope.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2605,10 +2605,10 @@
     ],
     "xclbin": "vaiml_2x4x4_gemm_silu_rms_mul_add_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
      "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2620,10 +2620,10 @@
     ],
     "xclbin": "vaiml_2x4x4_gemm_silu_rms_mul_add_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "0",
+     "is_preemptible": "0",
      "dd_use_elf_flow": "0",
-     "enable_preemption": "0",
-     "is_preemptible": "0"
+     "enable_txn_elf": "0",
+     "enable_preemption": "0"
     }
    },
    {
@@ -2634,9 +2634,9 @@
     ],
     "xclbin": "llama2_mladf_2x4x4_v1_gemmbfp16_silu_mul_mha_rms_rope.xclbin",
     "providerOptions": {
+     "is_preemptible": "1",
      "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
-     "is_preemptible": "1",
      "enable_preemption": "1"
     }
    },
@@ -2648,10 +2648,10 @@
     ],
     "xclbin": "8x4_psmu_st_v3.2_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2662,9 +2662,9 @@
     ],
     "xclbin": "8x4_psmu_st_v3.2_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2676,10 +2676,10 @@
     ],
     "xclbin": "8x4_hfds_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2690,10 +2690,10 @@
     ],
     "xclbin": "8x4_hfds_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "enable_preemption": "1",
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2704,9 +2704,9 @@
     ],
     "xclbin": "4x4_psu_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2718,10 +2718,10 @@
     ],
     "xclbin": "8x4_psu_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "dd_use_elf_flow": "1",
+     "enable_preemption": "1",
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2732,9 +2732,9 @@
     ],
     "xclbin": "8x4_psu_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2746,10 +2746,10 @@
     ],
     "xclbin": "8x4_psu_2_4_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2760,10 +2760,10 @@
     ],
     "xclbin": "8x4_psu_2_4_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "dd_use_elf_flow": "1",
+     "enable_preemption": "1",
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2774,10 +2774,10 @@
     ],
     "xclbin": "4x4_psu_model_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2787,10 +2787,10 @@
      "fuse_dynamic_dispatch_psr"
     ],
     "providerOptions": {
-     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
-     "is_preemptible": "1",
-     "enable_preemption": "1"
+     "enable_preemption": "1",
+     "enable_txn_elf": "1",
+     "is_preemptible": "1"
     }
    },
    {
@@ -2802,10 +2802,10 @@
     "xclbin": "4x2_psh_model_a16w8_qdq.xclbin",
     "shareHwContext": true,
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
-     "enable_preemption": "1"
+     "dd_use_elf_flow": "1",
+     "enable_preemption": "1",
+     "enable_txn_elf": "1"
     }
    },
    {
@@ -2816,10 +2816,10 @@
     ],
     "shareHwContext": true,
     "providerOptions": {
+     "is_preemptible": "1",
      "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_preemption": "1"
     }
    },
    {
@@ -2830,10 +2830,10 @@
     ],
     "xclbin": "8x4_psd_a16w8_qdq.xclbin",
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2844,9 +2844,9 @@
     ],
     "shareHwContext": true,
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2859,9 +2859,9 @@
     "xclbin": "4x2_pso2_integrated_model_a16w16_qdq.xclbin",
     "shareHwContext": true,
     "providerOptions": {
-     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
      "is_preemptible": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1"
     }
    },
@@ -2874,10 +2874,10 @@
     "xclbin": "4x2_pso2_integrated_model_a16w16_qdq.xclbin",
     "shareHwContext": true,
     "providerOptions": {
-     "enable_txn_elf": "1",
+     "is_preemptible": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -2888,8 +2888,8 @@
     ],
     "providerOptions": {
      "is_preemptible": "1",
-     "dd_optimize_pm_swap": "0",
      "dd_use_elf_flow": "1",
+     "dd_optimize_pm_swap": "0",
      "enable_preemption": "1",
      "enable_txn_elf": "1"
     }
@@ -2909,11 +2909,11 @@
       "debug_mode": {
        "stringValue": "performance"
       },
-      "opt_level": {
-       "uintValue": 65536
-      },
       "advanced_opt": {
        "boolValue": true
+      },
+      "opt_level": {
+       "uintValue": 65536
       },
       "dpu_subgraph_num": {
        "uintValue": 1000
@@ -2922,11 +2922,11 @@
     },
     "shareHwContext": true,
     "providerOptions": {
-     "is_preemptible": "1",
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1",
-     "enable_txn_elf": "1"
+     "is_preemptible": "1",
+     "xlnx_enable_old_qdq": "0"
     }
    },
    {
@@ -2937,37 +2937,37 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
+      "enable_x2_ge": {
+       "boolValue": true
+      },
+      "global_round_mode": {
+       "stringValue": "DPU_ROUND"
       },
       "target": {
        "stringValues": [
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
       },
-      "global_round_mode": {
-       "stringValue": "DPU_ROUND"
-      },
-      "advanced_opt": {
-       "boolValue": true
+      "opt_level": {
+       "uintValue": 3
       },
       "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
-      "enable_x2_ge": {
-       "boolValue": true
-      },
-      "enable_weights_prefetch": {
-       "boolValue": true
-      },
-      "enable_qdq_force_xint": {
        "boolValue": true
       },
       "mladf_options": {
        "stringValue": "control-opt=1"
       },
-      "opt_level": {
-       "uintValue": 3
+      "enable_qdq_force_xint": {
+       "boolValue": true
+      },
+      "enable_weights_prefetch": {
+       "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
+      },
+      "advanced_opt": {
+       "boolValue": true
       }
      }
     },
@@ -2986,8 +2986,13 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
+      "enable_matmul_add_fusion": {
+       "boolValue": false
+      },
+      "target": {
+       "stringValues": [
+        "AMD_AIE2P_4x8_CMC_Overlay"
+       ]
       },
       "enable_vaiml_flow_compile": {
        "boolValue": false
@@ -2995,23 +3000,18 @@
       "opt_level": {
        "uintValue": 3
       },
-      "target": {
-       "stringValues": [
-        "AMD_AIE2P_4x8_CMC_Overlay"
-       ]
-      },
-      "enable_matmul_add_fusion": {
-       "boolValue": false
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
       }
      }
     },
     "oldQdq": false,
     "providerOptions": {
-     "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
+     "enable_preemption": "1",
      "enable_txn_elf": "1",
      "xlnx_enable_old_qdq": "0",
-     "dd_use_elf_flow": "1",
-     "enable_preemption": "1"
+     "is_preemptible": "1"
     }
    },
    {
@@ -3022,28 +3022,14 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "opt_level": {
-       "uintValue": 0
-      },
-      "enable_ddr_memory_planner": {
-       "boolValue": true
-      },
-      "advanced_opt": {
-       "boolValue": true
-      },
       "mladf_options": {
        "stringValue": "custom-options=j=4,multi-layer-warning-level=0"
-      },
-      "target": {
-       "stringValues": [
-        "AMD_AIE2P_4x8_CMC_Overlay"
-       ]
       },
       "enable_vaiml_flow_compile": {
        "boolValue": false
       },
-      "enable_mt_fusion": {
-       "boolValue": false
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
       },
       "enable_mergesync": {
        "boolValue": true
@@ -3051,21 +3037,35 @@
       "enable_x2_ge": {
        "boolValue": true
       },
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
       "enable_merge_requantize": {
        "boolValue": true
+      },
+      "enable_ddr_memory_planner": {
+       "boolValue": true
+      },
+      "advanced_opt": {
+       "boolValue": true
+      },
+      "target": {
+       "stringValues": [
+        "AMD_AIE2P_4x8_CMC_Overlay"
+       ]
+      },
+      "enable_mt_fusion": {
+       "boolValue": false
+      },
+      "opt_level": {
+       "uintValue": 0
       }
      }
     },
     "oldQdq": false,
     "providerOptions": {
-     "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "is_preemptible": "1",
      "xlnx_enable_old_qdq": "0",
-     "enable_txn_elf": "1"
+     "is_preemptible": "1",
+     "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -3076,17 +3076,17 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
       "enable_x2_ge": {
        "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
       },
       "opt_level": {
        "uintValue": 0
       },
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
       },
       "target": {
        "stringValues": [
@@ -3097,11 +3097,11 @@
     },
     "oldQdq": false,
     "providerOptions": {
-     "enable_txn_elf": "1",
-     "is_preemptible": "1",
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "1",
+     "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "1"
     }
    },
    {
@@ -3112,28 +3112,28 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
       },
       "enable_x2_ge": {
        "boolValue": true
       },
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
       "opt_level": {
        "uintValue": 0
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
       }
      }
     },
     "providerOptions": {
+     "enable_txn_elf": "0",
      "enable_fast_pm": "0",
      "dump_subgraph_ops": "0",
-     "enable_pdi": "0",
-     "enable_preemption": "0",
-     "preemption_checker_points": "0",
      "xlnx_enable_old_qdq": "0",
-     "enable_txn_elf": "0"
+     "preemption_checker_points": "0",
+     "enable_preemption": "0",
+     "enable_pdi": "0"
     }
    },
    {
@@ -3144,16 +3144,7 @@
     ],
     "targetOpts": {
      "xcompilerAttrs": {
-      "enable_x2_ge": {
-       "boolValue": true
-      },
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
-      },
-      "mladf_options": {
-       "stringValue": "custom-options=j=4,multi-layer-warning-level=0"
-      },
-      "enable_matmul_add_fusion": {
+      "enable_mladf_in_memory_compile": {
        "boolValue": true
       },
       "target": {
@@ -3164,13 +3155,22 @@
       "enable_remove_pairs_and_move_down_reshape": {
        "boolValue": true
       },
-      "enable_mladf_in_memory_compile": {
+      "enable_matmul_add_fusion": {
        "boolValue": true
       },
-      "enable_ddr_memory_planner": {
-       "boolValue": true
+      "mladf_options": {
+       "stringValue": "custom-options=j=4,multi-layer-warning-level=0"
       },
       "enable_mergesync": {
+       "boolValue": true
+      },
+      "enable_x2_ge": {
+       "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
+      },
+      "enable_ddr_memory_planner": {
        "boolValue": true
       }
      }
@@ -3178,10 +3178,10 @@
     "oldQdq": false,
     "providerOptions": {
      "is_preemptible": "1",
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
+     "enable_txn_elf": "1",
      "enable_preemption": "1",
-     "enable_txn_elf": "1"
+     "xlnx_enable_old_qdq": "0"
     }
    },
    {
@@ -3194,7 +3194,33 @@
     "xclbin": "PSA2_x2_QMHA.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
+      "enable_matmul_to_conv": {
+       "boolValue": false
+      },
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
+      },
       "enable_mul_matmul_fusion": {
+       "boolValue": true
+      },
+      "enable_matmul_add_fusion": {
+       "boolValue": true
+      },
+      "enable_fast_pm": {
+       "boolValue": true
+      },
+      "target": {
+       "stringValues": [
+        "AMD_AIE2P_4x8_CMC_Overlay"
+       ]
+      },
+      "enable_ddr_memory_planner": {
+       "boolValue": true
+      },
+      "enable_lut_sigmoid": {
+       "boolValue": true
+      },
+      "enable_remove_pairs_and_move_down_reshape": {
        "boolValue": true
       },
       "enable_mergesync": {
@@ -3203,45 +3229,19 @@
       "enable_x2_ge": {
        "boolValue": true
       },
-      "enable_fast_pm": {
-       "boolValue": true
-      },
-      "enable_ddr_memory_planner": {
-       "boolValue": true
-      },
-      "enable_matmul_to_conv": {
-       "boolValue": false
-      },
-      "enable_lut_sigmoid": {
-       "boolValue": true
-      },
       "enable_vaiml_flow_compile": {
        "boolValue": false
-      },
-      "enable_matmul_add_fusion": {
-       "boolValue": true
-      },
-      "enable_remove_pairs_and_move_down_reshape": {
-       "boolValue": true
-      },
-      "enable_mladf_in_memory_compile": {
-       "boolValue": true
-      },
-      "target": {
-       "stringValues": [
-        "AMD_AIE2P_4x8_CMC_Overlay"
-       ]
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "enable_preemption": "1",
-     "is_preemptible": "1",
      "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "1",
+     "enable_txn_elf": "1",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1"
+     "enable_preemption": "1"
     }
    },
    {
@@ -3254,16 +3254,25 @@
     "xclbin": "procyon_detr_fast_pm.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "advanced_opt": {
+      "opt_level": {
+       "uintValue": 3
+      },
+      "enable_weights_prefetch": {
        "boolValue": true
+      },
+      "enable_mladf_in_memory_compile": {
+       "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
       },
       "global_round_mode": {
        "stringValue": "DPU_ROUND"
       },
-      "mladf_options": {
-       "stringValue": "control-opt=1"
+      "advanced_opt": {
+       "boolValue": true
       },
-      "enable_mladf_in_memory_compile": {
+      "enable_x2_ge": {
        "boolValue": true
       },
       "target": {
@@ -3271,32 +3280,23 @@
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
       },
-      "enable_weights_prefetch": {
-       "boolValue": true
-      },
-      "enable_x2_ge": {
-       "boolValue": true
-      },
-      "opt_level": {
-       "uintValue": 3
+      "mladf_options": {
+       "stringValue": "control-opt=1"
       },
       "enable_qdq_force_xint": {
        "boolValue": true
-      },
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "xlnx_enable_old_qdq": "0",
-     "enable_cache_file_io_in_mem": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1",
+     "enable_preemption": "0",
      "is_preemptible": "0",
-     "enable_preemption": "0"
+     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3312,11 +3312,8 @@
       "enable_x2_ge": {
        "boolValue": true
       },
-      "enable_qdq_force_xint": {
+      "enable_weights_prefetch": {
        "boolValue": true
-      },
-      "opt_level": {
-       "uintValue": 3
       },
       "enable_vaiml_flow_compile": {
        "boolValue": false
@@ -3324,22 +3321,25 @@
       "advanced_opt": {
        "boolValue": true
       },
-      "mladf_options": {
-       "stringValue": "control-opt=1"
-      },
-      "enable_mladf_in_memory_compile": {
+      "enable_qdq_force_xint": {
        "boolValue": true
-      },
-      "global_round_mode": {
-       "stringValue": "DPU_ROUND"
       },
       "target": {
        "stringValues": [
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
       },
-      "enable_weights_prefetch": {
+      "global_round_mode": {
+       "stringValue": "DPU_ROUND"
+      },
+      "enable_mladf_in_memory_compile": {
        "boolValue": true
+      },
+      "opt_level": {
+       "uintValue": 3
+      },
+      "mladf_options": {
+       "stringValue": "control-opt=1"
       }
      }
     },
@@ -3348,9 +3348,9 @@
     "providerOptions": {
      "dd_use_elf_flow": "1",
      "enable_preemption": "0",
-     "is_preemptible": "0",
+     "enable_txn_elf": "1",
      "xlnx_enable_old_qdq": "0",
-     "enable_txn_elf": "1"
+     "is_preemptible": "0"
     }
    },
    {
@@ -3362,25 +3362,22 @@
     "xclbin": "procyon_detr_fast_pm.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "global_round_mode": {
-       "stringValue": "DPU_ROUND"
-      },
-      "enable_x2_ge": {
-       "boolValue": true
-      },
-      "mladf_options": {
-       "stringValue": "control-opt=1"
-      },
       "target": {
        "stringValues": [
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
       },
-      "opt_level": {
-       "uintValue": 3
+      "enable_x2_ge": {
+       "boolValue": true
       },
       "enable_qdq_force_xint": {
        "boolValue": true
+      },
+      "mladf_options": {
+       "stringValue": "control-opt=1"
+      },
+      "opt_level": {
+       "uintValue": 3
       },
       "enable_weights_prefetch": {
        "boolValue": true
@@ -3393,17 +3390,20 @@
       },
       "advanced_opt": {
        "boolValue": true
+      },
+      "global_round_mode": {
+       "stringValue": "DPU_ROUND"
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "enable_preemption": "0",
-     "is_preemptible": "0",
      "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "0",
      "dd_use_elf_flow": "1",
-     "enable_txn_elf": "1"
+     "enable_txn_elf": "1",
+     "enable_preemption": "0"
     }
    },
    {
@@ -3415,16 +3415,7 @@
     "xclbin": "procyon_detr_fast_pm.xclbin",
     "targetOpts": {
      "xcompilerAttrs": {
-      "advanced_opt": {
-       "boolValue": true
-      },
-      "mladf_options": {
-       "stringValue": "control-opt=1"
-      },
-      "enable_weights_prefetch": {
-       "boolValue": true
-      },
-      "enable_x2_ge": {
+      "enable_qdq_force_xint": {
        "boolValue": true
       },
       "global_round_mode": {
@@ -3435,28 +3426,37 @@
         "AMD_AIE2P_4x8_CMC_Overlay"
        ]
       },
-      "enable_mladf_in_memory_compile": {
+      "mladf_options": {
+       "stringValue": "control-opt=1"
+      },
+      "enable_x2_ge": {
        "boolValue": true
       },
-      "enable_qdq_force_xint": {
+      "enable_weights_prefetch": {
+       "boolValue": true
+      },
+      "enable_vaiml_flow_compile": {
+       "boolValue": false
+      },
+      "advanced_opt": {
+       "boolValue": true
+      },
+      "enable_mladf_in_memory_compile": {
        "boolValue": true
       },
       "opt_level": {
        "uintValue": 3
-      },
-      "enable_vaiml_flow_compile": {
-       "boolValue": false
       }
      }
     },
     "shareHwContext": true,
     "oldQdq": false,
     "providerOptions": {
-     "is_preemptible": "0",
-     "xlnx_enable_old_qdq": "0",
      "dd_use_elf_flow": "1",
      "enable_preemption": "0",
-     "enable_txn_elf": "1"
+     "enable_txn_elf": "1",
+     "xlnx_enable_old_qdq": "0",
+     "is_preemptible": "0"
     }
    },
    {
@@ -3467,10 +3467,10 @@
     ],
     "providerOptions": {
      "is_preemptible": "1",
-     "enable_cache_file_io_in_mem": "1",
      "dd_use_elf_flow": "1",
-     "enable_preemption": "1",
-     "enable_txn_elf": "1"
+     "enable_txn_elf": "1",
+     "enable_cache_file_io_in_mem": "1",
+     "enable_preemption": "1"
     }
    },
    {
@@ -3501,8 +3501,8 @@
      "vaip_pass_waic_cpp_me"
     ],
     "providerOptions": {
-     "enable_cache_file_io_in_mem": "0",
-     "XLNX_model_clone_external_data_threshold": "17179869184"
+     "XLNX_model_clone_external_data_threshold": "17179869184",
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3512,10 +3512,10 @@
      "vaip_pass_waic_cpp_me"
     ],
     "providerOptions": {
-     "enable_preemption": "0",
      "XLNX_model_clone_external_data_threshold": "17179869184",
+     "optimization_level": "2",
      "enable_cache_file_io_in_mem": "0",
-     "optimization_level": "2"
+     "enable_preemption": "0"
     }
    },
    {
@@ -3527,9 +3527,9 @@
     "providerOptions": {
      "is_procyon": "1",
      "XLNX_model_clone_external_data_threshold": "17179869184",
+     "enable_preemption": "0",
      "prebuilt_mladf_mha": "1",
-     "enable_cache_file_io_in_mem": "0",
-     "enable_preemption": "0"
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3539,11 +3539,11 @@
      "vaip_pass_waic_cpp_me"
     ],
     "providerOptions": {
-     "enable_preemption": "0",
      "is_procyon": "1",
+     "optimization_level": "2",
+     "enable_preemption": "0",
      "XLNX_model_clone_external_data_threshold": "17179869184",
-     "enable_cache_file_io_in_mem": "0",
-     "optimization_level": "2"
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3554,8 +3554,8 @@
      "vaip_pass_waic_vaiml"
     ],
     "providerOptions": {
-     "enable_cache_file_io_in_mem": "0",
-     "XLNX_model_clone_external_data_threshold": "17179869184"
+     "XLNX_model_clone_external_data_threshold": "17179869184",
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3566,10 +3566,10 @@
      "vaip_pass_waic_vaiml_cpp_me"
     ],
     "providerOptions": {
-     "XLNX_model_clone_external_data_threshold": "17179869184",
-     "enable_cache_file_io_in_mem": "0",
      "xmc_runner_config": "1",
-     "use_inmem": "1"
+     "XLNX_model_clone_external_data_threshold": "17179869184",
+     "use_inmem": "1",
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3580,14 +3580,14 @@
      "vaip_pass_waic_vaiml_cpp_me"
     ],
     "providerOptions": {
-     "XLNX_model_clone_external_data_threshold": "17179869184",
-     "enable_cache_file_io_in_mem": "0",
      "use_inmem": "1",
      "target": "waic_target_vaiml_cpp_me_mha",
-     "enable_preemption": "0",
-     "is_procyon": "1",
+     "enable_cache_file_io_in_mem": "0",
      "prebuilt_mladf_mha": "1",
-     "xmc_runner_config": "1"
+     "is_procyon": "1",
+     "xmc_runner_config": "1",
+     "XLNX_model_clone_external_data_threshold": "17179869184",
+     "enable_preemption": "0"
     }
    },
    {
@@ -3598,13 +3598,13 @@
      "vaip_pass_waic_vaiml_cpp_me"
     ],
     "providerOptions": {
+     "xmc_runner_config": "1",
      "XLNX_model_clone_external_data_threshold": "17179869184",
-     "enable_cache_file_io_in_mem": "0",
+     "enable_preemption": "0",
      "use_inmem": "1",
      "target": "waic_target_vaiml_cpp_me_O2",
-     "enable_preemption": "0",
-     "xmc_runner_config": "1",
-     "optimization_level": "2"
+     "optimization_level": "2",
+     "enable_cache_file_io_in_mem": "0"
     }
    },
    {
@@ -3615,14 +3615,14 @@
      "vaip_pass_waic_vaiml_cpp_me"
     ],
     "providerOptions": {
-     "enable_preemption": "0",
-     "is_procyon": "1",
-     "optimization_level": "2",
-     "xmc_runner_config": "1",
-     "enable_cache_file_io_in_mem": "0",
-     "XLNX_model_clone_external_data_threshold": "17179869184",
      "use_inmem": "1",
-     "target": "waic_target_vaiml_cpp_me_O2_procyon"
+     "target": "waic_target_vaiml_cpp_me_O2_procyon",
+     "optimization_level": "2",
+     "enable_cache_file_io_in_mem": "0",
+     "is_procyon": "1",
+     "xmc_runner_config": "1",
+     "XLNX_model_clone_external_data_threshold": "17179869184",
+     "enable_preemption": "0"
     }
    },
    {
@@ -3644,8 +3644,8 @@
     "providerOptions": {
      "is_preemptible": "0",
      "dd_use_elf_flow": "0",
-     "enable_preemption": "0",
-     "enable_txn_elf": "0"
+     "enable_txn_elf": "0",
+     "enable_preemption": "0"
     }
    },
    {
@@ -3657,8 +3657,8 @@
     "providerOptions": {
      "is_preemptible": "0",
      "dd_use_elf_flow": "0",
-     "enable_preemption": "0",
-     "enable_txn_elf": "0"
+     "enable_txn_elf": "0",
+     "enable_preemption": "0"
     }
    }
   ],
@@ -3942,10 +3942,10 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "dd_dealloc_input_bo": "1",
-     "runner_idle_timeout_sec": "60",
+     "dd_dealloc_scratch_bo": "1",
      "dd_dealloc_output_bo": "1",
-     "dd_dealloc_scratch_bo": "1"
+     "dd_dealloc_input_bo": "1",
+     "runner_idle_timeout_sec": "60"
     }
    },
    {
@@ -3960,10 +3960,10 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "dd_dealloc_scratch_bo": "1",
      "dd_dealloc_output_bo": "1",
-     "runner_idle_timeout_sec": "60",
-     "dd_dealloc_input_bo": "1"
+     "dd_dealloc_input_bo": "1",
+     "dd_dealloc_scratch_bo": "1",
+     "runner_idle_timeout_sec": "60"
     }
    },
    {
@@ -3978,9 +3978,9 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "runner_idle_timeout_sec": "60",
      "dd_dealloc_output_bo": "1",
      "dd_dealloc_input_bo": "1",
+     "runner_idle_timeout_sec": "60",
      "dd_dealloc_scratch_bo": "1"
     }
    },
@@ -3996,8 +3996,8 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "dd_dealloc_scratch_bo": "1",
      "runner_idle_timeout_sec": "60",
+     "dd_dealloc_scratch_bo": "1",
      "dd_dealloc_output_bo": "1",
      "dd_dealloc_input_bo": "1"
     }
@@ -4014,10 +4014,10 @@
      "group_id": "2"
     },
     "providerOptions": {
+     "runner_idle_timeout_sec": "60",
      "dd_dealloc_output_bo": "1",
-     "dd_dealloc_scratch_bo": "1",
      "dd_dealloc_input_bo": "1",
-     "runner_idle_timeout_sec": "60"
+     "dd_dealloc_scratch_bo": "1"
     }
    },
    {
@@ -4032,10 +4032,10 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "dd_dealloc_input_bo": "1",
      "runner_idle_timeout_sec": "60",
-     "dd_dealloc_scratch_bo": "1",
-     "dd_dealloc_output_bo": "1"
+     "dd_dealloc_input_bo": "1",
+     "dd_dealloc_output_bo": "1",
+     "dd_dealloc_scratch_bo": "1"
     }
    },
    {
@@ -4068,10 +4068,10 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "dd_dealloc_scratch_bo": "1",
+     "dd_dealloc_input_bo": "1",
      "dd_dealloc_output_bo": "1",
-     "runner_idle_timeout_sec": "60",
-     "dd_dealloc_input_bo": "1"
+     "dd_dealloc_scratch_bo": "1",
+     "runner_idle_timeout_sec": "60"
     }
    },
    {
@@ -4181,8 +4181,8 @@
     "md5sumInMemoryWithIo": "8e85a483ed470a9f6835ca8b3e28daaf",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "frame_execution_time": "0",
-     "group_id": "1"
+     "group_id": "1",
+     "frame_execution_time": "0"
     }
    },
    {
@@ -4193,8 +4193,8 @@
     "md5sumInMemoryWithIo": "79e258b02a5ab8ee4a220e37837f909f",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "frame_execution_time": "0",
-     "group_id": "1"
+     "group_id": "1",
+     "frame_execution_time": "0"
     }
    },
    {
@@ -4205,8 +4205,8 @@
     "md5sumInMemoryWithIo": "4a61d050d5f1029910e327511c850d17",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4217,8 +4217,8 @@
     "md5sumInMemoryWithIo": "c3e49abb3c2ff7a5da05657814fb53",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "frame_execution_time": "0",
-     "group_id": "1"
+     "group_id": "1",
+     "frame_execution_time": "0"
     }
    },
    {
@@ -4229,8 +4229,8 @@
     "md5sumInMemoryWithIo": "6419ebe9098087a7337ea1834f431b5d",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4241,8 +4241,8 @@
     "md5sumInMemoryWithIo": "201751168ab70089aa9fb782faa47cdb",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "frame_execution_time": "0",
-     "group_id": "1"
+     "group_id": "1",
+     "frame_execution_time": "0"
     }
    },
    {
@@ -4265,8 +4265,8 @@
     "md5sumInMemoryWithIo": "79e258b02a5ab8ee4a220e37837f909f",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "frame_execution_time": "0",
-     "group_id": "1"
+     "group_id": "1",
+     "frame_execution_time": "0"
     }
    },
    {
@@ -4301,8 +4301,8 @@
     "md5sumInMemoryWithIo": "6419ebe9098087a7337ea1834f431b5d",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4313,8 +4313,8 @@
     "md5sumInMemoryWithIo": "201751168ab70089aa9fb782faa47cdb",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4325,8 +4325,8 @@
     "md5sumInMemoryWithIo": "351879f8282407b5f6524de2993f34ab",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4349,8 +4349,8 @@
     "md5sumInMemoryWithIo": "351879f8282407b5f6524de2993f34ab",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4361,8 +4361,8 @@
     "md5sumInMemoryWithIo": "cde769adfa0ee62a9cd128928f73b43b",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "frame_execution_time": "0",
-     "group_id": "1"
+     "group_id": "1",
+     "frame_execution_time": "0"
     }
    },
    {
@@ -4373,8 +4373,8 @@
     "md5sumInMemoryWithIo": "351879f8282407b5f6524de2993f34ab",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4385,8 +4385,8 @@
     "md5sumInMemoryWithIo": "cde769adfa0ee62a9cd128928f73b43b",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4409,8 +4409,8 @@
     "md5sumInMemoryWithIo": "cde769adfa0ee62a9cd128928f73b43b",
     "modelCategory": "PSU",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4421,8 +4421,8 @@
     "xclbin": "llama2_mladf_2x4x4_v1_gemmbfp16_silu_mul_mha_rms_rope.xclbin",
     "md5sumInMemoryWithIo": "351879f8282407b5f6524de2993f34ab",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -4433,8 +4433,8 @@
     "xclbin": "llama2_mladf_2x4x4_v1_gemmbfp16_silu_mul_mha_rms_rope.xclbin",
     "md5sumInMemoryWithIo": "cde769adfa0ee62a9cd128928f73b43b",
     "qosGenericParams": {
-     "group_id": "1",
-     "frame_execution_time": "0"
+     "frame_execution_time": "0",
+     "group_id": "1"
     }
    },
    {
@@ -5489,8 +5489,8 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "runner_idle_timeout_sec": "60",
-     "dealloc_scratch_bo": "1"
+     "dealloc_scratch_bo": "1",
+     "runner_idle_timeout_sec": "60"
     }
    },
    {
@@ -5515,8 +5515,8 @@
      "group_id": "2"
     },
     "providerOptions": {
-     "runner_idle_timeout_sec": "60",
-     "dealloc_scratch_bo": "1"
+     "dealloc_scratch_bo": "1",
+     "runner_idle_timeout_sec": "60"
     }
    },
    {
@@ -5585,26 +5585,27 @@
   {
    "name": "check_cache_hit",
    "ph": "X",
-   "ts": "21121",
-   "pid": "7992",
-   "tid": "50052",
+   "ts": "20105",
+   "pid": "27444",
+   "tid": "15396",
    "args": {
     "memUsage": {
-     "peakMemoryInBytes": "2384453632"
+     "peakMemoryInBytes": "185442304",
+     "currentMemoryInBytes": "4096"
     }
    },
-   "dur": "35"
+   "dur": "44"
   },
   {
    "id": "check_cache_hit_mem_usage_1",
    "ph": "v",
-   "ts": "21121",
-   "pid": "7992",
+   "ts": "20105",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "8e1fe000",
-      "current_memory": "7ad18000"
+      "peak_memory": "b0da000",
+      "current_memory": "ac46000"
      }
     }
    }
@@ -5612,96 +5613,97 @@
   {
    "id": "check_cache_hit_mem_usage_2",
    "ph": "v",
-   "ts": "21157",
-   "pid": "7992",
+   "ts": "20149",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "8e1fe000",
-      "current_memory": "7ad18000"
+      "peak_memory": "b0da000",
+      "current_memory": "ac47000"
      }
     }
    }
   },
   {
-   "name": "2-init@vaip-pass_init",
+   "name": "0-init@vaip-pass_init",
    "ph": "X",
-   "ts": "41121",
-   "pid": "7992",
-   "tid": "50052",
+   "ts": "44785",
+   "pid": "27444",
+   "tid": "15396",
    "args": {
     "memUsage": {
-     "peakMemoryInBytes": "2384453632"
+     "peakMemoryInBytes": "187109376",
+     "currentMemoryInBytes": "8192"
     }
    },
-   "dur": "14"
+   "dur": "46"
   },
   {
-   "id": "2-init@vaip-pass_init_mem_usage_1",
+   "id": "0-init@vaip-pass_init_mem_usage_1",
    "ph": "v",
-   "ts": "41121",
-   "pid": "7992",
+   "ts": "44785",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "8e1fe000",
-      "current_memory": "7ad18000"
+      "peak_memory": "b271000",
+      "current_memory": "b271000"
      }
     }
    }
   },
   {
-   "id": "2-init@vaip-pass_init_mem_usage_2",
+   "id": "0-init@vaip-pass_init_mem_usage_2",
    "ph": "v",
-   "ts": "41135",
-   "pid": "7992",
+   "ts": "44832",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "8e1fe000",
-      "current_memory": "7ad18000"
+      "peak_memory": "b273000",
+      "current_memory": "b273000"
      }
     }
    }
   },
   {
-   "name": "3-vaiml_partition@vaip-pass_vaiml_partition",
+   "name": "1-vaiml_partition@vaip-pass_vaiml_partition",
    "ph": "X",
-   "ts": "41150",
-   "pid": "7992",
-   "tid": "50052",
+   "ts": "44869",
+   "pid": "27444",
+   "tid": "15396",
    "args": {
     "memUsage": {
-     "peakMemoryInBytes": "2384453632",
-     "currentMemoryInBytes": "245751808"
+     "peakMemoryInBytes": "187117568",
+     "currentMemoryInBytes": "443396096"
     }
    },
-   "dur": "439569433"
+   "dur": "487733763"
   },
   {
-   "id": "3-vaiml_partition@vaip-pass_vaiml_partition_mem_usage_1",
+   "id": "1-vaiml_partition@vaip-pass_vaiml_partition_mem_usage_1",
    "ph": "v",
-   "ts": "41150",
-   "pid": "7992",
+   "ts": "44869",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "8e1fe000",
-      "current_memory": "7ad18000"
+      "peak_memory": "b273000",
+      "current_memory": "b273000"
      }
     }
    }
   },
   {
-   "id": "3-vaiml_partition@vaip-pass_vaiml_partition_mem_usage_2",
+   "id": "1-vaiml_partition@vaip-pass_vaiml_partition_mem_usage_2",
    "ph": "v",
-   "ts": "439610583",
-   "pid": "7992",
+   "ts": "487778633",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "9b4ea000",
-      "current_memory": "89776000"
+      "peak_memory": "389dc000",
+      "current_memory": "2594e000"
      }
     }
    }
@@ -5709,27 +5711,27 @@
   {
    "name": "update_cache",
    "ph": "X",
-   "ts": "41100",
-   "pid": "7992",
-   "tid": "50052",
+   "ts": "42372",
+   "pid": "27444",
+   "tid": "15396",
    "args": {
     "memUsage": {
-     "peakMemoryInBytes": "2384453632",
-     "currentMemoryInBytes": "245751808"
+     "peakMemoryInBytes": "187052032",
+     "currentMemoryInBytes": "443469824"
     }
    },
-   "dur": "439569544"
+   "dur": "487737247"
   },
   {
    "id": "update_cache_mem_usage_1",
    "ph": "v",
-   "ts": "41100",
-   "pid": "7992",
+   "ts": "42372",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "8e1fe000",
-      "current_memory": "7ad18000"
+      "peak_memory": "b263000",
+      "current_memory": "b263000"
      }
     }
    }
@@ -5737,13 +5739,13 @@
   {
    "id": "update_cache_mem_usage_2",
    "ph": "v",
-   "ts": "439610644",
-   "pid": "7992",
+   "ts": "487779619",
+   "pid": "27444",
    "args": {
     "dumps": {
      "process_totals": {
-      "peak_memory": "9b4ea000",
-      "current_memory": "89776000"
+      "peak_memory": "389dc000",
+      "current_memory": "25950000"
      }
     }
    }

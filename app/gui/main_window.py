@@ -31,7 +31,13 @@ from PySide6.QtWidgets import (
 
 from app.core import binaries
 from app.core.jobs import Job, JobKind, JobStatus
-from app.core.settings import OutputLocation, UpscaleBackend, UpscaleSettings
+from app.core.settings import (
+    DEFAULT_MODEL,
+    ModelFamily,
+    OutputLocation,
+    UpscaleBackend,
+    UpscaleSettings,
+)
 
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
@@ -42,10 +48,20 @@ from .worker import QueueWorker
 
 # 倍率トグルに出す候補（モデルがサポートする倍率のみ有効化）
 _SCALE_CHOICES = (2, 4)
-_BACKEND_LABELS = {
-    UpscaleBackend.VULKAN: "GPU (Vulkan)",
-    UpscaleBackend.NPU: "NPU (x4)",
-}
+_BACKEND_OPTIONS = [
+    ("自動（GPU優先）", "auto"),
+    ("GPU（DirectML）", UpscaleBackend.WINML_GPU.value),
+    ("NPU（GPU温存）", UpscaleBackend.NPU_NATIVE.value),
+    ("Vulkan", UpscaleBackend.VULKAN.value),
+]
+_HELPER_BACKENDS = {UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE}
+_HELPER_MODEL_OPTIONS = [
+    ("アニメ", ModelFamily.ANIME.value),
+    ("実写（質感重視）", ModelFamily.PHOTO.value),
+    ("実写（くっきり）", ModelFamily.REALESRGAN.value),
+]
+_HELPER_MODEL_VALUES = {value for _label, value in _HELPER_MODEL_OPTIONS}
+_HELPER_MODEL_LABELS = {value: label for label, value in _HELPER_MODEL_OPTIONS}
 _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
     "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
@@ -56,8 +72,16 @@ _MODEL_LABELS = {
 
 # バックエンド自体の説明（選択に連動して説明行の先頭に出す）
 _BACKEND_DESC = {
+    UpscaleBackend.WINML_GPU: "GPU：DirectMLで実行。起動できない場合はVulkanへ切替",
+    UpscaleBackend.NPU_NATIVE: "NPU：GPUを温存。Ryzen AIの常駐サーバーで実行",
     UpscaleBackend.VULKAN: "GPU：最速クラス。処理中は他の作業と競合し発熱大",
     UpscaleBackend.NPU: "NPU：GPUを使わないので静かで、他の作業と並走できる",
+}
+
+_HELPER_MODEL_DESC = {
+    ModelFamily.ANIME.value: "animevideov3系。アニメ・線画の処理に向く",
+    ModelFamily.PHOTO.value: "purephoto。実写の自然な質感を重視",
+    ModelFamily.REALESRGAN.value: "Real-ESRGAN。実写をくっきり見せる",
 }
 
 # (backend, model) → (速度, 画質, アニメ適性, 実写適性, 推奨タグ or None)
@@ -145,6 +169,18 @@ class MainWindow(QWidget):
 
         root.addWidget(self._build_footer())
 
+        # メインバーと詳細設定ドロワーの重複項目は常に同期する。
+        self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
+        self.drawer.backend.currentIndexChanged.connect(
+            self._on_drawer_backend_changed
+        )
+        self.model_combo.currentIndexChanged.connect(self._on_model_changed)
+        self.drawer.model_family.currentIndexChanged.connect(
+            self._on_drawer_model_family_changed
+        )
+        self._set_combo_data(self.backend_combo, self.drawer.backend.currentData())
+        self._refresh_model_options()
+
         page_scroll = QScrollArea()
         page_scroll.setWidgetResizable(True)
         page_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -217,15 +253,13 @@ class MainWindow(QWidget):
         outer.addLayout(row)
 
         self.backend_combo = QComboBox()
-        for backend, label in _BACKEND_LABELS.items():
-            self.backend_combo.addItem(label, backend.value)
-        self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
+        for label, value in _BACKEND_OPTIONS:
+            self.backend_combo.addItem(label, value)
         self.backend_combo.setToolTip(
-            "NPUはRyzen AIによる4倍拡大です（倍率は4x固定）。\n"
-            "モデルはNPU対応のもののみ選択できます。\n"
-            "画像も動画のフレーム拡大もNPUで処理されます。"
+            "自動はDirectML GPUを優先します。GPU/NPUのヘルパーが起動できない場合はVulkanへ切り替えます。\n"
+            "新AIモデルは4x固定、Vulkanを選ぶと従来モデルを表示します。"
         )
-        row.addLayout(self._field("処理", self._compact(self.backend_combo)))
+        row.addLayout(self._field("AI実行先", self._compact(self.backend_combo)), 1)
 
         # 倍率トグル（2x / 4x）
         scale_box = QHBoxLayout()
@@ -253,22 +287,7 @@ class MainWindow(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
-        self.model_combo.addItem("なし（拡大しない）", None)
-        models = binaries.available_models()
-        if models:
-            for model in models:
-                self.model_combo.addItem(_MODEL_LABELS.get(model, model), model)
-            # 既定モデルがあれば選択
-            from app.core.settings import DEFAULT_MODEL
-            if DEFAULT_MODEL in models:
-                idx = self.model_combo.findData(DEFAULT_MODEL)
-                if idx >= 0:
-                    self.model_combo.setCurrentIndex(idx)
-        else:
-            self.model_combo.addItem("モデル未検出", "__missing__")
-            self.model_combo.model().item(self.model_combo.count() - 1).setEnabled(False)
-        self.model_combo.currentIndexChanged.connect(lambda _i: self._refresh_scale_enabled())
-        row.addLayout(self._field("アップスケーラーモデル", self.model_combo), 1)
+        row.addLayout(self._field("モデル", self.model_combo), 1)
 
         # 2段目: フレーム補間モデル / 出力先
         row2 = QHBoxLayout()
@@ -435,48 +454,107 @@ class MainWindow(QWidget):
             btn.setChecked(s == value)
 
     def _refresh_scale_enabled(self) -> None:
-        """選択モデルがサポートする倍率だけ有効化（v2 の 2x/4x トグル）。"""
-        model = self.model_combo.currentData()
-        upscale_enabled = model not in (None, "__missing__")
-        self.backend_combo.setEnabled(upscale_enabled and not self._running)
-        # NPU選択中以外は常にモデルを選び直せるようにする
-        # （NPU分岐で無効化したままGPUに戻しても復帰しない事故の防止）
-        self.model_combo.setEnabled(not self._running)
-        if not upscale_enabled:
-            for btn in self._scale_btns.values():
-                btn.setEnabled(False)
-            self._update_model_info()
-            return
-
+        """バックエンドごとにモデルと倍率の選択可能範囲を更新する。"""
         backend = self._selected_backend()
-        if backend == UpscaleBackend.NPU:
-            self._apply_npu_model_filter(True)
+        model = self.model_combo.currentData()
+        self.backend_combo.setEnabled(not self._running)
+        self.model_combo.setEnabled(not self._running)
+
+        if backend in _HELPER_BACKENDS:
+            valid_family = model in _HELPER_MODEL_VALUES
+            self.model_combo.setEnabled(valid_family and not self._running)
             self._set_scale(4)
-            for s, btn in self._scale_btns.items():
-                btn.setEnabled(s == 4)
+            for scale, button in self._scale_btns.items():
+                button.setEnabled(valid_family and scale == 4 and not self._running)
             self._update_model_info()
             return
 
-        # GPUに戻ったら全モデルを再有効化（忘れると無効のまま残る）
-        self._apply_npu_model_filter(False)
-        self._update_model_info()
+        upscale_enabled = model not in (None, "__missing__")
+        if not upscale_enabled:
+            for button in self._scale_btns.values():
+                button.setEnabled(False)
+            self._update_model_info()
+            return
 
         first_enabled: int | None = None
-        for s, btn in self._scale_btns.items():
+        for scale, button in self._scale_btns.items():
             try:
-                supported = binaries.model_supports_scale(model, s)
+                supported = binaries.model_supports_scale(model, scale)
             except Exception:
                 supported = True
-            btn.setEnabled(supported)
+            button.setEnabled(supported and not self._running)
             if supported and first_enabled is None:
-                first_enabled = s
-        # 現在倍率が無効になったら、有効な最小倍率へ寄せる
-        cur_btn = self._scale_btns.get(self._scale)
-        if cur_btn is not None and not cur_btn.isEnabled() and first_enabled is not None:
+                first_enabled = scale
+        current = self._scale_btns.get(self._scale)
+        if current is not None and not current.isEnabled() and first_enabled is not None:
             self._set_scale(first_enabled)
+        self._update_model_info()
+
+    def _refresh_model_options(self) -> None:
+        """バックエンドに応じてモデル欄を再構成する。
+
+        新AIバックエンドでは旧Vulkan資産を列挙せず、3系統を必ず表示する。
+        Vulkanを選んだときだけ vendor/realesrgan の従来モデルを表示する。
+        """
+        backend = self._selected_backend()
+        if backend in _HELPER_BACKENDS:
+            selected = self.model_combo.currentData()
+            if selected not in _HELPER_MODEL_VALUES:
+                selected = self.drawer.model_family.currentData()
+            self._replace_model_items(_HELPER_MODEL_OPTIONS, selected)
+            self._set_combo_data(self.drawer.model_family, self.model_combo.currentData())
+            self._refresh_scale_enabled()
+            return
+
+        selected = self.model_combo.currentData()
+        models = binaries.available_models()
+        options: list[tuple[str, object]] = [("なし（拡大しない）", None)]
+        options.extend((_MODEL_LABELS.get(model, model), model) for model in models)
+        if not models:
+            options.append(("モデル未検出", "__missing__"))
+        elif selected not in models:
+            selected = DEFAULT_MODEL if DEFAULT_MODEL in models else None
+        self._replace_model_items(options, selected)
+        if not models:
+            item = self.model_combo.model().item(self.model_combo.count() - 1)
+            if item is not None:
+                item.setEnabled(False)
+        self._refresh_scale_enabled()
+
+    def _replace_model_items(
+        self, options: list[tuple[str, object]], selected: object | None
+    ) -> None:
+        """モデルコンボの項目を差し替え、可能なら選択値を維持する。"""
+        previous = self.model_combo.blockSignals(True)
+        try:
+            self.model_combo.clear()
+            for label, value in options:
+                self.model_combo.addItem(label, value)
+            if selected is not None:
+                index = self.model_combo.findData(selected)
+                if index >= 0:
+                    self.model_combo.setCurrentIndex(index)
+            if self.model_combo.currentIndex() < 0 and self.model_combo.count():
+                self.model_combo.setCurrentIndex(0)
+        finally:
+            self.model_combo.blockSignals(previous)
+
+    @staticmethod
+    def _set_combo_data(combo: QComboBox, value: object) -> None:
+        """コンボの値を変更する（変更通知は発火させない）。"""
+        index = combo.findData(value)
+        if index < 0:
+            return
+        previous = combo.blockSignals(True)
+        try:
+            combo.setCurrentIndex(index)
+        finally:
+            combo.blockSignals(previous)
 
     @staticmethod
     def _compose_model_hint(backend: UpscaleBackend, data: str) -> str:
+        if backend in _HELPER_BACKENDS and data in _HELPER_MODEL_VALUES:
+            return _HELPER_MODEL_DESC[data]
         info = _MODEL_INFO.get((backend, data))
         if info is None:
             return ""
@@ -496,7 +574,7 @@ class MainWindow(QWidget):
             data = self.model_combo.itemData(i)
             if data in (None, "__missing__"):
                 continue
-            base = _MODEL_LABELS.get(data, data)
+            base = _HELPER_MODEL_LABELS.get(data, _MODEL_LABELS.get(data, data))
             info = _MODEL_INFO.get((backend, data))
             item = item_model.item(i)
             if info is None:
@@ -523,45 +601,38 @@ class MainWindow(QWidget):
             return
         hint = self._compose_model_hint(backend, cur)
         if not hint:
-            self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】")
+            self.model_hint.setText(f"【{_BACKEND_DESC.get(backend, backend.value)}】")
             return
-        self.model_hint.setText(f"【{_BACKEND_DESC[backend]}】{hint}")
-
-    def _apply_npu_model_filter(self, npu: bool) -> None:
-        """NPU選択中はNPU対応モデルのみ選択可能にする（コンボ自体は有効のまま）。"""
-        combo = self.model_combo
-        supported = set(binaries.available_npu_models())
-        item_model = combo.model()
-        for i in range(combo.count()):
-            data = combo.itemData(i)
-            if data == "__missing__":
-                continue  # 常に無効のプレースホルダ
-            item = item_model.item(i)
-            if item is None:
-                continue
-            if data is None:
-                item.setEnabled(True)  # 「なし」は補間のみ運用のため常に選べる
-            else:
-                item.setEnabled(not npu or data in supported)
-        # NPUで非対応モデルが選択中なら既定NPUモデルへ寄せる
-        cur = combo.currentData()
-        if npu and cur is not None and cur != "__missing__" and cur not in supported:
-            idx = combo.findData(binaries.DEFAULT_NPU_MODEL)
-            if idx >= 0:
-                # currentIndexChanged→_refresh_scale_enabled の再帰を防ぐ
-                combo.blockSignals(True)
-                combo.setCurrentIndex(idx)
-                combo.blockSignals(False)
+        self.model_hint.setText(f"【{_BACKEND_DESC.get(backend, backend.value)}】{hint}")
 
     def _selected_backend(self) -> UpscaleBackend:
         value = self.backend_combo.currentData() if hasattr(self, "backend_combo") else None
+        if value == "auto":
+            return UpscaleBackend.WINML_GPU
         try:
-            return UpscaleBackend(value or UpscaleBackend.VULKAN.value)
+            return UpscaleBackend(value or UpscaleBackend.WINML_GPU.value)
         except ValueError:
-            return UpscaleBackend.VULKAN
+            return UpscaleBackend.WINML_GPU
 
-    def _on_backend_changed(self) -> None:
+    def _on_backend_changed(self, *_args) -> None:
+        self._set_combo_data(self.drawer.backend, self.backend_combo.currentData())
+        self._refresh_model_options()
         self._refresh_scale_enabled()
+
+    def _on_drawer_backend_changed(self, *_args) -> None:
+        self._set_combo_data(self.backend_combo, self.drawer.backend.currentData())
+        self._refresh_model_options()
+        self._refresh_scale_enabled()
+
+    def _on_model_changed(self, *_args) -> None:
+        if self._selected_backend() in _HELPER_BACKENDS:
+            self._set_combo_data(self.drawer.model_family, self.model_combo.currentData())
+        self._refresh_scale_enabled()
+
+    def _on_drawer_model_family_changed(self, *_args) -> None:
+        if self._selected_backend() in _HELPER_BACKENDS:
+            self._set_combo_data(self.model_combo, self.drawer.model_family.currentData())
+            self._refresh_scale_enabled()
 
     def _on_interpolation_changed(self) -> None:
         model = self.interpolation_combo.currentData()
@@ -596,7 +667,11 @@ class MainWindow(QWidget):
         s.backend = self._selected_backend()
         s.scale = self._scale
         model = self.model_combo.currentData()
-        s.model = None if model in (None, "__missing__") else str(model)
+        if s.backend in _HELPER_BACKENDS:
+            if model in _HELPER_MODEL_VALUES:
+                s.model_family = ModelFamily(model)
+        else:
+            s.model = None if model in (None, "__missing__") else str(model)
         interpolation = self.interpolation_combo.currentData()
         s.interpolation_model = (
             None if interpolation in (None, "__missing__") else str(interpolation)
@@ -692,6 +767,7 @@ class MainWindow(QWidget):
         for w in (self.backend_combo, self.model_combo, self.interpolation_combo, self.output_combo,
                   self.clear_btn, self.output_open_btn, self.settings_btn):
             w.setEnabled(not running)
+        self.drawer.setEnabled(not running)
         for btn in self._scale_btns.values():
             btn.setEnabled(not running)
         if not running:

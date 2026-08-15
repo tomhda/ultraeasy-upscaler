@@ -9,6 +9,10 @@ __pycache__/
 /portable_build/
 /portable_dist/
 /ultraeasy-upscaler-portable-*.zip
+/tools/winml-sr/bin/
+/tools/winml-sr/obj/
+/vendor/amd-npu-1.8/
+/vendor/amd-npu/modelcachekey_*/
 *.log
 .DS_Store
 Thumbs.db
@@ -18,4 +22,3 @@ Thumbs.db
 /current-shot-final.png
 /design-qa-comparison.png
 /design-qa.md
-vendor/amd-npu/modelcachekey_animevideov3dp_nchw_256x256_bf16cast/

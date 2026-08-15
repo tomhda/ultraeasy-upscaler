@@ -16,6 +16,7 @@ from .jobs import Cancelled, Job, JobKind, ProgressCb
 from .settings import (
     OutputLocation,
     ProcessingOrder,
+    UpscaleBackend,
     UpscaleSettings,
 )
 
@@ -128,6 +129,36 @@ def _process_video(job, settings, progress, cancel) -> Path:
         info = media.probe(str(job.input_path))
         fps = info.fps or job.fps or 30.0
 
+        # RIFEはフレームファイルを前提にするため、補間が有効なジョブでは
+        # 必ず従来のPNG経路を使う。RIFEなしの新AIヘルパーだけrawパイプへ進む。
+        active_settings = settings
+        if (
+            settings.upscale_enabled
+            and not settings.interpolation_enabled
+            and settings.backend in {UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE}
+        ):
+            from . import helper_backend
+
+            out = _video_output(job, settings)
+            out_tmp = _part_path(out)
+            try:
+                video.upscale_video_piped(
+                    str(job.input_path), str(out_tmp), settings,
+                    progress=lambda f, m: progress(0.02 + 0.98 * f, m),
+                    cancel=cancel,
+                )
+            except helper_backend.HelperBackendUnavailable as exc:
+                out_tmp.unlink(missing_ok=True)
+                active_settings = replace(settings, backend=UpscaleBackend.VULKAN)
+                progress(0.02, f"AIヘルパーを起動できないためVulkanへ切替… ({exc})")
+            except BaseException:
+                out_tmp.unlink(missing_ok=True)
+                raise
+            else:
+                os.replace(out_tmp, out)
+                progress(1.0, "完了")
+                return out
+
         progress(0.02, "フレームを抽出中…")
         video.extract_frames(
             str(job.input_path), str(src_frames),
@@ -158,7 +189,7 @@ def _process_video(job, settings, progress, cancel) -> Path:
             # 中間フレームは常に PNG に固定する。バックエンドは選択どおり
             # （NPU選択時は動画フレームもNPUで処理する）。
             frame_settings = replace(
-                settings,
+                active_settings,
                 image_format="png",
             )
             progress(start, "フレームをアップスケール中…")
@@ -193,7 +224,7 @@ def _process_video(job, settings, progress, cancel) -> Path:
         progress(0.80, "動画を再結合中…")
         try:
             video.reassemble(
-                str(current_frames), str(job.input_path), str(out_tmp), output_fps, settings,
+                str(current_frames), str(job.input_path), str(out_tmp), output_fps, active_settings,
                 progress=lambda f, m: progress(0.80 + 0.20 * f, m or "再結合中…"),
                 cancel=cancel,
             )

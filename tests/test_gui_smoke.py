@@ -132,6 +132,12 @@ def test_build_settings_maps_widgets(app):
     win = MainWindow()
     app.processEvents()
 
+    # Vulkanでは従来モデルの倍率を選べる。
+    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+    assert vulkan >= 0
+    win.backend_combo.setCurrentIndex(vulkan)
+    app.processEvents()
+
     # 倍率 2x を選択
     win._set_scale(2)
     # 詳細設定の一部を変更
@@ -155,6 +161,10 @@ def test_upscale_and_interpolation_models_are_independent(app):
     win = MainWindow()
     app.processEvents()
 
+    from app.core.settings import UpscaleBackend
+    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+    win.backend_combo.setCurrentIndex(vulkan)
+    app.processEvents()
     win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
     rife_index = win.interpolation_combo.findData("rife-v4.6")
     assert rife_index >= 0
@@ -184,6 +194,10 @@ def test_job_settings_apply_at_start_not_at_add(app):
 
     win = MainWindow()
     app.processEvents()
+    from app.core.settings import UpscaleBackend
+    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+    win.backend_combo.setCurrentIndex(vulkan)
+    app.processEvents()
     win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
     rife_index = win.interpolation_combo.findData("rife-v4.6")
     assert rife_index >= 0
@@ -210,42 +224,90 @@ def test_job_settings_apply_at_start_not_at_add(app):
     app.processEvents()
 
 
-def test_model_combo_filters_npu_supported_models(app):
-    """NPU選択中もコンボは有効のまま、非対応モデルの項目だけ無効になる。"""
+def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch, tmp_path):
+    """新AIの3系統がVulkan資産の有無にかかわらず選択できる。"""
     from app.core import binaries
+    from app.core.settings import ModelFamily, UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    available_calls: list[bool] = []
+
+    def no_vulkan_models():
+        available_calls.append(True)
+        return []
+
+    monkeypatch.setattr(binaries, "available_models", no_vulkan_models)
+    win = MainWindow()
+    app.processEvents()
+
+    assert available_calls == []
+    npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
+    assert npu >= 0
+    win.backend_combo.setCurrentIndex(npu)
+    app.processEvents()
+
+    s = win.build_settings()
+    assert s.backend == UpscaleBackend.NPU_NATIVE
+    assert win._scale_btns[2].isEnabled() is False
+    assert win._scale_btns[4].isEnabled() is True
+    assert win.model_combo.isEnabled() is True
+    assert [win.model_combo.itemText(i) for i in range(win.model_combo.count())] == [
+        "アニメ", "実写（質感重視）", "実写（くっきり）"
+    ]
+
+    photo_idx = win.model_combo.findData(ModelFamily.PHOTO.value)
+    win.model_combo.setCurrentIndex(photo_idx)
+    assert win.build_settings().model_family == ModelFamily.PHOTO
+
+    auto_idx = win.backend_combo.findData("auto")
+    win.backend_combo.setCurrentIndex(auto_idx)
+    app.processEvents()
+    assert win.model_combo.isEnabled() is True
+    assert win.model_combo.count() == 3
+    assert win.build_settings().backend == UpscaleBackend.WINML_GPU
+
+    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+    win.backend_combo.setCurrentIndex(vulkan)
+    app.processEvents()
+    assert available_calls == [True]
+    assert win.model_combo.count() == 2
+    assert win.model_combo.itemData(0) is None
+
+    win.close()
+    app.processEvents()
+
+
+def test_model_combo_filters_legacy_npu_api_is_removed_from_gui(app):
+    """旧npu_worker用のNPU値は新しいGUIの選択肢に出さない。"""
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+    assert win.backend_combo.findData(UpscaleBackend.NPU.value) == -1
+    win.close()
+    app.processEvents()
+
+
+def test_backend_combo_maps_to_npu_native_and_locks_scale(app):
+    """NPU_NATIVE選択は設定へ反映され、倍率は4xに固定される。"""
     from app.core.settings import UpscaleBackend
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
 
-    npu = win.backend_combo.findData(UpscaleBackend.NPU.value)
-    assert npu >= 0
-    win.backend_combo.setCurrentIndex(npu)
+    idx = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
+    assert idx >= 0
+    win.backend_combo.setCurrentIndex(idx)
     app.processEvents()
 
     assert win.model_combo.isEnabled() is True
-    supported = set(binaries.available_npu_models())
-    assert binaries.DEFAULT_NPU_MODEL in supported
-    item_model = win.model_combo.model()
-    for i in range(win.model_combo.count()):
-        data = win.model_combo.itemData(i)
-        if data in (None, "__missing__"):
-            continue
-        assert item_model.item(i).isEnabled() == (data in supported)
-    # 選択は必ずNPU対応モデルに寄る
-    assert win.model_combo.currentData() in supported
-
-    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
-    assert vulkan >= 0
-    win.backend_combo.setCurrentIndex(vulkan)
-    app.processEvents()
-    assert win.model_combo.isEnabled() is True
-    for i in range(win.model_combo.count()):
-        data = win.model_combo.itemData(i)
-        if data in (None, "__missing__"):
-            continue
-        assert item_model.item(i).isEnabled() is True
+    s = win.build_settings()
+    assert s.backend == UpscaleBackend.NPU_NATIVE
+    assert s.scale == 4
+    assert win._scale_btns[2].isEnabled() is False
+    assert win._scale_btns[4].isEnabled() is True
 
     win.close()
     app.processEvents()
@@ -311,29 +373,6 @@ def test_settings_drawer_explains_specialized_terms(app):
     app.processEvents()
 
 
-def test_backend_combo_maps_to_npu_and_locks_scale(app):
-    """NPU選択は設定へ反映され、倍率は4xに固定される。"""
-    from app.core.settings import UpscaleBackend
-    from app.gui.main_window import MainWindow
-
-    win = MainWindow()
-    app.processEvents()
-
-    idx = win.backend_combo.findData(UpscaleBackend.NPU.value)
-    assert idx >= 0
-    win.backend_combo.setCurrentIndex(idx)
-    app.processEvents()
-
-    s = win.build_settings()
-    assert s.backend == UpscaleBackend.NPU
-    assert s.scale == 4
-    assert win._scale_btns[2].isEnabled() is False
-    assert win._scale_btns[4].isEnabled() is True
-
-    win.close()
-    app.processEvents()
-
-
 def test_model_picker_shows_speed_quality_info(app):
     """モデルコンボにバッジ、下段に選択構成の実測ベース説明が出る。"""
     from app.core.settings import UpscaleBackend
@@ -342,7 +381,16 @@ def test_model_picker_shows_speed_quality_info(app):
     win = MainWindow()
     app.processEvents()
 
-    # GPU + 既定モデル(realesrgan-x4plus): バッジと説明
+    # 自動（GPU優先）では3系統の新モデルを表示する。
+    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
+        "anime", "photo", "realesrgan"
+    ]
+    assert "animevideov3" in win.model_hint.text()
+
+    # Vulkanでは旧モデルのバッジと説明を表示する。
+    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+    win.backend_combo.setCurrentIndex(vulkan)
+    app.processEvents()
     idx = win.model_combo.findData("realesrgan-x4plus")
     assert idx >= 0
     assert "速" in win.model_combo.itemText(idx)
@@ -350,12 +398,12 @@ def test_model_picker_shows_speed_quality_info(app):
     assert gpu_hint.startswith("【GPU")
     assert "速度" in gpu_hint and "画質" in gpu_hint
 
-    # NPUに切替 → 同じモデルでも説明とバッジが変わる
-    npu = win.backend_combo.findData(UpscaleBackend.NPU.value)
+    # NPU_NATIVEに切替 → 3系統の説明へ戻る。
+    npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
     win.backend_combo.setCurrentIndex(npu)
     app.processEvents()
     assert win.model_hint.text() != gpu_hint
-    assert "GPUを使わ" in win.model_hint.text()
+    assert "GPUを温存" in win.model_hint.text()
 
     # モデル「なし」では補間のみの案内
     win.backend_combo.setCurrentIndex(
