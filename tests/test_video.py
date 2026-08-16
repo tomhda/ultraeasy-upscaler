@@ -4,10 +4,12 @@
 """
 from __future__ import annotations
 
+import io
 import subprocess
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from app.core import binaries, media, video
 from app.core.settings import UpscaleSettings
@@ -41,6 +43,143 @@ def test_detect_hw_encoder_no_raise():
     # str か None を返し、例外を送出しないこと
     result = video.detect_hw_encoder()
     assert result is None or isinstance(result, str)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ((3840, 2160), (3840, 2160)),  # 上限ちょうどは縮小しない
+        ((3412, 1920), (3412, 1920)),  # 480p x4 の既存出力
+        ((7680, 4320), (3840, 2160)),  # 1080p x4
+        ((3840, 2161), (3838, 2160)),  # 高さ超過側の境界
+        ((7680, 4352), (3810, 2160)),  # 比率維持 + 偶数切り下げ
+    ],
+)
+def test_fit_video_dimensions_boundaries(source, expected):
+    fitted = video.fit_video_dimensions(*source)
+
+    assert fitted == expected
+    assert fitted[0] <= video.DEFAULT_MAX_VIDEO_DIM[0]
+    assert fitted[1] <= video.DEFAULT_MAX_VIDEO_DIM[1]
+    assert fitted[0] % 2 == 0
+    assert fitted[1] % 2 == 0
+    assert fitted[0] / fitted[1] == pytest.approx(source[0] / source[1], abs=0.002)
+
+
+def test_max_video_dim_setting_precedes_environment(monkeypatch):
+    monkeypatch.setenv(video.MAX_VIDEO_DIM_ENV, "1280x720")
+
+    assert video.resolve_max_video_dim(UpscaleSettings()) == (1280, 720)
+    assert video.resolve_max_video_dim(
+        UpscaleSettings(max_video_dim=(1920, 1080))
+    ) == (1920, 1080)
+
+
+def test_reassemble_adds_lanczos_fit_filter(monkeypatch, tmp_path):
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    Image.new("RGB", (800, 600), color=(0, 0, 0)).save(
+        frames / "frame_00000001.png"
+    )
+    commands: list[list[str]] = []
+    messages: list[str] = []
+
+    def fake_run(cmd, *_args, **_kwargs):
+        commands.append(cmd)
+
+    monkeypatch.setattr(video, "_run_with_progress", fake_run)
+    settings = UpscaleSettings(
+        keep_audio=False,
+        hw_encode=False,
+        max_video_dim=(640, 480),
+    )
+    video.reassemble(
+        str(frames), "", str(tmp_path / "out.mp4"), 30.0, settings,
+        progress=lambda _fraction, message: messages.append(message),
+    )
+
+    vf = commands[0][commands[0].index("-vf") + 1]
+    assert vf.startswith("scale=640:480:flags=lanczos,")
+    assert any("出力を640x480へ縮小" in message for message in messages)
+
+
+class _FailingPipe:
+    def write(self, _payload):
+        raise OSError(22, "Invalid argument")
+
+    def close(self):
+        pass
+
+
+class _FakePipelineProcess:
+    def __init__(self, *, decoder: bool):
+        self.stdout = io.BytesIO(b"\x00" * 12) if decoder else None
+        self.stderr = io.BytesIO(
+            b"[h264_amf] invalid resolution: 7680x4320\n"
+            if not decoder else b""
+        )
+        self.stdin = None if decoder else _FailingPipe()
+        self.returncode = 0 if decoder else 1
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.returncode = 1
+
+    def kill(self):
+        self.returncode = 1
+
+    def wait(self, timeout=None):
+        del timeout
+        return self.returncode
+
+
+def test_piped_encoder_failure_prefers_encoder_stderr(monkeypatch, tmp_path):
+    from app.core import helper_backend
+
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    processes: list[_FakePipelineProcess] = []
+
+    monkeypatch.setattr(
+        media,
+        "probe",
+        lambda _path: media.MediaInfo(
+            kind="video", width=2, height=2, fps=1.0, frame_count=1
+        ),
+    )
+
+    class _Session:
+        scale = 1
+
+        def upscale(self, image):
+            return image
+
+        def close(self, *, force=False):
+            del force
+
+    monkeypatch.setattr(helper_backend, "open_session", lambda *_args, **_kwargs: _Session())
+    monkeypatch.setattr(video, "detect_hw_encoder", lambda *_args: "h264_amf")
+
+    def fake_popen(cmd, **_kwargs):
+        del cmd
+        process = _FakePipelineProcess(decoder=len(processes) == 0)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(video.subprocess, "Popen", fake_popen)
+
+    with pytest.raises(RuntimeError) as caught:
+        video.upscale_video_piped(
+            str(source), str(tmp_path / "out.mp4"),
+            UpscaleSettings(hw_encode=True),
+        )
+
+    message = str(caught.value)
+    assert "動画エンコードに失敗しました" in message
+    assert "invalid resolution: 7680x4320" in message
+    assert "Errno 22" not in message
 
 
 def test_extract_frames(clip, tmp_path):

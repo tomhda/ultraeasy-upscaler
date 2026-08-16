@@ -54,6 +54,7 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 | `UEU_MODELS_DIR` | `tmp/npu-anime` | GPU fp32 / SPANモデルの探索先 |
 | `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU常駐サーバーを起動するPython |
 | `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU EPのセッションキャッシュ |
+| `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264出力の最大幅×高さ（例: `1920x1080`） |
 
 機械固有の絶対パスはソースへ埋め込まない。重み・ONNX・NPUキャッシュは新規にgitへ
 追加しない。取得と変換は次の手順で行う。

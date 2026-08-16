@@ -163,6 +163,11 @@ class UpscaleSettings:
     # INTERPOLATE_FIRST を選ぶ。
     processing_order: ProcessingOrder = ProcessingOrder.UPSCALE_FIRST
 
+    # 動画エンコード時の最大寸法。None のときは UEU_MAX_VIDEO_DIM、未設定なら
+    # video.py の既定値 3840x2160 を使う。値は (幅, 高さ) のタプル。
+    # 既存の位置引数互換を保つため、動画・補間設定の末尾に置く。
+    max_video_dim: tuple[int, int] | None = None
+
     def output_suffix(self) -> str:
         """選択した処理を表す出力接尾辞を返す。"""
         parts: list[str] = []

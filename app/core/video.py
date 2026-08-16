@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import queue
+import os
 import subprocess
 import tempfile
 import threading
@@ -33,6 +34,115 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 # (key, encoder_name) の順で優先する。
 _H264_CANDIDATES = ["h264_amf", "h264_nvenc", "h264_qsv"]
 _HEVC_CANDIDATES = ["hevc_amf", "hevc_nvenc", "hevc_qsv"]
+
+# H.264 の実用上限。GPUエンコーダだけでなく libx264 等にも同じガードを
+# 適用し、入力経路による挙動差をなくす。
+DEFAULT_MAX_VIDEO_DIM = (3840, 2160)
+MAX_VIDEO_DIM_ENV = "UEU_MAX_VIDEO_DIM"
+
+_VIDEO_DIM_SEPARATOR_RE = re.compile(r"\s*[xX×,:]\s*|\s+")
+_VIDEO_COLOR_FILTER = (
+    "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,"
+    "pad=ceil(iw/2)*2:ceil(ih/2)*2"
+)
+
+
+def _coerce_video_dim(value) -> tuple[int, int]:
+    """設定値/環境変数の最大動画寸法を (幅, 高さ) に正規化する。"""
+    if isinstance(value, str):
+        parts = [part for part in _VIDEO_DIM_SEPARATOR_RE.split(value.strip()) if part]
+        if len(parts) != 2:
+            raise ValueError(f"動画の最大寸法は WIDTHxHEIGHT で指定してください: {value!r}")
+        value = parts
+    try:
+        width, height = value
+        width, height = int(width), int(height)
+    except (TypeError, ValueError, IndexError):
+        raise ValueError(f"動画の最大寸法は (幅, 高さ) で指定してください: {value!r}") from None
+    if width < 2 or height < 2:
+        raise ValueError(f"動画の最大寸法は2以上で指定してください: {width}x{height}")
+    return width, height
+
+
+def resolve_max_video_dim(settings: UpscaleSettings | None = None) -> tuple[int, int]:
+    """動画の最大寸法を settings → 環境変数 → 既定値の順で解決する。"""
+    configured = getattr(settings, "max_video_dim", None)
+    if configured is None:
+        configured = os.environ.get(MAX_VIDEO_DIM_ENV)
+    if configured is None:
+        return DEFAULT_MAX_VIDEO_DIM
+    try:
+        return _coerce_video_dim(configured)
+    except ValueError:
+        # 環境変数の誤記でジョブ自体を落とさず、安全側の既定上限を使う。
+        return DEFAULT_MAX_VIDEO_DIM
+
+
+def _even_up(value: int) -> int:
+    return (value + 1) // 2 * 2
+
+
+def _even_down(value: float) -> int:
+    return max(2, int(value) // 2 * 2)
+
+
+def fit_video_dimensions(
+    width: int,
+    height: int,
+    max_dim: tuple[int, int] = DEFAULT_MAX_VIDEO_DIM,
+) -> tuple[int, int]:
+    """アスペクト比を維持して最大寸法内へ収めた動画寸法を返す。
+
+    上限超過時は、上限を超えないように制限側を偶数へ切り下げ、もう一方も
+    同じ比率から偶数へ切り下げる。上限内なら入力寸法をそのまま返す。
+    """
+    width, height = int(width), int(height)
+    if width <= 0 or height <= 0:
+        raise ValueError(f"動画の寸法が不正です: {width}x{height}")
+    max_width, max_height = _coerce_video_dim(max_dim)
+    max_width = max(2, max_width // 2 * 2)
+    max_height = max(2, max_height // 2 * 2)
+
+    # 既存の pad フィルタが偶数へ切り上げるため、実エンコーダ入力寸法で
+    # 上限判定する。これにより奇数のカスタム上限も超えない。
+    encoded_width = _even_up(width)
+    encoded_height = _even_up(height)
+    if encoded_width <= max_width and encoded_height <= max_height:
+        return width, height
+
+    if max_width / width <= max_height / height:
+        target_width = max_width
+        target_height = _even_down(target_width * height / width)
+    else:
+        target_height = max_height
+        target_width = _even_down(target_height * width / height)
+
+    # 浮動小数点の境界誤差があっても上限を超えないように最後に再確認する。
+    target_width = min(target_width, max_width)
+    target_height = min(target_height, max_height)
+    return target_width, target_height
+
+
+def _video_filter_for_dimensions(
+    width: int,
+    height: int,
+    max_dim: tuple[int, int],
+) -> tuple[str, tuple[int, int] | None]:
+    """入力寸法に必要なフィルタと、適用した出力寸法を返す。"""
+    fitted = fit_video_dimensions(width, height, max_dim)
+    max_width, max_height = _coerce_video_dim(max_dim)
+    needs_fit = _even_up(width) > max(2, max_width // 2 * 2) or _even_up(height) > max(2, max_height // 2 * 2)
+    filters: list[str] = []
+    if needs_fit:
+        filters.append(f"scale={fitted[0]}:{fitted[1]}:flags=lanczos")
+        return ",".join((*filters, _VIDEO_COLOR_FILTER)), fitted
+    return _VIDEO_COLOR_FILTER, None
+
+
+def _fit_progress_message(dim: tuple[int, int] | None) -> str | None:
+    if dim is None:
+        return None
+    return f"出力を{dim[0]}x{dim[1]}へ縮小（H.264上限のため）"
 
 
 @lru_cache(maxsize=None)
@@ -294,6 +404,24 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
     in_pattern = str(frames / FRAME_PATTERN)
     total_frames = sum(1 for _ in frames.glob(FRAME_GLOB))
 
+    # PNG経路では、先頭フレームの実寸がAIアップスケール後の出力寸法。
+    # ここで先に判定しておかないと、AMFがscale前の巨大フレームで初期化される。
+    frame_width = frame_height = 0
+    first_frame = next(iter(sorted(frames.glob(FRAME_GLOB))), None)
+    if first_frame is not None:
+        try:
+            frame_info = media.probe(str(first_frame))
+            frame_width, frame_height = frame_info.width, frame_info.height
+        except Exception:
+            frame_width = frame_height = 0
+    max_video_dim = resolve_max_video_dim(settings)
+    video_filter = _VIDEO_COLOR_FILTER
+    fit_dim: tuple[int, int] | None = None
+    if frame_width > 0 and frame_height > 0:
+        video_filter, fit_dim = _video_filter_for_dimensions(
+            frame_width, frame_height, max_video_dim
+        )
+
     # エンコーダ選択
     encoder = "libx264"
     if settings.hw_encode:
@@ -321,7 +449,7 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
         cmd += ["-i", audio_source]
 
     # 映像エンコード設定。元実装と同じBT.709/TVレンジを明示する。
-    cmd += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+    cmd += ["-vf", video_filter]
     cmd += _encoder_args(encoder, settings.video_quality)
     cmd += [
         "-pix_fmt", "yuv420p", "-r", fps_str,
@@ -337,7 +465,7 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
     cmd += [str(out), "-progress", "pipe:1", "-nostats"]
 
     if progress:
-        progress(0.0, "動画を再結合中…")
+        progress(0.0, _fit_progress_message(fit_dim) or "動画を再結合中…")
 
     try:
         _run_with_progress(cmd, total_frames, progress, cancel, "再結合中…")
@@ -350,7 +478,7 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
                 "-i", in_pattern,
                 "-i", audio_source,
             ]
-            cmd2 += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+            cmd2 += ["-vf", video_filter]
             cmd2 += _encoder_args(encoder, settings.video_quality)
             cmd2 += [
                 "-pix_fmt", "yuv420p", "-r", fps_str,
@@ -380,6 +508,29 @@ def _read_raw_frame(stream, size: int) -> bytes | None:
     return bytes(buf)
 
 
+def _ffmpeg_pipeline_error(
+    label: str,
+    stderr_lines: list[str],
+    *,
+    cause: BaseException | None = None,
+    returncode: int | None = None,
+) -> RuntimeError:
+    """パイプ経路の失敗をstderr優先で利用者向け例外へ変換する。"""
+    tail = "\n".join(line for line in stderr_lines[-15:] if line)
+    if tail:
+        return RuntimeError(f"{label}に失敗しました:\n{tail}")
+    if isinstance(cause, (BrokenPipeError, OSError, EOFError)):
+        return RuntimeError(
+            f"{label}に失敗しました（ffmpegとのパイプが閉じられました。"
+            "ffmpegのstderrは取得できませんでした）"
+        )
+    if returncode is not None:
+        return RuntimeError(
+            f"{label}に失敗しました（ffmpeg exit {returncode}、stderrなし）"
+        )
+    return RuntimeError(f"{label}に失敗しました")
+
+
 def upscale_video_piped(
     in_path: str,
     out_path: str,
@@ -404,8 +555,16 @@ def upscale_video_piped(
     session = helper_backend.open_session(settings, width, height, progress, cancel)
     out_width = width * session.scale
     out_height = height * session.scale
+    max_video_dim = resolve_max_video_dim(settings)
+    video_filter, fit_dim = _video_filter_for_dimensions(
+        out_width, out_height, max_video_dim
+    )
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    fit_message = _fit_progress_message(fit_dim)
+    if fit_message:
+        progress(0.0, fit_message)
 
     decoder_cmd = [
         binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
@@ -424,7 +583,7 @@ def upscale_video_piped(
     want_audio = bool(settings.keep_audio and info.has_audio)
     if want_audio:
         encoder_cmd += ["-i", in_path]
-    encoder_cmd += ["-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+    encoder_cmd += ["-vf", video_filter]
     encoder_cmd += _encoder_args(encoder, settings.video_quality)
     encoder_cmd += [
         "-pix_fmt", "yuv420p", "-r", fps_str,
@@ -439,7 +598,7 @@ def upscale_video_piped(
 
     decoder: subprocess.Popen | None = None
     encoder_proc: subprocess.Popen | None = None
-    errors: list[BaseException] = []
+    errors: list[tuple[str, BaseException]] = []
     error_lock = threading.Lock()
     stop = threading.Event()
     decoded: queue.Queue[object] = queue.Queue(maxsize=2)
@@ -448,10 +607,10 @@ def upscale_video_piped(
     decoder_stderr: list[str] = []
     encoder_stderr: list[str] = []
 
-    def _fail(exc: BaseException) -> None:
+    def _fail(stage: str, exc: BaseException) -> None:
         with error_lock:
             if not errors:
-                errors.append(exc)
+                errors.append((stage, exc))
         stop.set()
 
     def _queue_put(target: queue.Queue[object], value: object) -> bool:
@@ -511,7 +670,7 @@ def upscale_video_piped(
                     if not _queue_put(decoded, frame):
                         return
             except BaseException as exc:
-                _fail(exc)
+                _fail("decoder", exc)
 
         def _infer() -> None:
             try:
@@ -527,7 +686,7 @@ def upscale_video_piped(
                     if not _queue_put(upscaled, result):
                         return
             except BaseException as exc:
-                _fail(exc)
+                _fail("inference", exc)
 
         processed = 0
 
@@ -548,7 +707,7 @@ def upscale_video_piped(
                     suffix = f" {processed}/{total_frames}フレーム" if total_frames else f" {processed}フレーム"
                     progress(fraction, "動画をアップスケール中…" + suffix)
             except BaseException as exc:
-                _fail(exc)
+                _fail("encoder", exc)
 
         threads = [
             threading.Thread(target=_decode, name="ueu-video-read", daemon=True),
@@ -560,7 +719,7 @@ def upscale_video_piped(
 
         while any(thread.is_alive() for thread in threads):
             if cancel is not None and cancel.is_set():
-                _fail(Cancelled())
+                _fail("pipeline", Cancelled())
             if stop.is_set():
                 _terminate(decoder)
                 _terminate(encoder_proc)
@@ -570,18 +729,37 @@ def upscale_video_piped(
         for thread in threads:
             thread.join(timeout=5)
 
-        if not stop.is_set():
-            decoder_ret = decoder.wait(timeout=10)
-            encoder_ret = encoder_proc.wait(timeout=60)
-            decoder_drain.join(timeout=2)
-            encoder_drain.join(timeout=2)
-            if decoder_ret != 0:
-                raise RuntimeError("動画デコードに失敗しました:\n" + "\n".join(decoder_stderr[-15:]))
-            if encoder_ret != 0:
-                raise RuntimeError("動画エンコードに失敗しました:\n" + "\n".join(encoder_stderr[-15:]))
+        # エラー経路でもプロセス終了とstderrドレインを待ってから例外を組み立てる。
+        # これにより、Windowsのパイプ書き込み側に出る Errno 22 ではなく、
+        # エンコーダ/デコーダ自身の診断を優先して表示できる。
+        decoder_ret = decoder.wait(timeout=10)
+        encoder_ret = encoder_proc.wait(timeout=60)
+        decoder_drain.join(timeout=2)
+        encoder_drain.join(timeout=2)
 
         if errors:
-            raise errors[0]
+            stage, exc = errors[0]
+            if isinstance(exc, Cancelled):
+                raise exc
+            if stage == "encoder" and isinstance(exc, (BrokenPipeError, OSError, EOFError)):
+                raise _ffmpeg_pipeline_error(
+                    "動画エンコード", encoder_stderr,
+                    cause=exc, returncode=encoder_ret,
+                ) from exc
+            if stage == "decoder" and isinstance(exc, (BrokenPipeError, OSError, EOFError)):
+                raise _ffmpeg_pipeline_error(
+                    "動画デコード", decoder_stderr,
+                    cause=exc, returncode=decoder_ret,
+                ) from exc
+            raise exc
+        if decoder_ret != 0:
+            raise _ffmpeg_pipeline_error(
+                "動画デコード", decoder_stderr, returncode=decoder_ret
+            )
+        if encoder_ret != 0:
+            raise _ffmpeg_pipeline_error(
+                "動画エンコード", encoder_stderr, returncode=encoder_ret
+            )
         if not out.is_file() or out.stat().st_size == 0:
             raise RuntimeError(f"動画出力が生成されませんでした: {out}")
         progress(1.0, "完了")
