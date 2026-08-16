@@ -153,6 +153,16 @@ WinML EPカタログ停止（NPUドライバ.329がVitisAI EP 1.8.68の対応上
 - VAIMLコンパイル時間は増加（av3dp512: 389→914s）。初回のみなので実害小
 - SPAN系（purephoto）は1.7.1/1.8.0どちらのVAIMLでも問題なくコンパイル・実行
 
+## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
+
+列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
+
+![Big Buck Bunny](benchmarks/quality_matrix_bigbuckbunny.png)
+
+![Superman 1941](benchmarks/quality_matrix_superman1941.png)
+
+![Tears of Steel](benchmarks/quality_matrix_tearsofsteel.png)
+
 ## 用途別の推奨
 
 | 用途 | 構成 |

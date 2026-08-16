@@ -113,64 +113,50 @@ python -m quark.onnx.tools.convert_fp32_to_bf16 \
 purephotoの帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Hofmann/Phips**。
 取得元とSHA-256は [docs/span-bench-results.md](docs/span-bench-results.md) に記録している。
 
-## 旧構成のベンチマークと画質比較（履歴）
-
-以下は旧Vulkan/旧Ryzen AI経路を含む2026-08時点の測定記録であり、現在の新AI
-ヘルパーの保証値ではない。新AIのSPAN測定、取得元、変換時の注意点は
-[docs/span-bench-results.md](docs/span-bench-results.md) を参照する。
+## 実測ベンチマーク（現行構成）
 
 実測環境: Ryzen AI 7 PRO 350（NPU: XDNA2）/ Radeon 860M（iGPU）/ 32GB LPDDR5。
-854x480→4x、12フレームのフォルダ一括処理の平均（動画処理の実運用相当）。
+854x480→4x・1枚あたり。動画はrawパイプラインの実効値。
 
-| 構成 | 実効/枚 | 特徴 |
-|---|---|---|
-| GPU + Anime Video v3 | **0.7秒** | 断トツ最速。アニメ調に強いが実写はのっぺり。GPUフル占有＝発熱大 |
-| NPU + Anime Video v3 (bf16) | 約3.1秒 | NPU最速。アニメ向き。GPUフリーで他作業と並走可 |
-| NPU + Real-ESRGAN (bf16) | 約3.7秒 | GPU実行並みの画質。実写向き。GPUフリー |
-| NPU + Real-ESRGAN Anime (bf16) | 約4.5秒 | アニメ向け高画質（質感系）。GPUフリー |
-| GPU + General Video v3（強/弱） | 参考: 720p単発 約3秒 | 高速汎用。弱（wdn）は原本の質感を残す自然系で実写向き |
-| GPU + Real-ESRGAN | 参考: 単発 17秒 | 最高画質だが動画には不向き |
+| AI実行先 \ モデル系統 | アニメ | 実写（質感重視） | 実写（くっきり） |
+|---|---|---|---|
+| GPU（DirectML） | **0.40秒**（動画実効2.5fps） | 約0.5秒 | 2.8秒 |
+| NPU（GPU温存） | 1.14秒（動画実効0.83fps） | **0.60秒** | 2.15秒 |
+| Vulkan（従来） | 実効約0.7秒 | — | —（従来モデルを使用） |
 
-NPUの純推論はタイル151〜262msで理論1.8〜3.1秒/枚だが、現状はワーカーの
-フレーム入出力（PNG読み書き・タイル分割結合）が約1.2〜1.4秒/枚上乗せされる。
+- GPU（DirectML）は従来Vulkan経路の約1.8倍速
+- NPUはGPU使用率ほぼゼロのまま並走できる（ゲーム・作業と同時に変換）
+- NPUはbf16実行。fp32比PSNR 43〜48dBで、目視ではほぼ判別不能
+- NPUは初回のみモデル毎のコンパイル（数分〜15分）が走り、以後はキャッシュから数秒で起動
 
-### NPUの特性（実測からの知見）
-- **bf16（VAIMLフロー）が本命**: キャリブレーション不要で int8 より速く
-  （Real-ESRGAN: 335→168ms/タイル）、fp32忠実度も高い（min +2.3dB）。
-- int8（XIRフロー）はQ/DQ変換とサブグラフ分割のオーバーヘッドが支配的で、
-  演算量10倍差のモデルが同速に見える「見かけの帯域天井（約4.2MP/s）」を作る。
-- VAIML bf16 は**実学習済み重みのPReLU**で無音の誤コンパイル（出力の数値爆発）を
-  起こす。`PReLU(x)=ReLU(x)−w⊙ReLU(−x)` の等価分解で回避でき、分解版
-  Anime Video v3 は151ms/タイルの**NPU最速**になった。
-- 詳細は [docs/npu-research.md](docs/npu-research.md)。
+## モデル系統の画質比較
 
-### 目視評
-
-- アニメ/CG系は **GPU+Anime Video v3 が最良**。NPU+Real-ESRGAN Anime (bf16) が
-  肉薄し、好みの差の範囲。実写では Anime Video v3 系はのっぺりしやすい。
-- Real-ESRGAN の GPU(fp16) と NPU(bf16) は目視でほぼ区別不能（差分35dB超）。
-  実用上は同格で、速度と発熱で NPU が有利。
-- General Video v3（ノイズ除去弱）は原本の質感を残す忠実系で実写が自然。
-  Real-ESRGAN は輪郭を立てる知覚系で「加工感」が出る。忠実 vs 知覚の好み。
-
-### 比較画像
-
-列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
+列は左から: オリジナル（lanczos拡大）/ アニメ / 実写（質感重視）/ 実写（くっきり）。
 
 トゥーンCG — Big Buck Bunny (480p):
 
-![Big Buck Bunny](docs/benchmarks/quality_matrix_bigbuckbunny.png)
+![Big Buck Bunny](docs/benchmarks/model_guide_bbb.png)
 
 セル画アニメ — Superman (1941, 320x240):
 
-![Superman 1941](docs/benchmarks/quality_matrix_superman1941.png)
+![Superman 1941](docs/benchmarks/model_guide_sup.png)
 
 実写 — Tears of Steel (720p):
 
-![Tears of Steel](docs/benchmarks/quality_matrix_tearsofsteel.png)
+![Tears of Steel](docs/benchmarks/model_guide_tos.png)
+
+傾向:
+
+- **アニメ**（AnimeVideoV3）: 細部を整理してなめらかに。劣化した古い素材に最も強い
+- **実写（質感重視）**（purephoto）: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
+- **実写（くっきり）**（Real-ESRGAN）: 輪郭や毛の1本1本を立てる知覚系。加工感は強め
 
 素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)
 © Blender Foundation (CC-BY 3.0)、Superman (1941) はパブリックドメイン。
+
+過去の測定履歴（旧Vulkan/旧Ryzen AI経路、int8/bf16検証、NPU特性の調査記録）は
+[docs/npu-research.md](docs/npu-research.md) と
+[docs/span-bench-results.md](docs/span-bench-results.md) を参照。
 
 ## ポータブル版
 PowerShellで次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6を同梱したzipを作成する。
