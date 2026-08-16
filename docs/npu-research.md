@@ -27,7 +27,7 @@ GPU とほぼ同画質の 4x アップスケールを GPU 占有ゼロで実行�
 NPU実効はタイル推論の理論値（1.8〜3.1秒/枚）に対し、Pythonワーカーの
 フレーム入出力（PNG読み書き・タイル分割結合）が約1.2〜1.4秒/枚を上乗せする。
 軽量モデルではGPU実行系（C++・パイプライン化済み）が実効で明確に速い。
-NPUの価値は速度ではなく「GPU完全フリー・低発熱での並走」。
+NPUの利点は速度ではなく、GPUをほぼ占有せずに実行できる点にある（他のGPU作業と並走可能）。
 
 ## 主要な発見
 
@@ -167,11 +167,11 @@ WinML EPカタログ停止（NPUドライバ.329がVitisAI EP 1.8.68の対応上
 
 | 用途 | 構成 |
 |---|---|
-| 普段の動画（実写・汎用） | NPU + Real-ESRGAN (bf16) |
-| アニメを放置で高画質に | NPU + Real-ESRGAN Anime (bf16) |
-| アニメを今すぐ最速で | GPU + Anime Video v3 |
-| 実写で原本の質感重視 | GPU + General Video v3（ノイズ除去弱） |
-| 静止画を最高画質で | GPU + Real-ESRGAN |
+| 実写・汎用の動画 | NPU + Real-ESRGAN (bf16) |
+| アニメ（画質優先） | NPU + Real-ESRGAN Anime (bf16) |
+| アニメ（速度優先） | GPU + Anime Video v3 |
+| 実写（質感重視） | GPU + General Video v3（ノイズ除去弱） |
+| 静止画（最高画質） | GPU + Real-ESRGAN |
 
 ## 再現手順（scripts/npu/）
 
