@@ -150,7 +150,12 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 
 ## モデル系統の画質比較
 
-列は左から: オリジナル（lanczos拡大）/ アニメ / 実写（質感重視）/ 実写（くっきり）。
+列は左から（すべて GPU/DirectML・fp32 で実行）:
+
+1. オリジナル（lanczos 4x・AIなし）
+2. アニメ = **realesr-animevideov3**（SRVGGNetCompact）
+3. 実写（質感重視）= **4xNomosUni_span_multijpg**（SPAN, purephoto）
+4. 実写（くっきり）= **Real-ESRGAN**（AMD縮小RRDB版）
 
 トゥーンCG — Big Buck Bunny (480p):
 
@@ -166,9 +171,9 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 
 傾向:
 
-- **アニメ**（AnimeVideoV3）: 細部を整理してなめらかに。劣化した古い素材に最も強い
-- **実写（質感重視）**（purephoto）: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
-- **実写（くっきり）**（Real-ESRGAN）: 輪郭や毛の1本1本を立てる知覚系。加工感は強め
+- **アニメ = realesr-animevideov3**: 細部を整理してなめらかに。劣化した古い素材に最も強い
+- **実写（質感重視）= 4xNomosUni_span_multijpg**: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
+- **実写（くっきり）= Real-ESRGAN**: 輪郭や毛の1本1本を立てる知覚系。加工感は強め
 
 素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)
 © Blender Foundation (CC-BY 3.0)、Superman (1941) はパブリックドメイン。
