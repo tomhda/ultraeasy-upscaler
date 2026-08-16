@@ -21,7 +21,7 @@ class UpscaleBackend(str, Enum):
 
 
 class ModelFamily(str, Enum):
-    """新AIヘルパーが提供する3系統のモデル。"""
+    """旧UIが保存していたモデル系統（読み込み互換用）。"""
 
     ANIME = "anime"
     PHOTO = "photo"
@@ -40,30 +40,75 @@ DEFAULT_MODEL = "realesrgan-x4plus"
 DEFAULT_INTERPOLATION_MODEL = "rife-v4.6"
 DEFAULT_MODEL_FAMILY = ModelFamily.ANIME
 
-# 新AIヘルパー用ONNXモデル。キーはタイルの一辺。
-# NPU_NATIVEはアニメ/質感系を512、Real-ESRGANを256で実行する。
+# 新AIヘルパーのモデルキー。表示名ではなくこのキーを設定に保存し、
+# GPU版/NPU版で実体ファイルだけを差し替える。
+HELPER_MODEL_ANIME = "animevideov3"
+HELPER_MODEL_SPAN = "4xNomosUni"
+HELPER_MODEL_AMD_RRDB = "AMD-RRDB"
+DEFAULT_HELPER_MODEL = HELPER_MODEL_ANIME
+
+# 統合前後で保存された値を壊さないための読み込み互換表。
+# 抽象3系統はUIには出さず、ここで具体的なモデルキーへ正規化する。
+HELPER_MODEL_ALIASES = {
+    HELPER_MODEL_ANIME: HELPER_MODEL_ANIME,
+    "realesr-animevideov3": HELPER_MODEL_ANIME,
+    "animevideov3dp": HELPER_MODEL_ANIME,
+    ModelFamily.ANIME.value: HELPER_MODEL_ANIME,
+    HELPER_MODEL_SPAN: HELPER_MODEL_SPAN,
+    "4xNomosUni_span_multijpg": HELPER_MODEL_SPAN,
+    "purephoto": HELPER_MODEL_SPAN,
+    ModelFamily.PHOTO.value: HELPER_MODEL_SPAN,
+    HELPER_MODEL_AMD_RRDB: HELPER_MODEL_AMD_RRDB,
+    "amd-rrdb": HELPER_MODEL_AMD_RRDB,
+    "realesrgan-amd": HELPER_MODEL_AMD_RRDB,
+    "realesrgan-amd-rrdb": HELPER_MODEL_AMD_RRDB,
+    ModelFamily.REALESRGAN.value: HELPER_MODEL_AMD_RRDB,
+    # 現行統合版がhelper設定へ誤って保存していた既存既定値。
+    "realesrgan-x4plus": HELPER_MODEL_AMD_RRDB,
+}
+
+
+def canonical_helper_model(model: str | ModelFamily | None) -> str | None:
+    """helperの旧キーを具体的なモデルキーへ正規化する。"""
+    if model is None:
+        return None
+    value = model.value if isinstance(model, ModelFamily) else str(model)
+    return HELPER_MODEL_ALIASES.get(value, value)
+
+
+def helper_model_family(model: str | ModelFamily | None) -> ModelFamily:
+    """具体的なhelperモデルに対応する旧系統値を返す。"""
+    key = canonical_helper_model(model)
+    if key == HELPER_MODEL_SPAN:
+        return ModelFamily.PHOTO
+    if key == HELPER_MODEL_AMD_RRDB:
+        return ModelFamily.REALESRGAN
+    return ModelFamily.ANIME
+
+# 新AIヘルパー用ONNXモデル。キーは具体的なモデルキー、値はタイルの一辺。
+# NPU_NATIVEはアニメ/質感系を512、AMD縮小RRDBを256で実行する。
 HELPER_MODEL_FILES = {
     UpscaleBackend.WINML_GPU: {
-        ModelFamily.ANIME: {
+        HELPER_MODEL_ANIME: {
             256: "animevideov3_nchw_256x256_fp32.onnx",
             512: "animevideov3_nchw_512x512_fp32.onnx",
         },
-        ModelFamily.PHOTO: {
+        HELPER_MODEL_SPAN: {
             256: "purephoto_nchw_256x256_fp32.onnx",
             512: "purephoto_nchw_512x512_fp32.onnx",
         },
-        ModelFamily.REALESRGAN: {
+        HELPER_MODEL_AMD_RRDB: {
             256: "realesrgan_nchw_256x256_fp32.onnx",
         },
     },
     UpscaleBackend.NPU_NATIVE: {
-        ModelFamily.ANIME: {
+        HELPER_MODEL_ANIME: {
             512: "animevideov3dp_nchw_512x512_bf16cast.onnx",
         },
-        ModelFamily.PHOTO: {
+        HELPER_MODEL_SPAN: {
             512: "purephoto_nchw_512x512_bf16cast.onnx",
         },
-        ModelFamily.REALESRGAN: {
+        HELPER_MODEL_AMD_RRDB: {
             256: "realesrgan_nchw_256x256_bf16cast.onnx",
         },
     },
@@ -86,8 +131,8 @@ class UpscaleSettings:
     backend: UpscaleBackend = UpscaleBackend.WINML_GPU # 自動（GPU優先）を正規化した値
     scale: int = 4                                   # 倍率: 2 / 3 / 4（新ヘルパーは4固定）
     # None = アップスケールしない（動画で補間だけ行う場合に使う）
-    model: str | None = DEFAULT_MODEL                # realesrgan モデル名（-n）
-    model_family: ModelFamily = DEFAULT_MODEL_FAMILY # 新AIヘルパーのモデル系統
+    model: str | None = DEFAULT_MODEL                # Vulkan/helper共通のモデルキー
+    model_family: ModelFamily = DEFAULT_MODEL_FAMILY # 旧helper設定の読み込み互換値
     image_format: str = "png"                        # 画像出力形式: png / jpg / webp
 
     # --- 出力先 ---

@@ -38,13 +38,13 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 | NPU | `npu_serve.py` + Ryzen AI | Ryzen AI 1.8.0相当のPython、EP | bf16cast、キャッシュ再利用 |
 | Vulkan | realesrgan-ncnn-vulkan | `vendor/realesrgan` | 既存経路。2x/4x等の旧モデル |
 
-新AIの「モデル」は3系統で、GPU/NPUで対応するONNX名とタイルが異なる。
+新AIのモデルは具体的なモデル名で選択し、GPU/NPUで対応するONNX名とタイルが異なる。
 
-| GUIの系統 | 主モデル | 用途 | 既定タイル |
-|---|---|---|---:|
-| アニメ | animevideov3系 | アニメ・線画・CG | GPUは256/512自動、NPUは512 |
-| 実写（質感重視） | purephoto = 4xNomosUni_span_multijpg | 実写の自然な質感 | GPUは256/512自動、NPUは512 |
-| 実写（くっきり） | Real-ESRGAN | 輪郭を強めたい実写 | 256 |
+| GUIのモデルキー | 表示名 | 主モデル | 用途 | 既定タイル |
+|---|---|---|---|---:|
+| `animevideov3` | Anime Video v3 | animevideov3 | アニメ・線画・CG | GPUは256/512自動、NPUは512 |
+| `4xNomosUni` | 4xNomosUni SPAN | 4xNomosUni_span_multijpg | 実写の自然な質感 | GPUは256/512自動、NPUは512 |
+| `AMD-RRDB` | Real-ESRGAN（AMD縮小版） | AMD縮小RRDB版 | 輪郭を強めたい実写 | 256 |
 
 ### パス設定（環境変数で上書き可能）
 
@@ -97,18 +97,18 @@ python -m quark.onnx.tools.convert_fp32_to_bf16 \
 
 ## モデル選択ガイド（新AI）
 
-| 目的 | AI実行先 | モデル系統 |
+| 目的 | AI実行先 | モデル |
 |---|---|---|
-| アニメ・線画・CGを自然に拡大 | 自動 / GPU | アニメ（animevideov3系） |
-| 実写の毛・肌・背景の質感を残す | 自動 / GPU | 実写（質感重視）（purephoto） |
-| 実写の輪郭を強く見せる | 自動 / GPU | 実写（くっきり）（Real-ESRGAN） |
-| GPUを他の作業へ空ける | NPU | 上記3系統。アニメ/質感系は512、Real-ESRGANは256 |
+| アニメ・線画・CGを自然に拡大 | 自動 / GPU | Anime Video v3 (`animevideov3`) |
+| 実写の毛・肌・背景の質感を残す | 自動 / GPU | 4xNomosUni SPAN (`4xNomosUni`) |
+| 実写の輪郭を強く見せる | 自動 / GPU | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) |
+| GPUを他の作業へ空ける | NPU | 同じ3モデル。Anime/実写質感は512、AMD-RRDBは256 |
 | 既存モデル・2x等を使う | Vulkan | Vulkan選択時の従来モデル一覧 |
 
 新AIを試す場合は「自動（GPU優先）」から始める。ヘルパーが無い環境でも、
 画像・フォルダはVulkanへ退避する。NPUはRyzen AI環境とEPが必要で、初回だけ
-モデルごとのコンパイル時間が発生する。実写の質感重視系は
-`4xNomosUni_span_multijpg`（purephoto）を使う。
+モデルごとのコンパイル時間が発生する。4xNomosUni SPANは
+`4xNomosUni_span_multijpg`を使う。
 
 purephotoの帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Hofmann/Phips**。
 取得元とSHA-256は [docs/span-bench-results.md](docs/span-bench-results.md) に記録している。
@@ -121,11 +121,11 @@ Radeon 860M（iGPU）・32GB LPDDR5-8000。入力 854x480 → 4倍（3416x1920�
 ベストエフォート3回の最良値）。GPUは fp32 ONNX を DirectML で、NPUは bf16cast を
 Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 
-| モデル系統 | 実体モデル | アーキテクチャ | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | タイル (GPU/NPU) | NPU bf16忠実度* |
+| モデル | 実体モデル | アーキテクチャ | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | タイル (GPU/NPU) | NPU bf16忠実度* |
 |---|---|---|---|---|---|---|
-| アニメ | realesr-animevideov3（NPUはPReLU分解版 `dp`） | SRVGGNetCompact | **0.46秒** | 1.14秒 | 256〜512自動 / 512 | 48.3 dB |
-| 実写（質感重視） | `4xNomosUni_span_multijpg`（purephoto） | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
-| 実写（くっきり） | Real-ESRGAN（AMD縮小RRDB版） | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
+| Anime Video v3 (`animevideov3`) | realesr-animevideov3（NPUはPReLU分解版 `dp`） | SRVGGNetCompact | **0.46秒** | 1.14秒 | 256〜512自動 / 512 | 48.3 dB |
+| 4xNomosUni SPAN (`4xNomosUni`) | `4xNomosUni_span_multijpg` | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
+| Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) | AMD縮小RRDB版 | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
 
 \* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
 \*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
@@ -148,14 +148,14 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 - NPUの純推論はタイル処理を除くと av3dp 512 で 1.03秒/枚（Python側前後処理が約0.12秒）
 - Vulkan経路（realesrgan-ncnn-vulkan・フォールバック兼用）: animevideov3 実効約0.7秒/枚
 
-## モデル系統の画質比較
+## モデルの画質比較
 
 列は左から（すべて GPU/DirectML・fp32 で実行）:
 
 1. オリジナル（lanczos 4x・AIなし）
-2. アニメ = **realesr-animevideov3**（SRVGGNetCompact）
-3. 実写（質感重視）= **4xNomosUni_span_multijpg**（SPAN, purephoto）
-4. 実写（くっきり）= **Real-ESRGAN**（AMD縮小RRDB版）
+2. Anime Video v3 (`animevideov3`) = **realesr-animevideov3**（SRVGGNetCompact）
+3. 4xNomosUni SPAN (`4xNomosUni`) = **4xNomosUni_span_multijpg**（SPAN）
+4. Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) = **AMD縮小RRDB版**（RRDB）
 
 トゥーンCG — Big Buck Bunny (480p):
 
@@ -171,9 +171,9 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 
 傾向:
 
-- **アニメ = realesr-animevideov3**: 細部を整理してなめらかに。劣化した古い素材に最も強い
-- **実写（質感重視）= 4xNomosUni_span_multijpg**: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
-- **実写（くっきり）= Real-ESRGAN**: 輪郭や毛の1本1本を立てる知覚系。加工感は強め
+- **Anime Video v3 (`animevideov3`)**: 細部を整理してなめらかに。劣化した古い素材に最も強い
+- **4xNomosUni SPAN (`4xNomosUni`)**: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
+- **Real-ESRGAN（AMD縮小版） (`AMD-RRDB`)**: 輪郭や毛の1本1本を立てる知覚系。加工感は強め
 
 素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)
 © Blender Foundation (CC-BY 3.0)、Superman (1941) はパブリックドメイン。

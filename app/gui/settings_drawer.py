@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.settings import (
-    ModelFamily,
     ProcessingOrder,
     UpscaleBackend,
     UpscaleSettings,
@@ -59,14 +58,8 @@ _BACKEND_OPTIONS = [
     ("NPU（GPU温存）", UpscaleBackend.NPU_NATIVE.value),
     ("Vulkan", UpscaleBackend.VULKAN.value),
 ]
-_MODEL_FAMILY_OPTIONS = [
-    ("アニメ", ModelFamily.ANIME.value),
-    ("実写（質感重視）", ModelFamily.PHOTO.value),
-    ("実写（くっきり）", ModelFamily.REALESRGAN.value),
-]
 _HELP = {
     "backend": "AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。",
-    "model_family": "映像の種類に合うAIモデルを選びます。写真や実写映像は、自然な質感を残すか、輪郭をくっきり見せるかで選べます。",
     "image_format": "画像を書き出す形式です。pngは劣化なし、jpgは容量小、webpは容量を抑えやすい形式です。",
     "video_format": "動画ファイルの保存形式です。mp4は再生互換性が高く、mkv/movは用途に合わせて選びます。",
     "video_quality": "CRF/QPは動画の圧縮品質です。数字が小さいほど高画質で容量は大きくなります。",
@@ -257,57 +250,53 @@ class SettingsDrawer(QFrame):
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(3, 1)
 
-        # --- AI実行先 / モデル系統 ---
+        # --- AI実行先 / 画像の保存形式 ---
         self.backend = self._combo_with_data(_BACKEND_OPTIONS)
         grid.addWidget(self._label("AI実行先", _HELP["backend"]), 0, 0)
         grid.addWidget(self.backend, 0, 1)
 
-        self.model_family = self._combo_with_data(_MODEL_FAMILY_OPTIONS)
-        grid.addWidget(self._label("モデル系統", _HELP["model_family"]), 0, 2)
-        grid.addWidget(self.model_family, 0, 3)
-
         # --- 画像の保存形式 ---
         self.image_format = QComboBox()
         self.image_format.addItems(_IMAGE_FORMATS)
-        grid.addWidget(self._label("画像の保存形式", _HELP["image_format"]), 1, 0)
-        grid.addWidget(self.image_format, 1, 1)
+        grid.addWidget(self._label("画像の保存形式", _HELP["image_format"]), 0, 2)
+        grid.addWidget(self.image_format, 0, 3)
 
         # --- 動画の保存形式 ---
         self.video_format = QComboBox()
         self.video_format.addItems(_VIDEO_FORMATS)
-        grid.addWidget(self._label("動画の保存形式", _HELP["video_format"]), 1, 2)
-        grid.addWidget(self.video_format, 1, 3)
+        grid.addWidget(self._label("動画の保存形式", _HELP["video_format"]), 1, 0)
+        grid.addWidget(self.video_format, 1, 1)
 
         # --- 動画の画質 ---
         self.video_quality = self._combo_with_data(_VIDEO_QUALITY_OPTIONS)
-        grid.addWidget(self._label("動画の画質 (CRF/QP)", _HELP["video_quality"]), 2, 0)
-        grid.addWidget(self.video_quality, 2, 1)
+        grid.addWidget(self._label("動画の画質 (CRF/QP)", _HELP["video_quality"]), 1, 2)
+        grid.addWidget(self.video_quality, 1, 3)
 
         # --- 分割処理 ---
         self.tile_size = self._combo_with_data(_TILE_OPTIONS)
-        grid.addWidget(self._label("分割処理 (タイル)", _HELP["tile_size"]), 2, 2)
-        grid.addWidget(self.tile_size, 2, 3)
+        grid.addWidget(self._label("分割処理 (タイル)", _HELP["tile_size"]), 2, 0)
+        grid.addWidget(self.tile_size, 2, 1)
 
         # --- 使うGPU ---
         self.gpu_id = self._combo_with_data(_GPU_OPTIONS)
-        grid.addWidget(self._label("使うGPU", _HELP["gpu_id"]), 3, 0)
-        grid.addWidget(self.gpu_id, 3, 1)
+        grid.addWidget(self._label("使うGPU", _HELP["gpu_id"]), 2, 2)
+        grid.addWidget(self.gpu_id, 2, 3)
 
         # --- 出力フォルダ名 ---
         self.subfolder_name = QLineEdit()
         self.subfolder_name.setPlaceholderText("upscaled")
-        grid.addWidget(self._label("出力フォルダ名", _HELP["subfolder"]), 3, 2)
-        grid.addWidget(self.subfolder_name, 3, 3)
+        grid.addWidget(self._label("出力フォルダ名", _HELP["subfolder"]), 3, 0)
+        grid.addWidget(self.subfolder_name, 3, 1)
 
         # --- フレーム補間後のfps ---
         self.target_fps = self._combo_with_data(_TARGET_FPS_OPTIONS)
-        grid.addWidget(self._label("補間後のfps", _HELP["target_fps"]), 4, 0)
-        grid.addWidget(self.target_fps, 4, 1)
+        grid.addWidget(self._label("補間後のfps", _HELP["target_fps"]), 3, 2)
+        grid.addWidget(self.target_fps, 3, 3)
 
         # --- 処理の順番（アプコン×補間 併用時） ---
         self.processing_order = self._combo_with_data(_PROCESSING_ORDER_OPTIONS)
-        grid.addWidget(self._label("処理の順番", _HELP["processing_order"]), 4, 2)
-        grid.addWidget(self.processing_order, 4, 3)
+        grid.addWidget(self._label("処理の順番", _HELP["processing_order"]), 4, 0)
+        grid.addWidget(self.processing_order, 4, 1)
 
         root.addLayout(grid)
 
@@ -340,12 +329,6 @@ class SettingsDrawer(QFrame):
             self.backend,
             s.backend.value if settings is not None else "auto",
         )
-        family_value = (
-            s.model_family.value
-            if isinstance(s.model_family, ModelFamily)
-            else str(s.model_family)
-        )
-        self._set_combo_value(self.model_family, family_value)
         self.image_format.setCurrentText(s.image_format)
         self.video_format.setCurrentText(s.video_format)
         self._set_combo_value(self.video_quality, s.video_quality)
@@ -368,7 +351,6 @@ class SettingsDrawer(QFrame):
             if backend_value == "auto"
             else UpscaleBackend(backend_value)
         )
-        s.model_family = ModelFamily(self.model_family.currentData())
         s.image_format = self.image_format.currentText()
         s.video_format = self.video_format.currentText()
         s.video_quality = int(self.video_quality.currentData())

@@ -187,6 +187,60 @@ def test_upscale_and_interpolation_models_are_independent(app):
     app.processEvents()
 
 
+def test_helper_model_none_is_available_and_saved_as_upscale_off(app):
+    """新AIでも「なし」を選べ、RIFEのみのジョブ設定を作れる。"""
+    from app.core.settings import (
+        HELPER_MODEL_AMD_RRDB,
+        HELPER_MODEL_ANIME,
+        HELPER_MODEL_SPAN,
+        UpscaleBackend,
+    )
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+
+    assert win.model_combo.findData(None) == 0
+    assert win.model_combo.itemText(0) == "なし（拡大しない）"
+    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
+        None,
+        HELPER_MODEL_ANIME,
+        HELPER_MODEL_SPAN,
+        HELPER_MODEL_AMD_RRDB,
+    ]
+
+    win.model_combo.setCurrentIndex(0)
+    rife_index = win.interpolation_combo.findData("rife-v4.6")
+    assert rife_index >= 0
+    win.interpolation_combo.setCurrentIndex(rife_index)
+    app.processEvents()
+
+    settings = win.build_settings()
+    assert settings.backend == UpscaleBackend.WINML_GPU
+    assert settings.model is None
+    assert settings.interpolation_model == "rife-v4.6"
+    assert settings.upscale_enabled is False
+    assert settings.interpolation_enabled is True
+    assert win.model_combo.isEnabled() is True
+    assert all(not button.isEnabled() for button in win._scale_btns.values())
+
+    ok, _ = win.add_path(str(SAMPLE_IMAGE))
+    assert ok is True
+    win._apply_current_settings(win._pending_jobs())
+    job = next(iter(win._jobs.values()))
+    assert job.settings is not None
+    assert job.settings.model is None
+    assert job.settings.interpolation_model == "rife-v4.6"
+
+    # 「なし」から新AIモデルへ戻せることも確認する。
+    win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_ANIME))
+    app.processEvents()
+    assert win.build_settings().model == HELPER_MODEL_ANIME
+
+    win.close()
+    app.processEvents()
+
+
 def test_job_settings_apply_at_start_not_at_add(app):
     """設定は追加時ではなく「開始」時点のUI値が全保留ジョブへ適用される。"""
     from app.core.settings import DEFAULT_MODEL
@@ -225,9 +279,14 @@ def test_job_settings_apply_at_start_not_at_add(app):
 
 
 def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch, tmp_path):
-    """新AIの3系統がVulkan資産の有無にかかわらず選択できる。"""
+    """新AIの具体的3モデルがVulkan資産の有無にかかわらず選択できる。"""
     from app.core import binaries
-    from app.core.settings import ModelFamily, UpscaleBackend
+    from app.core.settings import (
+        HELPER_MODEL_AMD_RRDB,
+        HELPER_MODEL_ANIME,
+        HELPER_MODEL_SPAN,
+        UpscaleBackend,
+    )
     from app.gui.main_window import MainWindow
 
     available_calls: list[bool] = []
@@ -251,19 +310,28 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
     assert win._scale_btns[2].isEnabled() is False
     assert win._scale_btns[4].isEnabled() is True
     assert win.model_combo.isEnabled() is True
-    assert [win.model_combo.itemText(i) for i in range(win.model_combo.count())] == [
-        "アニメ", "実写（質感重視）", "実写（くっきり）"
+    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
+        None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB
     ]
+    assert win.model_combo.itemText(1).startswith("Anime Video v3")
+    assert win.model_combo.itemText(2).startswith("4xNomosUni SPAN")
+    assert win.model_combo.itemText(3).startswith("Real-ESRGAN（AMD縮小版）")
+    assert all(
+        text not in "\n".join(
+            win.model_combo.itemText(i) for i in range(win.model_combo.count())
+        )
+        for text in ("実写（質感重視）", "実写（くっきり）")
+    )
 
-    photo_idx = win.model_combo.findData(ModelFamily.PHOTO.value)
+    photo_idx = win.model_combo.findData(HELPER_MODEL_SPAN)
     win.model_combo.setCurrentIndex(photo_idx)
-    assert win.build_settings().model_family == ModelFamily.PHOTO
+    assert win.build_settings().model == HELPER_MODEL_SPAN
 
     auto_idx = win.backend_combo.findData("auto")
     win.backend_combo.setCurrentIndex(auto_idx)
     app.processEvents()
     assert win.model_combo.isEnabled() is True
-    assert win.model_combo.count() == 3
+    assert win.model_combo.count() == 4
     assert win.build_settings().backend == UpscaleBackend.WINML_GPU
 
     vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
@@ -375,17 +443,37 @@ def test_settings_drawer_explains_specialized_terms(app):
 
 def test_model_picker_shows_speed_quality_info(app):
     """モデルコンボにバッジ、下段に選択構成の実測ベース説明が出る。"""
-    from app.core.settings import UpscaleBackend
+    from app.core.settings import (
+        HELPER_MODEL_AMD_RRDB,
+        HELPER_MODEL_ANIME,
+        HELPER_MODEL_SPAN,
+        UpscaleBackend,
+    )
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
 
-    # 自動（GPU優先）では3系統の新モデルを表示する。
+    # 自動（GPU優先）では実モデル名の新AIモデルを表示する。
     assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
-        "anime", "photo", "realesrgan"
+        None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB
     ]
-    assert "animevideov3" in win.model_hint.text()
+    assert win.model_combo.itemText(1).startswith("Anime Video v3")
+    assert "速度◎" in win.model_combo.itemText(1)
+    assert win.model_hint.text().startswith("【GPU：DirectML")
+    assert "速度◎" in win.model_hint.text()
+    assert "アニメ◎・実写△" in win.model_hint.text()
+
+    # SPAN/AMD縮小版も同じ実モデル名＋特性説明の仕組みで選べる。
+    win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_SPAN))
+    app.processEvents()
+    assert win.model_combo.currentText().startswith("4xNomosUni SPAN")
+    assert "アニメ○・実写◎" in win.model_hint.text()
+    win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_AMD_RRDB))
+    app.processEvents()
+    assert win.model_combo.currentText().startswith("Real-ESRGAN（AMD縮小版）")
+    assert "速度◎" not in win.model_hint.text()
+    assert "速度△" in win.model_hint.text()
 
     # Vulkanでは旧モデルのバッジと説明を表示する。
     vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
@@ -398,12 +486,14 @@ def test_model_picker_shows_speed_quality_info(app):
     assert gpu_hint.startswith("【GPU")
     assert "速度" in gpu_hint and "画質" in gpu_hint
 
-    # NPU_NATIVEに切替 → 3系統の説明へ戻る。
+    # NPU_NATIVEに切替 → 同じ実モデル名でNPU実測の説明へ更新する。
     npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
     win.backend_combo.setCurrentIndex(npu)
     app.processEvents()
     assert win.model_hint.text() != gpu_hint
     assert "GPUを温存" in win.model_hint.text()
+    assert win.model_combo.currentText().startswith("Anime Video v3")
+    assert "速度○" in win.model_hint.text()
 
     # モデル「なし」では補間のみの案内
     win.backend_combo.setCurrentIndex(

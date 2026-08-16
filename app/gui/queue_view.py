@@ -147,9 +147,8 @@ class QueueRow(QFrame):
         if settings is None:
             return ""
         backend = getattr(settings.backend, "value", str(settings.backend))
-        family = getattr(settings.model_family, "value", str(settings.model_family))
         if backend in {"winml_gpu", "npu_native"}:
-            upscale = f"{family}（4x）"
+            upscale = "なし" if settings.model is None else f"{settings.model}（4x）"
         else:
             upscale = settings.model or "なし"
         interpolation = settings.interpolation_model or "なし"

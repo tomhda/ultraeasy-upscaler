@@ -1,5 +1,9 @@
 from app.core import helper_backend
-from app.core.settings import ModelFamily, UpscaleBackend, UpscaleSettings
+from app.core.settings import (
+    HELPER_MODEL_AMD_RRDB,
+    UpscaleBackend,
+    UpscaleSettings,
+)
 
 
 def test_gpu_tile_uses_less_discarded_pixel_plan() -> None:
@@ -30,7 +34,7 @@ def test_realesrgan_winml_resolves_256_model_from_env_first(
 
     settings = UpscaleSettings(
         backend=UpscaleBackend.WINML_GPU,
-        model_family=ModelFamily.REALESRGAN,
+        model=HELPER_MODEL_AMD_RRDB,
     )
     backend, tile, model_path = helper_backend._session_spec(settings, 854, 480)
 
@@ -54,7 +58,7 @@ def test_realesrgan_npu_resolves_256_model_from_vendor(
 
     settings = UpscaleSettings(
         backend=UpscaleBackend.NPU_NATIVE,
-        model_family=ModelFamily.REALESRGAN,
+        model=HELPER_MODEL_AMD_RRDB,
     )
     backend, tile, model_path = helper_backend._session_spec(settings, 854, 480)
 

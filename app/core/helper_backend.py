@@ -19,10 +19,14 @@ from . import binaries, jobs, media
 from .jobs import ProgressCb
 from .serve_client import ServeClient, ServeClientError
 from .settings import (
+    DEFAULT_HELPER_MODEL,
+    DEFAULT_MODEL,
     DEFAULT_MODELS_DIR,
     DEFAULT_NPU_CACHE_DIR,
     DEFAULT_VENDOR_MODELS_DIR,
     HELPER_MODEL_FILES,
+    HELPER_MODEL_AMD_RRDB,
+    canonical_helper_model,
     ModelFamily,
     UpscaleBackend,
     UpscaleSettings,
@@ -74,11 +78,21 @@ def npu_cache_dir() -> Path:
     return Path(os.environ.get(NPU_CACHE_ENV, str(DEFAULT_NPU_CACHE_DIR))).expanduser()
 
 
-def _family(settings: UpscaleSettings) -> ModelFamily:
-    try:
-        return ModelFamily(settings.model_family)
-    except (TypeError, ValueError) as exc:
-        raise HelperBackendUnavailable(f"未知のモデル系統です: {settings.model_family}") from exc
+def _model_key(settings: UpscaleSettings) -> str:
+    """設定からhelperの具体的なモデルキーを取り出す。
+
+    現行統合版は ``model_family`` に抽象値を保存していたため、
+    ``model=DEFAULT_MODEL`` の旧形式だけは系統値を優先して読み戻す。
+    新形式では ``model`` が具体的なキーなので、表示名では解決しない。
+    """
+    model_key = canonical_helper_model(settings.model)
+    if settings.model in (None, DEFAULT_MODEL):
+        legacy_key = canonical_helper_model(settings.model_family)
+        if legacy_key is not None:
+            model_key = legacy_key
+    if model_key is None:
+        model_key = DEFAULT_HELPER_MODEL
+    return model_key
 
 
 def _discarded_pixels(width: int, height: int, tile: int, overlap: int = OVERLAP) -> int:
@@ -100,12 +114,13 @@ def effective_backend(backend: UpscaleBackend, width: int, height: int) -> Upsca
     return backend
 
 
-def _resolve_model(backend: UpscaleBackend, family: ModelFamily, tile: int) -> Path:
+def _resolve_model(backend: UpscaleBackend, model: str | ModelFamily, tile: int) -> Path:
+    model_key = canonical_helper_model(model)
     try:
-        filename = HELPER_MODEL_FILES[backend][family][tile]
+        filename = HELPER_MODEL_FILES[backend][model_key][tile]
     except KeyError as exc:
         raise HelperBackendUnavailable(
-            f"対応モデルがありません: backend={backend.value}, family={family.value}, tile={tile}"
+            f"対応モデルがありません: backend={backend.value}, model={model_key}, tile={tile}"
         ) from exc
 
     root = models_dir()
@@ -181,12 +196,12 @@ def _session_spec(
         raise HelperBackendUnavailable("新しいGPU/NPUバックエンドは4xモデル専用です。倍率を4xにしてください。")
     requested = settings.backend
     backend = effective_backend(requested, width, height)
-    family = _family(settings)
-    if family == ModelFamily.REALESRGAN:
+    model_key = _model_key(settings)
+    if model_key == HELPER_MODEL_AMD_RRDB:
         tile = 256
     else:
         tile = 512 if backend == UpscaleBackend.NPU_NATIVE else choose_gpu_tile(width, height)
-    model_path = _resolve_model(backend, family, tile)
+    model_path = _resolve_model(backend, model_key, tile)
     return backend, tile, model_path
 
 

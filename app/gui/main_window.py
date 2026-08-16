@@ -33,10 +33,14 @@ from app.core import binaries
 from app.core.jobs import Job, JobKind, JobStatus
 from app.core.settings import (
     DEFAULT_MODEL,
-    ModelFamily,
+    DEFAULT_HELPER_MODEL,
+    HELPER_MODEL_AMD_RRDB,
+    HELPER_MODEL_ANIME,
+    HELPER_MODEL_SPAN,
     OutputLocation,
     UpscaleBackend,
     UpscaleSettings,
+    helper_model_family,
 )
 
 from .drop_zone import DropZone
@@ -55,19 +59,24 @@ _BACKEND_OPTIONS = [
     ("Vulkan", UpscaleBackend.VULKAN.value),
 ]
 _HELPER_BACKENDS = {UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE}
-_HELPER_MODEL_OPTIONS = [
-    ("アニメ", ModelFamily.ANIME.value),
-    ("実写（質感重視）", ModelFamily.PHOTO.value),
-    ("実写（くっきり）", ModelFamily.REALESRGAN.value),
-]
-_HELPER_MODEL_VALUES = {value for _label, value in _HELPER_MODEL_OPTIONS}
-_HELPER_MODEL_LABELS = {value: label for label, value in _HELPER_MODEL_OPTIONS}
 _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
     "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
     "realesr-animevideov3": "Anime Video v3",
+    HELPER_MODEL_ANIME: "Anime Video v3",
     "realesr-general-x4v3": "General Video v3（ノイズ除去強）",
     "realesr-general-wdn-x4v3": "General Video v3（ノイズ除去弱）",
+    HELPER_MODEL_SPAN: "4xNomosUni SPAN",
+    HELPER_MODEL_AMD_RRDB: "Real-ESRGAN（AMD縮小版）",
+}
+_HELPER_MODEL_OPTIONS = [
+    ("なし（拡大しない）", None),
+    (_MODEL_LABELS[HELPER_MODEL_ANIME], HELPER_MODEL_ANIME),
+    (_MODEL_LABELS[HELPER_MODEL_SPAN], HELPER_MODEL_SPAN),
+    (_MODEL_LABELS[HELPER_MODEL_AMD_RRDB], HELPER_MODEL_AMD_RRDB),
+]
+_HELPER_MODEL_VALUES = {
+    value for _label, value in _HELPER_MODEL_OPTIONS if value is not None
 }
 
 # バックエンド自体の説明（選択に連動して説明行の先頭に出す）
@@ -76,12 +85,6 @@ _BACKEND_DESC = {
     UpscaleBackend.NPU_NATIVE: "NPU：GPUを温存。Ryzen AIの常駐サーバーで実行",
     UpscaleBackend.VULKAN: "GPU：最速クラス。処理中は他の作業と競合し発熱大",
     UpscaleBackend.NPU: "NPU：GPUを使わないので静かで、他の作業と並走できる",
-}
-
-_HELPER_MODEL_DESC = {
-    ModelFamily.ANIME.value: "animevideov3系。アニメ・線画の処理に向く",
-    ModelFamily.PHOTO.value: "purephoto。実写の自然な質感を重視",
-    ModelFamily.REALESRGAN.value: "Real-ESRGAN。実写をくっきり見せる",
 }
 
 # (backend, model) → (速度, 画質, アニメ適性, 実写適性, 推奨タグ or None)
@@ -103,6 +106,18 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str],
         ("○", "◎", "◎", "○", None),
     (UpscaleBackend.NPU, "realesr-animevideov3"):
         ("◎", "◎", "◎", "△", "アニメ"),
+    (UpscaleBackend.WINML_GPU, HELPER_MODEL_ANIME):
+        ("◎", "◎", "◎", "△", "アニメ"),
+    (UpscaleBackend.WINML_GPU, HELPER_MODEL_SPAN):
+        ("◎", "◎", "○", "◎", "実写"),
+    (UpscaleBackend.WINML_GPU, HELPER_MODEL_AMD_RRDB):
+        ("△", "◎", "○", "◎", None),
+    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ANIME):
+        ("○", "◎", "◎", "△", "アニメ"),
+    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SPAN):
+        ("◎", "◎", "○", "◎", "実写"),
+    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_AMD_RRDB):
+        ("△", "◎", "○", "◎", None),
 }
 
 
@@ -175,9 +190,6 @@ class MainWindow(QWidget):
             self._on_drawer_backend_changed
         )
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
-        self.drawer.model_family.currentIndexChanged.connect(
-            self._on_drawer_model_family_changed
-        )
         self._set_combo_data(self.backend_combo, self.drawer.backend.currentData())
         self._refresh_model_options()
 
@@ -461,11 +473,16 @@ class MainWindow(QWidget):
         self.model_combo.setEnabled(not self._running)
 
         if backend in _HELPER_BACKENDS:
-            valid_family = model in _HELPER_MODEL_VALUES
-            self.model_combo.setEnabled(valid_family and not self._running)
+            # 「なし」はアップスケールを無効にするだけで、コンボ自体は
+            # 有効のままにして別のモデルへ戻せるようにする。
+            self.model_combo.setEnabled(not self._running)
             self._set_scale(4)
             for scale, button in self._scale_btns.items():
-                button.setEnabled(valid_family and scale == 4 and not self._running)
+                button.setEnabled(
+                    model in _HELPER_MODEL_VALUES
+                    and scale == 4
+                    and not self._running
+                )
             self._update_model_info()
             return
 
@@ -493,16 +510,20 @@ class MainWindow(QWidget):
     def _refresh_model_options(self) -> None:
         """バックエンドに応じてモデル欄を再構成する。
 
-        新AIバックエンドでは旧Vulkan資産を列挙せず、3系統を必ず表示する。
+        新AIバックエンドでは旧Vulkan資産を列挙せず、具体的な3モデルを表示する。
         Vulkanを選んだときだけ vendor/realesrgan の従来モデルを表示する。
         """
         backend = self._selected_backend()
         if backend in _HELPER_BACKENDS:
             selected = self.model_combo.currentData()
-            if selected not in _HELPER_MODEL_VALUES:
-                selected = self.drawer.model_family.currentData()
+            # 初回（項目未構築）だけ具体的な既定モデルを使う。
+            # 既に「なし」が選択されている場合は、バックエンド切替時にも
+            # その明示的な選択を維持する。
+            if self.model_combo.count() == 0:
+                selected = DEFAULT_HELPER_MODEL
+            elif selected is not None and selected not in _HELPER_MODEL_VALUES:
+                selected = DEFAULT_HELPER_MODEL
             self._replace_model_items(_HELPER_MODEL_OPTIONS, selected)
-            self._set_combo_data(self.drawer.model_family, self.model_combo.currentData())
             self._refresh_scale_enabled()
             return
 
@@ -512,7 +533,7 @@ class MainWindow(QWidget):
         options.extend((_MODEL_LABELS.get(model, model), model) for model in models)
         if not models:
             options.append(("モデル未検出", "__missing__"))
-        elif selected not in models:
+        elif selected is not None and selected not in models:
             selected = DEFAULT_MODEL if DEFAULT_MODEL in models else None
         self._replace_model_items(options, selected)
         if not models:
@@ -553,8 +574,6 @@ class MainWindow(QWidget):
 
     @staticmethod
     def _compose_model_hint(backend: UpscaleBackend, data: str) -> str:
-        if backend in _HELPER_BACKENDS and data in _HELPER_MODEL_VALUES:
-            return _HELPER_MODEL_DESC[data]
         info = _MODEL_INFO.get((backend, data))
         if info is None:
             return ""
@@ -574,7 +593,7 @@ class MainWindow(QWidget):
             data = self.model_combo.itemData(i)
             if data in (None, "__missing__"):
                 continue
-            base = _HELPER_MODEL_LABELS.get(data, _MODEL_LABELS.get(data, data))
+            base = _MODEL_LABELS.get(data, data)
             info = _MODEL_INFO.get((backend, data))
             item = item_model.item(i)
             if info is None:
@@ -625,14 +644,7 @@ class MainWindow(QWidget):
         self._refresh_scale_enabled()
 
     def _on_model_changed(self, *_args) -> None:
-        if self._selected_backend() in _HELPER_BACKENDS:
-            self._set_combo_data(self.drawer.model_family, self.model_combo.currentData())
         self._refresh_scale_enabled()
-
-    def _on_drawer_model_family_changed(self, *_args) -> None:
-        if self._selected_backend() in _HELPER_BACKENDS:
-            self._set_combo_data(self.model_combo, self.drawer.model_family.currentData())
-            self._refresh_scale_enabled()
 
     def _on_interpolation_changed(self) -> None:
         model = self.interpolation_combo.currentData()
@@ -668,8 +680,12 @@ class MainWindow(QWidget):
         s.scale = self._scale
         model = self.model_combo.currentData()
         if s.backend in _HELPER_BACKENDS:
-            if model in _HELPER_MODEL_VALUES:
-                s.model_family = ModelFamily(model)
+            # helperも表示ラベルではなく、選択肢の具体的なモデルキーを保存する。
+            # 「なし」はアップスケール無効として扱い、前回のモデルキーを残さない。
+            s.model = None if model in (None, "__missing__") else str(model)
+            if s.model is not None:
+                # 旧API利用者向けに系統値も併記するが、解決の主キーは s.model。
+                s.model_family = helper_model_family(s.model)
         else:
             s.model = None if model in (None, "__missing__") else str(model)
         interpolation = self.interpolation_combo.currentData()

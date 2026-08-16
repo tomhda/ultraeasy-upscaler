@@ -250,9 +250,16 @@ def test_video_can_interpolate_without_upscaling(monkeypatch, tmp_path: Path) ->
         upscaler, "upscale_folder",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("upscaler must be skipped")),
     )
+    monkeypatch.setattr(
+        video, "upscale_video_piped",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("helper raw pipe must be skipped")
+        ),
+    )
     monkeypatch.setattr(video, "reassemble", fake_reassemble)
 
     settings = UpscaleSettings(
+        backend=UpscaleBackend.WINML_GPU,
         model=None,
         interpolation_model="rife-v4.6",
         output_location=engine.OutputLocation.CUSTOM,
