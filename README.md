@@ -115,19 +115,38 @@ purephotoの帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Ho
 
 ## 実測ベンチマーク（現行構成）
 
-実測環境: Ryzen AI 7 PRO 350（NPU: XDNA2）/ Radeon 860M（iGPU）/ 32GB LPDDR5。
-854x480→4x・1枚あたり。動画はrawパイプラインの実効値。
+実測環境: AMD Ryzen AI 7 PRO 350（NPU: XDNA2 / ドライバ 32.0.203.329）・
+Radeon 860M（iGPU）・32GB LPDDR5-8000。入力 854x480 → 4倍（3416x1920）。
+数値はタイル分割・結合・色変換込みの「1枚あたり」実測（常駐セッションの定常値、
+ベストエフォート3回の最良値）。GPUは fp32 ONNX を DirectML で、NPUは bf16cast を
+Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 
-| AI実行先 \ モデル系統 | アニメ | 実写（質感重視） | 実写（くっきり） |
-|---|---|---|---|
-| GPU（DirectML） | **0.40秒**（動画実効2.5fps） | 約0.5秒 | 2.8秒 |
-| NPU（GPU温存） | 1.14秒（動画実効0.83fps） | **0.60秒** | 2.15秒 |
-| Vulkan（従来） | 実効約0.7秒 | — | —（従来モデルを使用） |
+| モデル系統 | 実体モデル | アーキテクチャ | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | タイル (GPU/NPU) | NPU bf16忠実度* |
+|---|---|---|---|---|---|---|
+| アニメ | realesr-animevideov3（NPUはPReLU分解版 `dp`） | SRVGGNetCompact | **0.46秒** | 1.14秒 | 256〜512自動 / 512 | 48.3 dB |
+| 実写（質感重視） | `4xNomosUni_span_multijpg`（purephoto） | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
+| 実写（くっきり） | Real-ESRGAN（AMD縮小RRDB版） | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
 
-- GPU（DirectML）は従来Vulkan経路の約1.8倍速
-- NPUはGPU使用率ほぼゼロのまま並走できる（ゲーム・作業と同時に変換）
-- NPUはbf16実行。fp32比PSNR 43〜48dBで、目視ではほぼ判別不能
-- NPUは初回のみモデル毎のコンパイル（数分〜15分）が走り、以後はキャッシュから数秒で起動
+\* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
+\*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
+
+動画（rawvideoパイプライン・音声保持・3秒クリップのE2E実測）:
+
+| 経路 | 実効fps | 1フレームあたり |
+|---|---|---|
+| GPU (DirectML) × アニメ | **2.48fps** | 0.40秒 |
+| NPU (VitisAI) × アニメ | 0.83fps | 1.21秒 |
+
+動画の1フレーム値が静止画定常値より速い（GPU 0.40 vs 0.46秒）のは、
+パイプラインがデコード/変換と推論を重ねて隠すため。NPU動画はGPU使用率ほぼゼロの
+まま回るので、ゲーム・GPU作業と並走できる。
+
+補足:
+
+- NPUは初回のみモデル毎にVAIMLコンパイルが走る（実測: av3dp 512 = 15.2分 /
+  purephoto 512 = 12.9分 / Real-ESRGAN 256 = 18.7分）。以後はキャッシュから数秒で起動
+- NPUの純推論はタイル処理を除くと av3dp 512 で 1.03秒/枚（Python側前後処理が約0.12秒）
+- Vulkan経路（realesrgan-ncnn-vulkan・フォールバック兼用）: animevideov3 実効約0.7秒/枚
 
 ## モデル系統の画質比較
 
