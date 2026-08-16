@@ -35,7 +35,7 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 |---|---|---|---|
 | 自動（GPU優先） | DirectML GPU | `tools/winml-sr` のビルド済みexe | GPUを優先。起動失敗時はVulkan |
 | GPU（DirectML） | DirectML GPU | 同上 | 明示的にGPUを選択 |
-| NPU（GPU温存） | `npu_serve.py` + Ryzen AI | Ryzen AI 1.8.0相当のPython、EP | bf16cast、キャッシュ再利用 |
+| NPU | `npu_serve.py` + Ryzen AI | Ryzen AI 1.8.0相当のPython、EP | bf16cast、キャッシュ再利用 |
 | Vulkan | realesrgan-ncnn-vulkan | `vendor/realesrgan` | 既存経路。2x/4x等の旧モデル |
 
 新AIの「モデル」は3系統で、GPU/NPUで対応するONNX名とタイルが異なる。
