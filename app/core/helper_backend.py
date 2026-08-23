@@ -189,6 +189,23 @@ def _cache_hit(model_path: Path) -> bool:
     return (cache / "context.json").is_file() and any(cache.rglob("*.rai"))
 
 
+def _helper_env() -> dict[str, str]:
+    """常駐ヘルパーへ渡す環境を作る。
+
+    .NET SDK/runtimeをユーザー領域へ入れたWindowsでは、親プロセスが古い
+    PATHを保持したまま起動されることがあるため、標準のユーザー配置先を
+    見つけた場合だけDOTNET_ROOTを補う。
+    """
+    env = os.environ.copy()
+    dotnet_root = Path.home() / ".dotnet"
+    if "DOTNET_ROOT" not in env and (dotnet_root / "dotnet.exe").is_file():
+        env["DOTNET_ROOT"] = str(dotnet_root)
+        env.setdefault("DOTNET_ROOT_X64", str(dotnet_root))
+        env["PATH"] = str(dotnet_root) + os.pathsep + env.get("PATH", "")
+    env.setdefault("PYTHONUTF8", "1")
+    return env
+
+
 def _session_spec(
     settings: UpscaleSettings, width: int, height: int
 ) -> tuple[UpscaleBackend, int, Path]:
@@ -246,8 +263,7 @@ def open_session(
             if not cache_hit:
                 progress(0.0, "初回のみNPU最適化中（次回から数秒）")
 
-        env = os.environ.copy()
-        env.setdefault("PYTHONUTF8", "1")
+        env = _helper_env()
         client = ServeClient(command, workdir, env=env)
 
         last_second = -1

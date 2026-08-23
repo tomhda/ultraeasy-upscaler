@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import queue
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -30,8 +31,9 @@ FRAME_GLOB = "frame_*.png"
 # Windows でコンソールウィンドウを出さない
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-# 本機は AMD のため amf を優先。可搬性のため nvenc/qsv も検出候補に含める。
-# (key, encoder_name) の順で優先する。
+# AMD専用機ではAMFを優先する。NVIDIAドライバが見える環境ではNVENCを優先し、
+# ハイブリッド機（NVIDIA dGPU + AMD/Intel iGPU）でもdGPUを選びやすくする。
+# いずれも実エンコード検証に通ったものだけ採用する。
 _H264_CANDIDATES = ["h264_amf", "h264_nvenc", "h264_qsv"]
 _HEVC_CANDIDATES = ["hevc_amf", "hevc_nvenc", "hevc_qsv"]
 
@@ -204,7 +206,7 @@ def _encoder_works(encoder: str) -> bool:
 def detect_hw_encoder(prefer: str = "auto") -> Optional[str]:
     """利用可能な HW エンコーダ名を返す（'hevc_amf' / 'h264_amf' / 'h264_nvenc' /
     'h264_qsv' 等）。無ければ None。`ffmpeg -encoders` を調べる。
-    本機は AMD なので *_amf を優先する。
+    AMD専用機では *_amf、`nvidia-smi` がPATH上にある環境では *_nvenc を優先する。
 
     prefer: "auto"（既定, h264系→hevc系）/ "h264" / "hevc" / "none"。
     """
@@ -214,11 +216,11 @@ def detect_hw_encoder(prefer: str = "auto") -> Optional[str]:
     available = _available_encoders()
 
     if prefer == "hevc":
-        order = _HEVC_CANDIDATES
+        order = _encoder_candidates(_HEVC_CANDIDATES)
     elif prefer == "h264":
-        order = _H264_CANDIDATES
+        order = _encoder_candidates(_H264_CANDIDATES)
     else:  # auto: Windows標準再生に必要なH.264だけを選ぶ
-        order = _H264_CANDIDATES
+        order = _encoder_candidates(_H264_CANDIDATES)
 
     for enc in order:
         if enc not in available:
@@ -229,6 +231,15 @@ def detect_hw_encoder(prefer: str = "auto") -> Optional[str]:
             continue
         return enc
     return None
+
+
+def _encoder_candidates(candidates: list[str]) -> list[str]:
+    """GPU構成に合わせてハードウェアエンコーダの優先順を返す。"""
+    if shutil.which("nvidia-smi") or shutil.which("nvidia-smi.exe"):
+        nvenc = [name for name in candidates if name.endswith("_nvenc")]
+        other = [name for name in candidates if not name.endswith("_nvenc")]
+        return [*nvenc, *other]
+    return candidates
 
 
 # --- progress 解析用 ---

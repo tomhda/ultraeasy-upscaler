@@ -131,6 +131,26 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 \* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
 \*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
 
+### NVIDIA機の実機スモーク
+
+2026-08-23、AMD Ryzen 7 9700X と NVIDIA GeForce RTX 5060 Ti（ドライバ 610.62、16GB）で確認した。
+入力は `animevideov3_nchw_256x256_fp32.onnx`、220x220画像、overlap 16、ウォームアップ1回。
+
+| 経路 | セッション生成 | タイル処理 | pure-run | wall total |
+|---|---:|---:|---:|---:|
+| DirectML（NVIDIA GPU） | 1.5秒 | 7.4 ms | 5.8 ms | 2.28秒 |
+| NvTensorRTRTXExecutionProvider | 0.7秒 | 7.6 ms | 6.1 ms | 1.67秒 |
+
+両経路の出力PSNRは **63.87 dB**。DMLデバイスが複数ある構成では、ヘルパーがVendor ID `0x10DE` のNVIDIA GPUを1台選択する。
+動画3秒のrawvideo経路は72/72フレーム成功し、出力は2560x1920・H.264（`h264_nvenc`）・音声保持だった。
+詳細な条件とログは [docs/nvidia-smoke-results.md](docs/nvidia-smoke-results.md) に記録した。
+
+同じ854x480入力での速度比較では、RTX上のwall totalはDirectML 1.50秒、TensorRT 1.60秒、Vulkan 1.888秒、AMD内蔵GPUのDirectMLは3.11秒だった。
+推論・出力一致度を含む詳細は [docs/gpu-benchmark-2026-08-24.md](docs/gpu-benchmark-2026-08-24.md) を参照。
+動画（640x480→2560x1920、NVENC使用）では、1秒はDirectML 3.626秒 / TensorRT 3.635秒、3秒は7.570秒 / **7.513秒**、12秒は25.227秒 / **25.026秒**。
+短い動画では固定費が効き、3秒以上ではTensorRTが僅かに逆転したが、12秒でも差は約0.8%だった。
+モデル別では、3秒動画のE2EがAnime Video v3で7.570秒 / 7.513秒、purephotoで8.405秒 / **7.576秒**、Real-ESRGANで**23.310秒** / 24.694秒（DirectML / TensorRT）となり、TensorRTの優位はモデル依存だった。
+
 動画（rawvideoパイプライン・音声保持・3秒クリップのE2E実測）:
 
 | 経路 | 実効fps | 1フレームあたり |

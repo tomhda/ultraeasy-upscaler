@@ -45,6 +45,23 @@ def test_detect_hw_encoder_no_raise():
     assert result is None or isinstance(result, str)
 
 
+def test_detect_hw_encoder_prefers_nvenc_when_nvidia_driver_is_present(monkeypatch):
+    video.detect_hw_encoder.cache_clear()
+    monkeypatch.setattr(
+        video.shutil, "which",
+        lambda name: "C:/Windows/System32/nvidia-smi.exe"
+        if name in {"nvidia-smi", "nvidia-smi.exe"} else None,
+    )
+    monkeypatch.setattr(
+        video, "_available_encoders",
+        lambda: frozenset({"h264_amf", "h264_nvenc"}),
+    )
+    monkeypatch.setattr(video, "_encoder_works", lambda _encoder: True)
+
+    assert video.detect_hw_encoder("h264") == "h264_nvenc"
+    video.detect_hw_encoder.cache_clear()
+
+
 @pytest.mark.parametrize(
     ("source", "expected"),
     [

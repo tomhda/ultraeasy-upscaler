@@ -4,6 +4,7 @@
 //   winml-sr run --model <onnx> --input <img> --output <img>
 //                [--ep-policy npu|gpu|cpu|default|power|perf|efficiency]
 //                [--ep-name VitisAIExecutionProvider [--device-type NPU]]
+//                [--device-index <n>]
 //                [--overlap 16] [--compile] [--download] [--warmup 2]
 //   winml-sr psnr --a <img> --b <img>
 //
@@ -80,6 +81,7 @@ internal static class Program
         string? epPolicy = Value(args, "--ep-policy");
         string? epName = Value(args, "--ep-name");
         string? deviceType = Value(args, "--device-type");
+        string? deviceIndex = Value(args, "--device-index");
         Dictionary<string, string> epOptions = ParseEpOptions(args);
         int overlap = int.Parse(Value(args, "--overlap") ?? "16");
         int warmup = int.Parse(Value(args, "--warmup") ?? "2");
@@ -98,7 +100,7 @@ internal static class Program
         await InitializeProvidersAsync(download);
         PrintEpDevices(env);
 
-        SessionOptions sessionOptions = BuildSessionOptions(env, epPolicy, epName, deviceType, epOptions);
+        SessionOptions sessionOptions = BuildSessionOptions(env, epPolicy, epName, deviceType, deviceIndex, epOptions);
 
         // EPコンパイル（EPContextモデル生成）: 初回のみ。以後はコンパイル済みを再利用。
         string actualModelPath = modelPath;
@@ -310,9 +312,14 @@ internal static class Program
     {
         IReadOnlyList<OrtEpDevice> devices = env.GetEpDevices();
         Console.WriteLine("[ep] discovered devices:");
-        foreach (var d in devices)
+        for (int i = 0; i < devices.Count; i++)
         {
-            Console.WriteLine($"  {d.EpName,-34} {d.EpVendor,-14} {d.HardwareDevice.Type}");
+            var d = devices[i];
+            var hw = d.HardwareDevice;
+            string metadata = string.Join(", ", hw.Metadata.Entries.Select(kv => $"{kv.Key}={kv.Value}"));
+            Console.WriteLine($"  [{i}] {d.EpName,-34} {d.EpVendor,-14} {hw.Type,-3} " +
+                              $"hwVendor={hw.Vendor} vendorId=0x{hw.VendorId:X4} deviceId=0x{hw.DeviceId:X8}" +
+                              (metadata.Length == 0 ? "" : $" metadata={metadata}"));
         }
     }
 
@@ -331,7 +338,7 @@ internal static class Program
     }
 
     private static SessionOptions BuildSessionOptions(OrtEnv env, string? epPolicy, string? epName, string? deviceType,
-        Dictionary<string, string>? epOptions = null)
+        string? deviceIndex = null, Dictionary<string, string>? epOptions = null)
     {
         var sessionOptions = new SessionOptions();
 
@@ -346,8 +353,38 @@ internal static class Program
             {
                 throw new InvalidOperationException($"EP '{epName}' (device={deviceType ?? "any"}) が見つかりません。'winml-sr list' で確認してください。");
             }
-            Console.WriteLine($"[session] explicit EP: {epName} ({string.Join(",", devices.Select(d => d.HardwareDevice.Type))})");
-            sessionOptions.AppendExecutionProvider(env, devices, new Dictionary<string, string>());
+            List<OrtEpDevice> selectedDevices = devices;
+            if (devices.Count > 1 && epName.Equals("DmlExecutionProvider", StringComparison.OrdinalIgnoreCase))
+            {
+                if (deviceIndex is not null)
+                {
+                    if (!int.TryParse(deviceIndex, out int index) || index < 0 || index >= devices.Count)
+                    {
+                        throw new ArgumentException(
+                            $"--device-index は0〜{devices.Count - 1}の整数で指定してください: {deviceIndex}");
+                    }
+                    selectedDevices = [devices[index]];
+                }
+                else
+                {
+                    // DML EPは一度に1デバイスしか受け付けない。NVIDIAを優先し、
+                    // 複数のNVIDIAがある場合は先頭、それ以外は列挙順の先頭を使う。
+                    selectedDevices = devices
+                        .Where(IsNvidiaDevice)
+                        .Take(1)
+                        .ToList();
+                    if (selectedDevices.Count == 0)
+                    {
+                        selectedDevices = [devices[0]];
+                    }
+                    Console.WriteLine($"[session] DML exposes {devices.Count} devices; selecting one " +
+                                      "(--device-indexで上書き可能)");
+                }
+            }
+            Console.WriteLine($"[session] explicit EP: {epName} ({string.Join(",", selectedDevices.Select(d =>
+                $"{d.HardwareDevice.Type}/{d.HardwareDevice.Vendor}/0x{d.HardwareDevice.VendorId:X4}"))})");
+            sessionOptions.AppendExecutionProvider(env, selectedDevices,
+                epOptions ?? new Dictionary<string, string>());
             return sessionOptions;
         }
 
@@ -365,6 +402,13 @@ internal static class Program
         Console.WriteLine($"[session] EP policy: {policy}");
         sessionOptions.SetEpSelectionPolicy(policy);
         return sessionOptions;
+    }
+
+    private static bool IsNvidiaDevice(OrtEpDevice device)
+    {
+        var hardware = device.HardwareDevice;
+        return hardware.VendorId == 0x10DE ||
+               hardware.Vendor.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -548,6 +592,7 @@ internal static class Program
         string? epPolicy = Value(args, "--ep-policy");
         string? epName = Value(args, "--ep-name");
         string? deviceType = Value(args, "--device-type");
+        string? deviceIndex = Value(args, "--device-index");
         Dictionary<string, string> epOptions = ParseEpOptions(args);
         int overlap = int.Parse(Value(args, "--overlap") ?? "16");
         int warmup = int.Parse(Value(args, "--warmup") ?? "2");
@@ -564,7 +609,7 @@ internal static class Program
         await InitializeProvidersAsync(download);
         PrintEpDevices(env);
 
-        SessionOptions sessionOptions = BuildSessionOptions(env, epPolicy, epName, deviceType, epOptions);
+        SessionOptions sessionOptions = BuildSessionOptions(env, epPolicy, epName, deviceType, deviceIndex, epOptions);
 
         Console.Error.WriteLine($"[session] creating from {Path.GetFileName(modelPath)} ...");
         var swSession = Stopwatch.StartNew();
@@ -1169,9 +1214,9 @@ internal static class Program
         Console.WriteLine("winml-sr list [--download]");
         Console.WriteLine("winml-sr run --model <onnx> --input <img> --output <img>");
         Console.WriteLine("             [--ep-policy npu|gpu|cpu|default|power|perf|efficiency]");
-        Console.WriteLine("             [--ep-name <EpName> [--device-type NPU|GPU|CPU]]");
+        Console.WriteLine("             [--ep-name <EpName> [--device-type NPU|GPU|CPU] [--device-index n]]");
         Console.WriteLine("             [--overlap 16] [--compile] [--download] [--warmup 2]");
-        Console.WriteLine("winml-sr serve --model <onnx> (--ep-name <EP> [--device-type T] | --ep-policy <p>)");
+        Console.WriteLine("winml-sr serve --model <onnx> (--ep-name <EP> [--device-type T] [--device-index n] | --ep-policy <p>)");
         Console.WriteLine("               [--overlap 16] [--warmup 2]   # stdin/stdoutバイナリプロトコル常駐モード");
         Console.WriteLine("winml-sr psnr --a <img> --b <img>");
     }
