@@ -22,3 +22,6 @@ Thumbs.db
 /current-shot-final.png
 /design-qa-comparison.png
 /design-qa.md
+
+# エージェント向けローカル規約（公開しない・各マシンに手動配置）
+AGENTS.md
