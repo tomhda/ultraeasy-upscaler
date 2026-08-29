@@ -260,9 +260,11 @@ def open_session(
                 "--overlap", str(OVERLAP), "--warmup", "1",
             ]
             workdir = binaries.repo_root()
-            timeout = 15 * 60.0
+            # 初回VAIMLコンパイルはモデル次第で長い（av3dp512: 約15分、SwinIR-M: 約51分）。
+            # キャッシュ有無でタイムアウトを分け、初回コンパイルを打ち切らない。
+            timeout = 15 * 60.0 if cache_hit else 120 * 60.0
             if not cache_hit:
-                progress(0.0, "初回のみNPU最適化中（次回から数秒）")
+                progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回から数秒）")
 
         env = _helper_env()
         client = ServeClient(command, workdir, env=env)
@@ -276,7 +278,7 @@ def open_session(
                 return
             last_second = second
             if backend == UpscaleBackend.NPU_NATIVE and not cache_hit:
-                progress(0.0, "初回のみNPU最適化中（次回から数秒）")
+                progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回から数秒）")
             else:
                 progress(0.0, "AI準備中…")
 

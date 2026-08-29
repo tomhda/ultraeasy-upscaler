@@ -54,6 +54,28 @@ def main() -> int:
     print(f"  -> {img_out.name}  {iw}x{ih}")
     assert img_out.exists() and iw == 880, f"画像出力が不正: {iw}x{ih}"
 
+    # --- 画像 E2E: SwinIR-M（静止画枠・GPU/DirectML）---
+    # モデルONNX未取得の環境ではスキップ（取得手順は scripts/get_ai_models.py --pipeline swinir）。
+    print("\n=== 画像 E2E: SwinIR-M (GPU/DirectML) ===")
+    from app.core import helper_backend
+    from app.core.settings import HELPER_MODEL_SWINIR, UpscaleBackend
+    try:
+        helper_backend._resolve_model(UpscaleBackend.WINML_GPU, HELPER_MODEL_SWINIR, 256)
+    except helper_backend.HelperBackendUnavailable as exc:
+        print(f"  スキップ: {exc}")
+    else:
+        swinir_settings = UpscaleSettings(
+            scale=4, model=HELPER_MODEL_SWINIR, backend=UpscaleBackend.WINML_GPU,
+            output_location=OutputLocation.CUSTOM, output_dir=str(out_root),
+            create_subfolder=False,
+        )
+        swinir_out = process_job(
+            Job.create(str(vendor / "input.jpg")), swinir_settings, _progress("swinir"))
+        with Image.open(swinir_out) as im:
+            sw, sh = im.width, im.height
+        print(f"  -> {swinir_out.name}  {sw}x{sh}")
+        assert swinir_out.exists() and sw == 880, f"SwinIR画像出力が不正: {sw}x{sh}"
+
     # --- 動画 E2E: bbb_demo 0.6s を 2x（分解→拡大→結合＋音声維持）---
     print("\n=== 動画 E2E: bbb_demo 0.6s を 2x ===")
     clip = out_root / "clip.mp4"

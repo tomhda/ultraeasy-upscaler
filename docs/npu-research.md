@@ -251,5 +251,5 @@ python -m quark.onnx.tools.convert_fp32_to_bf16 --input <fp32.onnx> --output <bf
 ## 運用メモ
 
 - 一時停止はジョブ完了後に効く。実行中ジョブの即時中止はキュー行の ×
-- VAIML 初回コンパイルは数分〜15分（キャッシュを git に同梱して回避）
+- VAIML 初回コンパイルは数分〜1時間弱（SwinIR-M 256は約51分。小型モデルのキャッシュのみ git に同梱）
 - 比較画像の生成スクリプトは tmp/npu-anime/（素材は自前で用意すること）
