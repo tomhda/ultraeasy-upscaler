@@ -119,6 +119,8 @@ SwinIRのONNXは `scripts/get_ai_models.py --download swinir` で重みを取得
 VitisAI(VAIML)コンパイラのSlice負値バグ回避の書き換えを自動適用する。
 詳細は [docs/npu-research.md](docs/npu-research.md) と
 [amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)）。
+SwinIRをNPUで動かす手順・回避策の英語まとめ: [docs/swinir-npu.md](docs/swinir-npu.md)
+(Running SwinIR on an AMD Ryzen AI NPU)。
 
 帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Hofmann/Phips**
 （取得元とSHA-256は [docs/span-bench-results.md](docs/span-bench-results.md)）、

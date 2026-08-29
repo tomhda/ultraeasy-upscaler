@@ -155,6 +155,9 @@ WinML EPカタログ停止（NPUドライバ.329がVitisAI EP 1.8.68の対応上
 
 ## SwinIR-M（attention系）のNPU対応（2026-08-29 追記）
 
+*English summary for searchability: [swinir-npu.md](swinir-npu.md)
+(Running SwinIR on an AMD Ryzen AI NPU).*
+
 静止画最高画質枠として SwinIR-M（`003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN`、
 real-world SR、Apache-2.0）を追加した。`export_spandrel.py` で 256x256 固定 fp32 ONNX 化
 （torch/ORT 最大差 7.7e-07）。attention 系（MatMul/Softmax/LayerNormalization/roll）を
