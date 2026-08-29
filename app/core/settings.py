@@ -45,6 +45,7 @@ DEFAULT_MODEL_FAMILY = ModelFamily.ANIME
 HELPER_MODEL_ANIME = "animevideov3"
 HELPER_MODEL_SPAN = "4xNomosUni"
 HELPER_MODEL_AMD_RRDB = "AMD-RRDB"
+HELPER_MODEL_SWINIR = "SwinIR"
 DEFAULT_HELPER_MODEL = HELPER_MODEL_ANIME
 
 # 統合前後で保存された値を壊さないための読み込み互換表。
@@ -58,6 +59,9 @@ HELPER_MODEL_ALIASES = {
     "4xNomosUni_span_multijpg": HELPER_MODEL_SPAN,
     "purephoto": HELPER_MODEL_SPAN,
     ModelFamily.PHOTO.value: HELPER_MODEL_SPAN,
+    HELPER_MODEL_SWINIR: HELPER_MODEL_SWINIR,
+    "swinir": HELPER_MODEL_SWINIR,
+    "swinir-m": HELPER_MODEL_SWINIR,
     HELPER_MODEL_AMD_RRDB: HELPER_MODEL_AMD_RRDB,
     "amd-rrdb": HELPER_MODEL_AMD_RRDB,
     "realesrgan-amd": HELPER_MODEL_AMD_RRDB,
@@ -79,7 +83,7 @@ def canonical_helper_model(model: str | ModelFamily | None) -> str | None:
 def helper_model_family(model: str | ModelFamily | None) -> ModelFamily:
     """具体的なhelperモデルに対応する旧系統値を返す。"""
     key = canonical_helper_model(model)
-    if key == HELPER_MODEL_SPAN:
+    if key in (HELPER_MODEL_SPAN, HELPER_MODEL_SWINIR):
         return ModelFamily.PHOTO
     if key == HELPER_MODEL_AMD_RRDB:
         return ModelFamily.REALESRGAN
@@ -100,6 +104,9 @@ HELPER_MODEL_FILES = {
         HELPER_MODEL_AMD_RRDB: {
             256: "realesrgan_nchw_256x256_fp32.onnx",
         },
+        HELPER_MODEL_SWINIR: {
+            256: "swinir_nchw_256x256_fp32.onnx",
+        },
     },
     UpscaleBackend.NPU_NATIVE: {
         HELPER_MODEL_ANIME: {
@@ -110,6 +117,10 @@ HELPER_MODEL_FILES = {
         },
         HELPER_MODEL_AMD_RRDB: {
             256: "realesrgan_nchw_256x256_bf16cast.onnx",
+        },
+        # SwinIRのNPU版はVAIML crash回避のroll書換済みグラフ（研究ノート参照）
+        HELPER_MODEL_SWINIR: {
+            256: "swinir_nchw_256x256_bf16cast.onnx",
         },
     },
 }

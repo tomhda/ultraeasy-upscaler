@@ -153,6 +153,60 @@ WinML EPカタログ停止（NPUドライバ.329がVitisAI EP 1.8.68の対応上
 - VAIMLコンパイル時間は増加（av3dp512: 389→914s）。初回のみなので実害小
 - SPAN系（purephoto）は1.7.1/1.8.0どちらのVAIMLでも問題なくコンパイル・実行
 
+## SwinIR-M（attention系）のNPU対応（2026-08-29 追記）
+
+静止画最高画質枠として SwinIR-M（`003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN`、
+real-world SR、Apache-2.0）を追加した。`export_spandrel.py` で 256x256 固定 fp32 ONNX 化
+（torch/ORT 最大差 7.7e-07）。attention 系（MatMul/Softmax/LayerNormalization/roll）を
+このスタックで NPU コンパイルした初のモデル。
+
+実測（853x480/1920x1080 → 4x、Radeon 860M / Ryzen AI 7 PRO 350）:
+
+| 経路 | 精度 | 256タイル/枚 | 480p 1枚 | 1080p 1枚 | 忠実度 |
+|---|---|---|---|---|---|
+| GPU (DirectML) | fp32 | 約4.5s | 約60s (12タイル) | 213s (45タイル) | - |
+| NPU (VitisAI 1.8.0) | bf16 | 6.6s | 約90s | 推定297s | 38.5dB (vs fp32) |
+
+### VAIMLコンパイラのassertion crashと切り分け
+
+bf16cast モデルの VitisAI セッション生成が、ONNX→ONNX-MLIR lowering 段の
+native assertion（`"Iteratees do not have equal length"`、exit 0x80000003）で
+2.8秒で停止した。20超の切り分け試行（部分グラフ抽出＋合成最小グラフ）の結果:
+
+- 単体では全て成功: LayerNormalization / Softmax / 4D MatMul / roll等価のSlice+Concat /
+  window分割のTranspose・Reshape連鎖 / マスクAdd付きwindow attention / 非シフト完全ブロック
+- 落ちるのは「**負の starts/ends リテラルを持つ Slice 2本 + Concat**」の組み合わせのみ
+  （`torch.roll(x, shifts=+4)` の逆roll export形）。最小再現器は3ノード。
+  同一形状・同一構成で符号を非負にしただけの順rollは成功する
+- スタックは `lowerONNXToONNXMLIR` → `ResultNamesUpdater` → `zip_equal<SmallVector<string>>`
+
+### 回避と結果
+
+負のSlice境界リテラルを正の等価値へ書き換えるだけで回避できる（数値はbit-exact、
+ノード数・op種は不変。フルモデルで72箇所）。書き換え後は1697ノードの全体が
+コンパイルを通り、VAIMLが 4971 op / 2969 GOPs を100%・単一サブグラフで受理した
+（初回コンパイル51分、以後はキャッシュ）。この書き換えは `export_spandrel.py` に
+恒久組込み済み（`_rewrite_slice_nonneg`、export時に常時適用）。
+
+### 採用判断はリソース占有率で行った
+
+SwinIR-M は 256タイル1枚で 2969 GOPs あり、NPU は GPU より遅い。採用理由は速度では
+なく占有率（2秒間隔サンプリング、アイドル差分）:
+
+| 実行中 | iGPU 3Dエンジン | CPU全体 | NPU | メモリコミット増 |
+|---|---|---|---|---|
+| NPU (VitisAI) | 2.4%（アイドル同等） | +0.7pt | 100%（時間積分） | +7.65GB |
+| GPU (DirectML) | 99.1% | +0.8pt | 0% | +3.19GB |
+
+NPU実行中はiGPUが空いたままなので、他の作業と並行して裏で回せる。既知の注意点:
+NPU実行中のみ36〜38秒周期で+4.4〜8.3GBの過渡的なコミットスパイクを観測
+（ユーザープロセスのprivateではなくカーネル/ドライバ側。発生源未特定）。
+
+計測ノウハウ: NPU専用のパフォーマンスカウンタは無く、`GPU Engine` カウンタセットに
+別LUIDのデバイスとして現れる。値は推論1回につき1サンプルのバースト報告
+（約650%）なので、中央値ではなく時間積分の平均で読む。xrt-smi でHWコンテキストの
+Active状態と使用カラム数の裏取りができる。
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
@@ -171,7 +225,8 @@ WinML EPカタログ停止（NPUドライバ.329がVitisAI EP 1.8.68の対応上
 | アニメ（画質優先） | NPU + Real-ESRGAN Anime (bf16) |
 | アニメ（速度優先） | GPU + Anime Video v3 |
 | 実写（質感重視） | GPU + General Video v3（ノイズ除去弱） |
-| 静止画（最高画質） | GPU + Real-ESRGAN |
+| 静止画（最高画質） | GPU + SwinIR-M |
+| 静止画（最高画質・GPUをほぼ占有しない） | NPU + SwinIR-M (bf16) |
 
 ## 再現手順（scripts/npu/）
 

@@ -59,6 +59,78 @@ def parse_size(value: str) -> tuple[int, int]:
     return width, height
 
 
+def _rewrite_slice_nonneg(model):
+    """負のSlice starts/endsリテラルを正の等価値に置換する（VAIML crash回避）。
+
+    VitisAI(RyzenAI SW 1.8.0)のVAIMLコンパイラは「負のstarts/endsを持つ
+    Slice2本＋Concat」（torch.rollのexport形）をONNX→MLIR loweringの
+    assertionで落とす（2026-08-29切り分け、最小再現は3ノード）。
+    固定形状exportなので負値は常に正の等価値へ確定でき、数値はbit-exact、
+    ノード数・順序・op種も不変。他バックエンドにも無害なので常時適用する。
+    戻り値は (書換済みmodel, 書換箇所数)。書換対象が無ければ None。
+    """
+    import onnx
+    from onnx import numpy_helper, shape_inference
+
+    try:
+        model = shape_inference.infer_shapes(model, strict_mode=False)
+    except Exception:  # noqa: BLE001 - shape推論はベストエフォート
+        pass
+    graph = model.graph
+    inits = {t.name: t for t in graph.initializer}
+    shapes: dict[str, list[int]] = {}
+    for collection in (graph.value_info, graph.input, graph.output):
+        for item in collection:
+            proto_dims = item.type.tensor_type.shape.dim
+            dims = [d.dim_value for d in proto_dims if d.HasField("dim_value")]
+            if dims and len(dims) == len(proto_dims):
+                shapes[item.name] = dims
+
+    new_inits: dict[str, object] = {}
+    count = 0
+    for node in graph.node:
+        if node.op_type != "Slice" or len(node.input) < 4:
+            continue
+        axes_init = inits.get(node.input[3])
+        dims = shapes.get(node.input[0])
+        if axes_init is None or dims is None:
+            continue
+        axes = numpy_helper.to_array(axes_init).reshape(-1)
+        for position in (1, 2):  # starts, ends
+            init = inits.get(node.input[position])
+            if init is None:
+                continue
+            values = numpy_helper.to_array(init).reshape(-1).astype(np.int64)
+            if not (values < 0).any():
+                continue
+            fixed = values.copy()
+            ok = True
+            for index, value in enumerate(values):
+                if value >= 0:
+                    continue
+                axis = int(axes[index])
+                if axis >= len(dims):
+                    ok = False
+                    break
+                fixed[index] = max(0, min(int(dims[axis]), int(value) + int(dims[axis])))
+            if not ok:
+                continue
+            name = f"{node.input[position]}__nonneg_{'_'.join(str(int(v)) for v in fixed)}"
+            if name not in new_inits:
+                new_inits[name] = numpy_helper.from_array(fixed, name=name)
+            node.input[position] = name
+            count += 1
+
+    if count == 0:
+        return None
+    graph.initializer.extend(new_inits.values())
+    used = {name for node in graph.node for name in node.input}
+    keep = [t for t in graph.initializer if t.name in used]
+    del graph.initializer[:]
+    graph.initializer.extend(keep)
+    return model, count
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--weights", required=True, type=Path)
@@ -169,6 +241,14 @@ def main() -> int:
         else:
             onnx.save(simplified, str(out_path))
             print(f"onnxsim簡略化OK: {out_path.name}")
+
+    # VAIML対策の負Slice境界の正値化（適用理由は_rewrite_slice_nonnegのdocstring参照）。
+    # この後のORT検証は書換済みグラフに対して行われる。
+    rewritten = _rewrite_slice_nonneg(onnx.load(str(out_path)))
+    if rewritten is not None:
+        fixed_model, fixed_count = rewritten
+        onnx.save(fixed_model, str(out_path))
+        print(f"VAIML-safe化: 負のSlice境界 {fixed_count}箇所を正値へ書換")
 
     try:
         import onnxruntime as ort

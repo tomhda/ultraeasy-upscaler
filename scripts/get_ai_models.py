@@ -62,6 +62,17 @@ MODELS = {
         license="MIT",
         attribution="TNTwise",
     ),
+    "swinir": ModelSpec(
+        name="swinir",
+        filename="003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth",
+        url=(
+            "https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/"
+            "003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth"
+        ),
+        sha256="B9AFB61E65E04EB7F8ABA5095D070BBE9AF28DF76ACD0C9405AEB33B814BCFC6",
+        license="Apache-2.0",
+        attribution="Jingyun Liang (SwinIR)",
+    ),
 }
 
 

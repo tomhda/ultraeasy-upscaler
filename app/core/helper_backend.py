@@ -26,6 +26,7 @@ from .settings import (
     DEFAULT_VENDOR_MODELS_DIR,
     HELPER_MODEL_FILES,
     HELPER_MODEL_AMD_RRDB,
+    HELPER_MODEL_SWINIR,
     canonical_helper_model,
     ModelFamily,
     UpscaleBackend,
@@ -214,7 +215,7 @@ def _session_spec(
     requested = settings.backend
     backend = effective_backend(requested, width, height)
     model_key = _model_key(settings)
-    if model_key == HELPER_MODEL_AMD_RRDB:
+    if model_key in (HELPER_MODEL_AMD_RRDB, HELPER_MODEL_SWINIR):
         tile = 256
     else:
         tile = 512 if backend == UpscaleBackend.NPU_NATIVE else choose_gpu_tile(width, height)
