@@ -47,6 +47,8 @@ class MediaInfo:
     codec: Optional[str] = None
     size_bytes: int = 0
     rotation: int = 0                  # 表示時の回転角（度）
+    color_transfer: Optional[str] = None
+    color_primaries: Optional[str] = None
 
     @property
     def display_width(self) -> int:
@@ -198,6 +200,8 @@ def _probe_video(p: Path, info: MediaInfo) -> None:
         info.height = _to_int(video_stream.get("height")) or 0
         info.rotation = _parse_rotation(video_stream)
         info.codec = video_stream.get("codec_name")
+        info.color_transfer = video_stream.get("color_transfer") or video_stream.get("color_trc")
+        info.color_primaries = video_stream.get("color_primaries")
 
         # fps: avg_frame_rate を優先し、無ければ r_frame_rate
         info.fps = (_parse_fps(video_stream.get("avg_frame_rate"))

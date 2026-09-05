@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from . import binaries, jobs, media
 from .jobs import ProgressCb
@@ -292,14 +292,52 @@ def open_session(
         raise HelperBackendUnavailable(str(exc) or exc.__class__.__name__) from exc
 
 
-def _load_rgb(path: str) -> np.ndarray:
+@dataclass
+class _LoadedImage:
+    rgb: np.ndarray
+    alpha: Image.Image | None = None
+    icc_profile: bytes | None = None
+
+
+def _load_image(path: str) -> _LoadedImage:
     with Image.open(path) as image:
-        return np.asarray(image.convert("RGB"), dtype=np.uint8)
+        image = ImageOps.exif_transpose(image)
+        icc_profile = image.info.get("icc_profile")
+        has_alpha = "A" in image.getbands() or (image.mode == "P" and "transparency" in image.info)
+        alpha = image.convert("RGBA").getchannel("A") if has_alpha else None
+        rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
+        return _LoadedImage(rgb, alpha, icc_profile)
 
 
-def _save_rgb(image: np.ndarray, path: Path) -> None:
+def _load_rgb(path: str) -> np.ndarray:
+    return _load_image(path).rgb
+
+
+def _save_rgb(image: np.ndarray, path: Path, *, alpha: Image.Image | None = None,
+              icc_profile: bytes | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(image, mode="RGB").save(path)
+    output = Image.fromarray(image, mode="RGB")
+    if alpha is not None:
+        alpha = alpha.resize(output.size, Image.Resampling.LANCZOS)
+        output = Image.merge("RGBA", (*output.split(), alpha))
+        if path.suffix.lower() in {".jpg", ".jpeg"}:
+            background = Image.new("RGB", output.size, "white")
+            background.paste(output, mask=alpha)
+            output = background
+    output.save(path, **({"icc_profile": icc_profile} if icc_profile else {}))
+
+
+def _folder_outputs(images: list[Path], target: Path, fmt: str, overwrite: bool) -> dict[Path, Path]:
+    outputs, reserved = {}, set()
+    for source in images:
+        candidate = target / f"{source.stem}.{fmt}"
+        index = 1
+        while candidate in reserved or (not overwrite and candidate.exists()):
+            candidate = target / f"{source.stem}({index}).{fmt}"
+            index += 1
+        outputs[source] = candidate
+        reserved.add(candidate)
+    return outputs
 
 
 def upscale_image(
@@ -310,7 +348,8 @@ def upscale_image(
     cancel=None,
 ) -> None:
     progress = progress or _noop
-    image = _load_rgb(in_path)
+    loaded = _load_image(in_path)
+    image = loaded.rgb
     height, width = image.shape[:2]
     session = open_session(settings, width, height, progress, cancel)
     try:
@@ -320,7 +359,7 @@ def upscale_image(
         output = session.upscale(image, cancel=cancel) if cancel is not None else session.upscale(image)
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
-        _save_rgb(output, Path(out_path))
+        _save_rgb(output, Path(out_path), alpha=loaded.alpha, icc_profile=loaded.icc_profile)
     finally:
         session.close(force=cancel is not None and cancel.is_set())
     progress(1.0, "完了")
@@ -348,11 +387,13 @@ def upscale_folder(
 
     sessions: dict[tuple[UpscaleBackend, Path], HelperSession] = {}
     fmt = (settings.image_format or "png").lower().replace("jpeg", "jpg")
+    outputs = _folder_outputs(images, target, fmt, settings.overwrite)
     try:
         for index, path in enumerate(images, start=1):
             if cancel is not None and cancel.is_set():
                 raise jobs.Cancelled()
-            image = _load_rgb(str(path))
+            loaded = _load_image(str(path))
+            image = loaded.rgb
             height, width = image.shape[:2]
             backend, _tile, model_path = _session_spec(settings, width, height)
             key = (backend, model_path)
@@ -367,7 +408,7 @@ def upscale_folder(
                 )
                 sessions[key] = session
             output = session.upscale(image, cancel=cancel) if cancel is not None else session.upscale(image)
-            _save_rgb(output, target / f"{path.stem}.{fmt}")
+            _save_rgb(output, outputs[path], alpha=loaded.alpha, icc_profile=loaded.icc_profile)
             progress(index / total, f"{index}/{total} 枚")
     finally:
         force = cancel is not None and cancel.is_set()

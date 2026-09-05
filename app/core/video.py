@@ -350,16 +350,20 @@ def extract_frames(video_path: str, out_dir: str,
 
     # 総フレーム数（進捗算出用）。失敗しても抽出は続行する。
     total_frames: Optional[int] = None
+    info = None
     try:
         info = media.probe(video_path)
         total_frames = info.frame_count
     except Exception:
         total_frames = None
+    if info is not None and info.color_transfer in {"smpte2084", "arib-std-b67"}:
+        raise ValueError("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
 
     out_pattern = str(out / FRAME_PATTERN)
     cmd = [
         binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
         "-i", video_path,
+        "-fps_mode", "cfr", "-r", repr(float(info.fps if info and info.fps else 30.0)),
         out_pattern,
         "-progress", "pipe:1", "-nostats",
     ]
@@ -556,6 +560,8 @@ def upscale_video_piped(
 
     progress = progress or (lambda _fraction, _message: None)
     info = media.probe(in_path)
+    if info.color_transfer in {"smpte2084", "arib-std-b67"}:
+        raise ValueError("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
     width, height = info.display_width, info.display_height
     fps = info.fps or 30.0
     total_frames = info.frame_count
@@ -579,7 +585,7 @@ def upscale_video_piped(
 
     decoder_cmd = [
         binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
-        "-i", in_path, "-map", "0:v:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+        "-i", in_path, "-map", "0:v:0", "-fps_mode", "cfr", "-r", repr(float(fps)), "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
     ]
 
     encoder = "libx264"

@@ -68,7 +68,9 @@ def _part_path(out: Path) -> Path:
     まずこの .part ファイルに書き、成功時だけ os.replace で確定する。
     （拡張子はそのまま保つ＝ffmpeg/realesrgan の形式判定が崩れない）
     """
-    return out.with_name(f"{out.stem}.part{out.suffix}")
+    fd, name = tempfile.mkstemp(prefix=f"{out.stem}.part-", suffix=out.suffix, dir=str(out.parent))
+    os.close(fd)
+    return Path(name)
 
 
 def process_job(job: Job, settings: UpscaleSettings,

@@ -235,6 +235,32 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
         progress(1.0, "0/0 枚")
         return
 
+    fmt = (settings.image_format or "png").lower().replace("jpeg", "jpg")
+    outputs = {}
+    reserved = set()
+    for source in sorted(in_p.iterdir()):
+        if not source.is_file() or source.suffix.lower() not in media.IMAGE_EXTS:
+            continue
+        candidate = out_p / f"{source.stem}.{fmt}"
+        index = 1
+        while candidate in reserved or (not settings.overwrite and candidate.exists()):
+            candidate = out_p / f"{source.stem}({index}).{fmt}"
+            index += 1
+        outputs[source] = candidate
+        reserved.add(candidate)
+
+    # exeのフォルダ出力はstem.extを直接生成するため、対応表を確定した後に
+    # ファイル単位で実行する。これによりstem衝突と既存出力を安全に扱う。
+    for index, source in enumerate(outputs, start=1):
+        if cancel is not None and cancel.is_set():
+            raise jobs.Cancelled()
+        upscale_image(str(source), str(outputs[source]), settings,
+                      progress=lambda f, m, i=index: progress(
+                          (i - 1 + f) / total, f"{i}/{total} 枚 {m}"),
+                      cancel=cancel)
+    progress(1.0, f"{len(outputs)}/{total} 枚")
+    return
+
     cmd = _build_cmd(in_dir, out_dir, settings)
     # フォルダ出力でも形式を固定（設定の image_format）。
     fmt = (settings.image_format or "png").lower()
