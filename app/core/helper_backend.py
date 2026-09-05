@@ -26,6 +26,7 @@ from .settings import (
     DEFAULT_VENDOR_MODELS_DIR,
     HELPER_MODEL_FILES,
     HELPER_MODEL_AMD_RRDB,
+    HELPER_MODEL_ADCSR,
     HELPER_MODEL_SWINIR,
     canonical_helper_model,
     ModelFamily,
@@ -215,7 +216,11 @@ def _session_spec(
     requested = settings.backend
     backend = effective_backend(requested, width, height)
     model_key = _model_key(settings)
-    if model_key in (HELPER_MODEL_AMD_RRDB, HELPER_MODEL_SWINIR):
+    if model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
+        backend = UpscaleBackend.WINML_GPU
+    if model_key == HELPER_MODEL_ADCSR:
+        tile = 128
+    elif model_key in (HELPER_MODEL_AMD_RRDB, HELPER_MODEL_SWINIR):
         tile = 256
     else:
         tile = 512 if backend == UpscaleBackend.NPU_NATIVE else choose_gpu_tile(width, height)
@@ -235,7 +240,10 @@ def open_session(
     try:
         backend, _tile, model_path = _session_spec(settings, width, height)
         if settings.backend == UpscaleBackend.NPU_NATIVE and backend == UpscaleBackend.WINML_GPU:
-            progress(0.0, "短辺480px未満のためGPUへ自動切替…")
+            if _model_key(settings) == HELPER_MODEL_ADCSR:
+                progress(0.0, "AdcSRはNPU非対応のためGPUで実行…")
+            else:
+                progress(0.0, "短辺480px未満のためGPUへ自動切替…")
         else:
             progress(0.0, "AI準備中…")
 

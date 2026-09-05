@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.core import engine, interpolator, media, upscaler, video
 from app.core.jobs import Job, JobKind
-from app.core.settings import ProcessingOrder, UpscaleBackend, UpscaleSettings
+from app.core.settings import HELPER_MODEL_ADCSR, ProcessingOrder, UpscaleBackend, UpscaleSettings
 
 
 def test_video_keeps_npu_backend_for_frames(monkeypatch, tmp_path: Path) -> None:
@@ -345,3 +345,15 @@ def test_video_rejects_no_operations(tmp_path: Path) -> None:
         assert "モデル" in str(exc)
     else:
         raise AssertionError("no-op video must be rejected")
+
+
+def test_video_rejects_adcsr() -> None:
+    src = Path("tmp/adcsr/testbase/adcsr-guard-clip.mp4")
+    job = Job(input_path=src, kind=JobKind.VIDEO)
+    settings = UpscaleSettings(model=HELPER_MODEL_ADCSR)
+    try:
+        engine.process_job(job, settings)
+    except ValueError as exc:
+        assert str(exc) == "AdcSRは静止画専用です。動画には他のモデルを選んでください"
+    else:
+        raise AssertionError("AdcSR video must be rejected")

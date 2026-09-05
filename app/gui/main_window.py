@@ -38,6 +38,7 @@ from app.core.settings import (
     HELPER_MODEL_ANIME,
     HELPER_MODEL_SPAN,
     HELPER_MODEL_SWINIR,
+    HELPER_MODEL_ADCSR,
     OutputLocation,
     UpscaleBackend,
     UpscaleSettings,
@@ -70,6 +71,7 @@ _MODEL_LABELS = {
     HELPER_MODEL_SPAN: "4xNomosUni SPAN",
     HELPER_MODEL_AMD_RRDB: "Real-ESRGAN（AMD縮小版）",
     HELPER_MODEL_SWINIR: "SwinIR-M",
+    HELPER_MODEL_ADCSR: "AdcSR",
 }
 _HELPER_MODEL_OPTIONS = [
     ("なし（拡大しない）", None),
@@ -77,6 +79,7 @@ _HELPER_MODEL_OPTIONS = [
     (_MODEL_LABELS[HELPER_MODEL_SPAN], HELPER_MODEL_SPAN),
     (_MODEL_LABELS[HELPER_MODEL_AMD_RRDB], HELPER_MODEL_AMD_RRDB),
     (_MODEL_LABELS[HELPER_MODEL_SWINIR], HELPER_MODEL_SWINIR),
+    (_MODEL_LABELS[HELPER_MODEL_ADCSR], HELPER_MODEL_ADCSR),
 ]
 _HELPER_MODEL_VALUES = {
     value for _label, value in _HELPER_MODEL_OPTIONS if value is not None
@@ -117,6 +120,10 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str],
         ("△", "◎", "○", "◎", None),
     (UpscaleBackend.WINML_GPU, HELPER_MODEL_SWINIR):
         ("✕", "◎", "○", "◎", "静止画"),
+    (UpscaleBackend.WINML_GPU, HELPER_MODEL_ADCSR):
+        ("✕", "◎◎", "○", "◎", "実写"),
+    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ADCSR):
+        ("✕", "◎◎", "○", "◎", "実写"),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ANIME):
         ("○", "◎", "◎", "△", "アニメ"),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SPAN):

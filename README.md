@@ -46,6 +46,7 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 | `4xNomosUni` | 4xNomosUni SPAN | 4xNomosUni_span_multijpg | 実写の自然な質感 | GPUは256/512自動、NPUは512 |
 | `AMD-RRDB` | Real-ESRGAN（AMD縮小版） | AMD縮小RRDB版 | 輪郭を強めたい実写 | 256 |
 | `SwinIR` | SwinIR-M | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | 静止画の最高画質（低速） | 256 |
+| `AdcSR` | AdcSR | AdcSR net_params_200（SD2.1-base派生・1ステップ） | 実写・静止画専用 | 128 |
 
 ### パス設定（環境変数で上書き可能）
 
@@ -105,6 +106,7 @@ python -m quark.onnx.tools.convert_fp32_to_bf16 \
 | 実写の毛・肌・背景の質感を残す | 自動 / GPU | 4xNomosUni SPAN (`4xNomosUni`) |
 | 実写の輪郭を強く見せる | 自動 / GPU | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) |
 | 静止画を最高画質で拡大（低速） | 自動 / GPU / NPU | SwinIR-M (`SwinIR`) |
+| 実写を生成型1ステップで拡大（静止画専用） | 自動 / GPU / NPU（GPU実行） | AdcSR (`AdcSR`) |
 | GPUを他の作業へ空ける | NPU | 同じ4モデル。Anime/実写質感は512、AMD-RRDBとSwinIRは256 |
 | 既存モデル・2x等を使う | Vulkan | Vulkan選択時の従来モデル一覧 |
 
@@ -119,12 +121,22 @@ SwinIRのONNXは `scripts/get_ai_models.py --download swinir` で重みを取得
 VitisAI(VAIML)コンパイラのSlice負値バグ回避の書き換えを自動適用する。
 詳細は [docs/npu-research.md](docs/npu-research.md) と
 [amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)）。
+AdcSRの取得と変換は、AdcSRリポジトリをcloneし、Hugging FaceのGuaishou74851/AdcSRから`net_params_200.pkl`と`halfDecoder.ckpt`を取得し、Stable Diffusion 2.1-baseのdiffusers形式ローカルディレクトリを用意した後、次で行う（公式リポジトリはgated化されているため、公開ミラー `sd2-community/stable-diffusion-2-1-base` などを使う）。
+
+```powershell
+git clone https://github.com/Guaishou74851/AdcSR.git <AdcSR clone>
+.venv\Scripts\python.exe scripts/adcsr/export_adcsr.py --repo <AdcSR clone> --sd <SD2.1-base ディレクトリ> --weights <net_params_200.pkl> --half-decoder <halfDecoder.ckpt> --size 128 --out tmp/npu-anime/span/adcsr_nchw_128x128_fp32.onnx
+```
+
+AdcSRはDirectML専用の静止画モデルで、NPUには対応しない。
+
 SwinIRをNPUで動かす手順・回避策の英語まとめ: [docs/swinir-npu.md](docs/swinir-npu.md)
 (Running SwinIR on an AMD Ryzen AI NPU)。
 
 帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Hofmann/Phips**
 （取得元とSHA-256は [docs/span-bench-results.md](docs/span-bench-results.md)）、
-**003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN — Apache-2.0, by Jingyun Liang (SwinIR)**。
+**003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN — Apache-2.0, by Jingyun Liang (SwinIR)**、
+**AdcSR — Apache-2.0, Guaishou74851（CVPR 2025）。基盤 Stable Diffusion 2.1-base は CreativeML OpenRAIL-M（使用制限あり、利用者が確認すること）**。
 
 ## 実測ベンチマーク（現行構成）
 
@@ -140,6 +152,7 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 | 4xNomosUni SPAN (`4xNomosUni`) | `4xNomosUni_span_multijpg` | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
 | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) | AMD縮小RRDB版 | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
 | SwinIR-M (`SwinIR`) | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | SwinIR（window attention） | 約53秒 | 約79秒 | 256 / 256 | 38.5 dB |
+| AdcSR (`AdcSR`) | AdcSR net_params_200（SD2.1-base派生） | 生成型1ステップ拡散（UNet+VAEデコーダ） | 約1.0〜1.2秒/128タイル | NPU非対応 | 128 / - | - |
 
 \* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
 \*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
@@ -163,6 +176,8 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 動画（640x480→2560x1920、NVENC使用）では、1秒はDirectML 3.626秒 / TensorRT 3.635秒、3秒は7.570秒 / **7.513秒**、12秒は25.227秒 / **25.026秒**。
 短い動画では固定費が効き、3秒以上ではTensorRTが僅かに逆転したが、12秒でも差は約0.8%だった。
 モデル別では、3秒動画のE2EがAnime Video v3で7.570秒 / 7.513秒、purephotoで8.405秒 / **7.576秒**、Real-ESRGANで**23.310秒** / 24.694秒（DirectML / TensorRT）となり、TensorRTの優位はモデル依存だった。
+
+AdcSRは静止画専用のため動画には使用できない。`tos`（1280x534）では128タイル84枚、DirectMLで約80〜100秒だった。
 
 動画（rawvideoパイプライン・音声保持・3秒クリップのE2E実測）:
 

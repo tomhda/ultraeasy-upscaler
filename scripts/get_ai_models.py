@@ -161,6 +161,7 @@ def main() -> int:
     args = build_parser().parse_args()
 
     if args.list or (args.download is None and args.pipeline is None):
+        print("AdcSR: HuggingFace Guaishou74851/AdcSRから取得し、scripts/adcsr/export_adcsr.pyで変換")
         for spec in MODELS.values():
             print(
                 f"{spec.name}: {spec.filename}, {spec.license}, "

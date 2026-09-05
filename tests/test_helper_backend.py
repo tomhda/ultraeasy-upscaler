@@ -1,8 +1,12 @@
 from app.core import helper_backend
 from app.core.settings import (
     HELPER_MODEL_AMD_RRDB,
+    HELPER_MODEL_ADCSR,
     UpscaleBackend,
     UpscaleSettings,
+    canonical_helper_model,
+    helper_model_family,
+    vulkan_fallback_settings,
 )
 
 
@@ -78,3 +82,34 @@ def test_winml_helper_uses_renamed_tool_layout(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv(helper_backend.WINML_HELPER_ENV, raising=False)
 
     assert helper_backend._winml_helper() == helper.resolve()
+
+
+def test_adcsr_uses_fixed_128_gpu_tile(monkeypatch) -> None:
+    model = helper_backend.binaries.repo_root() / "tmp" / "adcsr" / "onnx" / "adcsr_nchw_128x128_fp32.onnx"
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(model.parent))
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=HELPER_MODEL_ADCSR)
+    backend, tile, path = helper_backend._session_spec(settings, 1280, 534)
+    assert backend == UpscaleBackend.WINML_GPU
+    assert tile == 128
+    assert path == model.resolve()
+
+def test_adcsr_npu_request_switches_to_gpu_with_message(monkeypatch) -> None:
+    model = helper_backend.binaries.repo_root() / "tmp" / "adcsr" / "onnx" / "adcsr_nchw_128x128_fp32.onnx"
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(model.parent))
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    messages = []
+    monkeypatch.setattr(helper_backend, "_winml_helper", lambda: model.parent / "missing.exe")
+    try:
+        helper_backend.open_session(settings, 1280, 534, progress=lambda _f, msg: messages.append(msg))
+    except helper_backend.HelperBackendUnavailable:
+        pass
+    assert "AdcSRはNPU非対応のためGPUで実行…" in messages
+
+def test_adcsr_alias_family_and_vulkan_fallback() -> None:
+    from app.core.settings import ModelFamily
+    assert canonical_helper_model("adcsr") == "AdcSR"
+    assert helper_model_family("adcsr") == ModelFamily.PHOTO
+    settings = UpscaleSettings(model="adcsr")
+    fallback = vulkan_fallback_settings(settings)
+    assert fallback.model == "realesrgan-x4plus"
+    assert fallback.backend == UpscaleBackend.VULKAN

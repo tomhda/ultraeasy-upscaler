@@ -194,6 +194,7 @@ def test_helper_model_none_is_available_and_saved_as_upscale_off(app):
         HELPER_MODEL_ANIME,
         HELPER_MODEL_SPAN,
         HELPER_MODEL_SWINIR,
+        HELPER_MODEL_ADCSR,
         UpscaleBackend,
     )
     from app.gui.main_window import MainWindow
@@ -209,6 +210,7 @@ def test_helper_model_none_is_available_and_saved_as_upscale_off(app):
         HELPER_MODEL_SPAN,
         HELPER_MODEL_AMD_RRDB,
         HELPER_MODEL_SWINIR,
+        HELPER_MODEL_ADCSR,
     ]
 
     win.model_combo.setCurrentIndex(0)
@@ -288,6 +290,7 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
         HELPER_MODEL_ANIME,
         HELPER_MODEL_SPAN,
         HELPER_MODEL_SWINIR,
+        HELPER_MODEL_ADCSR,
         UpscaleBackend,
     )
     from app.gui.main_window import MainWindow
@@ -316,6 +319,7 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
     assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
         None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
         HELPER_MODEL_SWINIR,
+        HELPER_MODEL_ADCSR,
     ]
     assert win.model_combo.itemText(1).startswith("Anime Video v3")
     assert win.model_combo.itemText(2).startswith("4xNomosUni SPAN")
@@ -335,7 +339,7 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
     win.backend_combo.setCurrentIndex(auto_idx)
     app.processEvents()
     assert win.model_combo.isEnabled() is True
-    assert win.model_combo.count() == 5
+    assert win.model_combo.count() == 6
     assert win.build_settings().backend == UpscaleBackend.WINML_GPU
 
     vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
@@ -452,6 +456,7 @@ def test_model_picker_shows_speed_quality_info(app):
         HELPER_MODEL_ANIME,
         HELPER_MODEL_SPAN,
         HELPER_MODEL_SWINIR,
+        HELPER_MODEL_ADCSR,
         UpscaleBackend,
     )
     from app.gui.main_window import MainWindow
@@ -463,6 +468,7 @@ def test_model_picker_shows_speed_quality_info(app):
     assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
         None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
         HELPER_MODEL_SWINIR,
+        HELPER_MODEL_ADCSR,
     ]
     assert win.model_combo.itemText(1).startswith("Anime Video v3")
     assert "速度◎" in win.model_combo.itemText(1)

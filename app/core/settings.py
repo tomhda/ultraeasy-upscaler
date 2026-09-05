@@ -46,6 +46,7 @@ HELPER_MODEL_ANIME = "animevideov3"
 HELPER_MODEL_SPAN = "4xNomosUni"
 HELPER_MODEL_AMD_RRDB = "AMD-RRDB"
 HELPER_MODEL_SWINIR = "SwinIR"
+HELPER_MODEL_ADCSR = "AdcSR"
 DEFAULT_HELPER_MODEL = HELPER_MODEL_ANIME
 
 VULKAN_FALLBACK_MODELS = {
@@ -53,6 +54,7 @@ VULKAN_FALLBACK_MODELS = {
     HELPER_MODEL_SPAN: "realesrgan-x4plus",
     HELPER_MODEL_AMD_RRDB: "realesrgan-x4plus",
     HELPER_MODEL_SWINIR: "realesrgan-x4plus",
+    HELPER_MODEL_ADCSR: "realesrgan-x4plus",
 }
 
 # 統合前後で保存された値を壊さないための読み込み互換表。
@@ -69,6 +71,7 @@ HELPER_MODEL_ALIASES = {
     HELPER_MODEL_SWINIR: HELPER_MODEL_SWINIR,
     "swinir": HELPER_MODEL_SWINIR,
     "swinir-m": HELPER_MODEL_SWINIR,
+    "adcsr": HELPER_MODEL_ADCSR,
     HELPER_MODEL_AMD_RRDB: HELPER_MODEL_AMD_RRDB,
     "amd-rrdb": HELPER_MODEL_AMD_RRDB,
     "realesrgan-amd": HELPER_MODEL_AMD_RRDB,
@@ -90,7 +93,7 @@ def canonical_helper_model(model: str | ModelFamily | None) -> str | None:
 def helper_model_family(model: str | ModelFamily | None) -> ModelFamily:
     """具体的なhelperモデルに対応する旧系統値を返す。"""
     key = canonical_helper_model(model)
-    if key in (HELPER_MODEL_SPAN, HELPER_MODEL_SWINIR):
+    if key in (HELPER_MODEL_SPAN, HELPER_MODEL_SWINIR, HELPER_MODEL_ADCSR):
         return ModelFamily.PHOTO
     if key == HELPER_MODEL_AMD_RRDB:
         return ModelFamily.REALESRGAN
@@ -120,6 +123,9 @@ HELPER_MODEL_FILES = {
         },
         HELPER_MODEL_SWINIR: {
             256: "swinir_nchw_256x256_fp32.onnx",
+        },
+        HELPER_MODEL_ADCSR: {
+            128: "adcsr_nchw_128x128_fp32.onnx",
         },
     },
     UpscaleBackend.NPU_NATIVE: {

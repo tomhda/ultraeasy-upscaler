@@ -117,6 +117,10 @@ def _process_folder(job, settings, progress, cancel) -> Path:
 
 
 def _process_video(job, settings, progress, cancel) -> Path:
+    from .settings import HELPER_MODEL_ADCSR, canonical_helper_model
+
+    if canonical_helper_model(settings.model) == HELPER_MODEL_ADCSR:
+        raise ValueError("AdcSRは静止画専用です。動画には他のモデルを選んでください")
     if not settings.upscale_enabled and not settings.interpolation_enabled:
         raise ValueError(
             "アップスケーラーモデルまたはフレーム補間モデルを選択してください。"
