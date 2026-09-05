@@ -18,6 +18,7 @@ from .settings import (
     ProcessingOrder,
     UpscaleBackend,
     UpscaleSettings,
+    vulkan_fallback_settings,
 )
 
 
@@ -149,8 +150,8 @@ def _process_video(job, settings, progress, cancel) -> Path:
                 )
             except helper_backend.HelperBackendUnavailable as exc:
                 out_tmp.unlink(missing_ok=True)
-                active_settings = replace(settings, backend=UpscaleBackend.VULKAN)
-                progress(0.02, f"AIヘルパーを起動できないためVulkanへ切替… ({exc})")
+                active_settings = vulkan_fallback_settings(settings)
+                progress(0.02, f"Vulkanへ切替（モデル: {active_settings.model} で代替） ({exc})")
             except BaseException:
                 out_tmp.unlink(missing_ok=True)
                 raise

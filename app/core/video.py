@@ -556,7 +556,7 @@ def upscale_video_piped(
 
     progress = progress or (lambda _fraction, _message: None)
     info = media.probe(in_path)
-    width, height = info.width, info.height
+    width, height = info.display_width, info.display_height
     fps = info.fps or 30.0
     total_frames = info.frame_count
     if width <= 0 or height <= 0:
@@ -693,7 +693,7 @@ def upscale_video_piped(
                     if item is sentinel:
                         _queue_put(upscaled, sentinel)
                         return
-                    result = session.upscale(item)  # type: ignore[arg-type]
+                    result = (session.upscale(item, cancel=cancel) if cancel is not None else session.upscale(item))  # type: ignore[arg-type]
                     if not _queue_put(upscaled, result):
                         return
             except BaseException as exc:

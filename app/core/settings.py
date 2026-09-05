@@ -1,7 +1,7 @@
 """アップスケール設定モデル（GUI / エンジン共通）。"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 
@@ -48,6 +48,13 @@ HELPER_MODEL_AMD_RRDB = "AMD-RRDB"
 HELPER_MODEL_SWINIR = "SwinIR"
 DEFAULT_HELPER_MODEL = HELPER_MODEL_ANIME
 
+VULKAN_FALLBACK_MODELS = {
+    HELPER_MODEL_ANIME: "realesr-animevideov3",
+    HELPER_MODEL_SPAN: "realesrgan-x4plus",
+    HELPER_MODEL_AMD_RRDB: "realesrgan-x4plus",
+    HELPER_MODEL_SWINIR: "realesrgan-x4plus",
+}
+
 # 統合前後で保存された値を壊さないための読み込み互換表。
 # 抽象3系統はUIには出さず、ここで具体的なモデルキーへ正規化する。
 HELPER_MODEL_ALIASES = {
@@ -88,6 +95,13 @@ def helper_model_family(model: str | ModelFamily | None) -> ModelFamily:
     if key == HELPER_MODEL_AMD_RRDB:
         return ModelFamily.REALESRGAN
     return ModelFamily.ANIME
+
+
+def vulkan_fallback_settings(settings: "UpscaleSettings") -> "UpscaleSettings":
+    """新AIヘルパー設定をVulkanで実行できる設定へ変換する。"""
+    model = VULKAN_FALLBACK_MODELS.get(canonical_helper_model(settings.model), settings.model)
+    return replace(settings, backend=UpscaleBackend.VULKAN, model=model)
+
 
 # 新AIヘルパー用ONNXモデル。キーは具体的なモデルキー、値はタイルの一辺。
 # NPU_NATIVEはアニメ/質感系を512、AMD縮小RRDBを256で実行する。

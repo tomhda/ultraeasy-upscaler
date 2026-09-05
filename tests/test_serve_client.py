@@ -97,3 +97,33 @@ def test_rejects_non_rgb_uint8_before_writing(monkeypatch) -> None:
     assert fake.stdin.getvalue() == b""
     client.close()
 
+
+
+def test_receive_cancel_terminates_blocked_helper():
+    class BlockingStdout:
+        def read(self, _size):
+            threading.Event().wait()
+            return b""
+
+    class BlockingProc(_FakeProc):
+        def __init__(self):
+            super().__init__(b"")
+            self.stdout = BlockingStdout()
+        def terminate(self):
+            self.returncode = -15
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+    import threading
+    fake = BlockingProc()
+    client = serve_client.ServeClient(["fake-helper"])
+    client.proc = fake
+    cancel = threading.Event()
+    thread = threading.Thread(target=lambda: (threading.Event().wait(0.1), cancel.set()))
+    thread.start()
+    with pytest.raises(serve_client.Cancelled):
+        client.receive(cancel=cancel)
+    thread.join()
+    assert fake.returncode == -15
+    assert client.proc is None

@@ -19,7 +19,7 @@ from typing import Optional
 
 from . import binaries, jobs, media
 from .jobs import ProgressCb
-from .settings import UpscaleBackend, UpscaleSettings
+from .settings import UpscaleBackend, UpscaleSettings, vulkan_fallback_settings
 
 # stderr に出る進捗行（例: "25.00%"）を拾う。
 _PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
@@ -137,7 +137,8 @@ def upscale_image(in_path: str, out_path: str, settings: UpscaleSettings,
             return
         except helper_backend.HelperBackendUnavailable as exc:
             # DirectML/NPUのモデル不在・helper起動失敗時は、既存のVulkan資産へ退避する。
-            progress(0.0, f"AIヘルパーを起動できないためVulkanへ切替… ({exc})")
+            settings = vulkan_fallback_settings(settings)
+            progress(0.0, f"Vulkanへ切替（モデル: {settings.model} で代替） ({exc})")
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -221,7 +222,8 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
             helper_backend.upscale_folder(in_dir, out_dir, settings, progress, cancel)
             return
         except helper_backend.HelperBackendUnavailable as exc:
-            progress(0.0, f"AIヘルパーを起動できないためVulkanへ切替… ({exc})")
+            settings = vulkan_fallback_settings(settings)
+            progress(0.0, f"Vulkanへ切替（モデル: {settings.model} で代替） ({exc})")
 
     in_p = Path(in_dir)
     out_p = Path(out_dir)

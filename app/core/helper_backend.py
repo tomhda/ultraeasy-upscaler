@@ -56,8 +56,8 @@ class HelperSession:
     def scale(self) -> int:
         return self.client.scale
 
-    def upscale(self, image: np.ndarray) -> np.ndarray:
-        return self.client.upscale(image)
+    def upscale(self, image: np.ndarray, cancel=None) -> np.ndarray:
+        return self.client.upscale(image, cancel=cancel)
 
     def close(self, *, force: bool = False) -> None:
         self.client.close(force=force)
@@ -317,7 +317,7 @@ def upscale_image(
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
         progress(0.1, "アップスケール中…")
-        output = session.upscale(image)
+        output = session.upscale(image, cancel=cancel) if cancel is not None else session.upscale(image)
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
         _save_rgb(output, Path(out_path))
@@ -366,7 +366,7 @@ def upscale_folder(
                     cancel=cancel,
                 )
                 sessions[key] = session
-            output = session.upscale(image)
+            output = session.upscale(image, cancel=cancel) if cancel is not None else session.upscale(image)
             _save_rgb(output, target / f"{path.stem}.{fmt}")
             progress(index / total, f"{index}/{total} 枚")
     finally:

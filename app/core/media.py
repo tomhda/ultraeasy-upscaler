@@ -46,6 +46,15 @@ class MediaInfo:
     has_audio: bool = False
     codec: Optional[str] = None
     size_bytes: int = 0
+    rotation: int = 0                  # 表示時の回転角（度）
+
+    @property
+    def display_width(self) -> int:
+        return self.height if abs(self.rotation) % 180 == 90 else self.width
+
+    @property
+    def display_height(self) -> int:
+        return self.width if abs(self.rotation) % 180 == 90 else self.height
 
 
 def _parse_fps(value: Optional[str]) -> Optional[float]:
@@ -79,6 +88,19 @@ def _to_float(value) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_rotation(stream: dict) -> int:
+    """ffprobe の side_data / tags から表示回転角を取得する。"""
+    side_data = stream.get("side_data_list") or stream.get("side_data") or []
+    for item in side_data:
+        value = item.get("rotation") if isinstance(item, dict) else None
+        parsed = _to_float(value)
+        if parsed is not None:
+            return int(round(parsed)) % 360
+    tags = stream.get("tags") or {}
+    parsed = _to_float(tags.get("rotate"))
+    return int(round(parsed)) % 360 if parsed is not None else 0
 
 
 def _run_ffprobe(path: str) -> dict:
@@ -174,6 +196,7 @@ def _probe_video(p: Path, info: MediaInfo) -> None:
     if video_stream is not None:
         info.width = _to_int(video_stream.get("width")) or 0
         info.height = _to_int(video_stream.get("height")) or 0
+        info.rotation = _parse_rotation(video_stream)
         info.codec = video_stream.get("codec_name")
 
         # fps: avg_frame_rate を優先し、無ければ r_frame_rate

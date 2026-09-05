@@ -13,7 +13,7 @@ import pytest
 from PIL import Image
 
 from app.core import binaries, jobs, upscaler
-from app.core.settings import UpscaleBackend, UpscaleSettings
+from app.core.settings import UpscaleBackend, UpscaleSettings, vulkan_fallback_settings
 
 REPO = Path(__file__).resolve().parents[1]
 INPUT_JPG = REPO / "vendor" / "realesrgan" / "input.jpg"
@@ -297,3 +297,19 @@ def test_npu_rejects_unsupported_model(tmp_path: Path) -> None:
         npu_backend.upscale_image(
             str(tmp_path / "a.png"), str(tmp_path / "b.png"), settings
         )
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("animevideov3", "realesr-animevideov3"),
+        ("4xNomosUni", "realesrgan-x4plus"),
+        ("AMD-RRDB", "realesrgan-x4plus"),
+        ("SwinIR", "realesrgan-x4plus"),
+    ],
+)
+def test_vulkan_fallback_model_names(model, expected):
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=model)
+    fallback = vulkan_fallback_settings(settings)
+    assert fallback.backend == UpscaleBackend.VULKAN
+    assert fallback.model == expected

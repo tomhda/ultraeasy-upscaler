@@ -138,8 +138,35 @@ class ServeClient:
         except (BrokenPipeError, OSError) as exc:
             raise ServeClientError(self._failure_message("AI helperへの送信に失敗しました")) from exc
 
-    def receive(self) -> np.ndarray:
+    def receive(self, cancel=None) -> np.ndarray:
         """次の応答を読む。UEUEはそのフレームだけのValueErrorにする。"""
+        if cancel is not None:
+            finished = threading.Event()
+            result: dict[str, object] = {}
+            def _read() -> None:
+                try:
+                    result["value"] = self._receive_once()
+                except BaseException as exc:
+                    result["error"] = exc
+                finally:
+                    finished.set()
+            reader = threading.Thread(target=_read, name="ueu-frame-read", daemon=True)
+            reader.start()
+            while not finished.wait(0.05):
+                if cancel.is_set():
+                    self.close(force=True)
+                    raise Cancelled()
+            if cancel.is_set():
+                self.close(force=True)
+                raise Cancelled()
+            error = result.get("error")
+            if isinstance(error, BaseException):
+                raise error
+            return result["value"]  # type: ignore[return-value]
+        return self._receive_once()
+
+    def _receive_once(self) -> np.ndarray:
+        """キャンセル監視スレッドからも呼べる同期受信本体。"""
         self._require_connected()
         try:
             magic = self._read_exact(4)
@@ -163,11 +190,11 @@ class ServeClient:
         except (EOFError, OSError, struct.error) as exc:
             raise ServeClientError(self._failure_message(str(exc))) from exc
 
-    def upscale(self, image: np.ndarray) -> np.ndarray:
+    def upscale(self, image: np.ndarray, cancel=None) -> np.ndarray:
         """1フレームを同期送受信する。"""
         with self._io_lock:
             self.send(image)
-            return self.receive()
+            return self.receive(cancel=cancel)
 
     def close(self, *, force: bool = False) -> None:
         proc = self.proc
