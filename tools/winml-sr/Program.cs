@@ -85,6 +85,7 @@ internal static class Program
         Dictionary<string, string> epOptions = ParseEpOptions(args);
         int overlap = int.Parse(Value(args, "--overlap") ?? "16");
         int warmup = int.Parse(Value(args, "--warmup") ?? "2");
+        bool blend = !Has(args, "--no-blend");
         bool compile = Has(args, "--compile");
         bool download = Has(args, "--download");
 
@@ -155,7 +156,7 @@ internal static class Program
         // タイル分割 → 推論（ウォームアップ含む）→ 結合 → 保存
         var timings = new TileTimings();
         float[] merged = UpscaleChw(tileRunner, img, w, h, tileW, tileH, scale, overlap,
-            warmup, timings, Console.WriteLine);
+            warmup, timings, Console.WriteLine, blend);
         SaveImageChw(merged, w * scale, h * scale, outputPath);
 
         // 統計
@@ -527,7 +528,7 @@ internal static class Program
     /// </summary>
     private static float[] UpscaleChw(
         TileRunner runner, float[] img, int w, int h, int tileW, int tileH,
-        int scale, int overlap, int warmup, TileTimings timings, Action<string>? log)
+        int scale, int overlap, int warmup, TileTimings timings, Action<string>? log, bool blend = true)
     {
         // タイル分割（reflect padding + overlap）。タイル配列は作らず、runner.InputBufferへ直接充填する。
         var plan = TilePlan.Create(w, h, tileW, tileH, overlap);
@@ -546,6 +547,7 @@ internal static class Program
         int outW = w * scale;
         int outH = h * scale;
         int outOverlap = overlap * scale;
+        var weights = blend && outOverlap > 0 ? new float[outW * outH] : null;
         for (int tileIndex = 0; tileIndex < plan.TileCount; tileIndex++)
         {
             var swTile = Stopwatch.StartNew();
@@ -558,7 +560,7 @@ internal static class Program
 
             var swMerge = Stopwatch.StartNew();
             MergeTile(runner.OutputBuffer, merged, outW, outH, runner.OutTileW, runner.OutTileH,
-                outOverlap, plan.NTilesX, tileIndex);
+                outOverlap, plan.NTilesX, plan.NTilesY, tileIndex, blend, weights);
             double mergeMs = swMerge.Elapsed.TotalMilliseconds;
 
             timings.PreprocessMs.Add(preprocessMs);
@@ -596,6 +598,7 @@ internal static class Program
         Dictionary<string, string> epOptions = ParseEpOptions(args);
         int overlap = int.Parse(Value(args, "--overlap") ?? "16");
         int warmup = int.Parse(Value(args, "--warmup") ?? "2");
+        bool blend = !Has(args, "--no-blend");
         bool download = Has(args, "--download");
 
         if (epPolicy is null && epName is null)
@@ -661,7 +664,7 @@ internal static class Program
         var stats = new ServeStats();
         Task receiveTask = Task.Run(() => ReceiveLoop(stdin, received, pipelineCts.Token, Fail, stats));
         Task inferenceTask = Task.Run(() => InferenceLoop(received, inferred, pipelineCts.Token, Fail,
-            tileRunner, scale, overlap, stats));
+            tileRunner, scale, overlap, blend, stats));
         Task sendTask = Task.Run(() => SendLoop(inferred, stdout, pipelineCts.Token, Fail, scale, stats));
 
         try
@@ -839,7 +842,7 @@ internal static class Program
 
     private static void InferenceLoop(BlockingCollection<ServeFrame> input, BlockingCollection<ServeFrame> output,
         CancellationToken cancellationToken, Action<Exception> fail, TileRunner runner,
-        int scale, int overlap, ServeStats stats)
+        int scale, int overlap, bool blend, ServeStats stats)
     {
         try
         {
@@ -851,7 +854,7 @@ internal static class Program
                     {
                         var timings = new TileTimings();
                         frame.MergedChw = UpscaleChw(runner, frame.ImageChw!, frame.Width, frame.Height,
-                            runner.TileW, runner.TileH, scale, overlap, warmup: 0, timings, log: null);
+                            runner.TileW, runner.TileH, scale, overlap, warmup: 0, timings, log: null, blend: blend);
                         frame.Timings = timings;
                         stats.AddTiming(timings);
                     }
@@ -1086,7 +1089,8 @@ internal static class Program
 
     private static void MergeTile(
         float[] tile, float[] outImg, int outW, int outH,
-        int tileW, int tileH, int overlap, int nTilesX, int tileIndex)
+        int tileW, int tileH, int overlap, int nTilesX, int nTilesY, int tileIndex,
+        bool blend, float[]? weights)
     {
         int coreW = tileW - 2 * overlap;
         int coreH = tileH - 2 * overlap;
@@ -1096,22 +1100,42 @@ internal static class Program
         int ix = tileIndex % nTilesX;
         int y0 = iy * coreH;
         int x0 = ix * coreW;
-        int copyH = Math.Min(coreH, outH - y0);
-        int copyW = Math.Min(coreW, outW - x0);
-        if (copyH <= 0 || copyW <= 0) return;
-        for (int c = 0; c < 3; c++)
+        if (!blend || overlap == 0 || weights is null)
         {
-            int dstBase = c * planeOut;
-            int srcBase = c * planeTile;
-            for (int y = 0; y < copyH; y++)
+            int copyH = Math.Min(coreH, outH - y0);
+            int copyW = Math.Min(coreW, outW - x0);
+            if (copyH <= 0 || copyW <= 0) return;
+            for (int c = 0; c < 3; c++)
             {
-                int src = srcBase + (overlap + y) * tileW + overlap;
-                int dst = dstBase + (y0 + y) * outW + x0;
-                Array.Copy(tile, src, outImg, dst, copyW);
+                int dstBase = c * planeOut;
+                int srcBase = c * planeTile;
+                for (int y = 0; y < copyH; y++)
+                    Array.Copy(tile, srcBase + (overlap + y) * tileW + overlap, outImg, dstBase + (y0 + y) * outW + x0, copyW);
+            }
+            return;
+        }
+        int startX = Math.Max(0, x0 - overlap);
+        int endX = Math.Min(outW, x0 + coreW + overlap);
+        int startY = Math.Max(0, y0 - overlap);
+        int endY = Math.Min(outH, y0 + coreH + overlap);
+        for (int oy = startY; oy < endY; oy++)
+        {
+            int ty = oy - (y0 - overlap);
+            float wy = ty < overlap ? (ty + 1f) / overlap : ty >= overlap + coreH ? (tileH - ty) / (float)overlap : 1f;
+            for (int ox = startX; ox < endX; ox++)
+            {
+                int tx = ox - (x0 - overlap);
+                float wx = tx < overlap ? (tx + 1f) / overlap : tx >= overlap + coreW ? (tileW - tx) / (float)overlap : 1f;
+                float weight = MathF.Max(0.0001f, wx * wy);
+                int pi = oy * outW + ox;
+                float oldWeight = weights[pi];
+                float total = oldWeight + weight;
+                for (int c = 0; c < 3; c++)
+                    outImg[c * planeOut + pi] = (outImg[c * planeOut + pi] * oldWeight + tile[c * planeTile + ty * tileW + tx] * weight) / total;
+                weights[pi] = total;
             }
         }
     }
-
     // ---------------------------------------------------------------- image IO
 
     private static (float[] chw, int w, int h) LoadImageChw(string path)
