@@ -215,6 +215,29 @@ NPU実行中のみ約38秒周期（タイル6枚ごと）で最大+7GBの過渡�
 （約650%）なので、中央値ではなく時間積分の平均で読む。xrt-smi でHWコンテキストの
 Active状態と使用カラム数の裏取りができる。
 
+### 軽量版 SwinIR-S の検討（2026-09-05〜06、不採用）
+
+SwinIR-S（002_lightweightSR_DIV2K_s64w8_SwinIR-S_x4、878Kパラメータ、bicubic劣化で学習）を
+同じ手順（export_spandrel → quark bf16cast → VAIML）で NPU 化した。
+VAIML は 3317 op / 272.9 GOPs を100%受理し、コンパイル36.6分。負のSlice境界の書換は0件だった。
+
+| 項目 | SwinIR-M | SwinIR-S |
+|---|---|---|
+| 演算量（256タイル） | 2969 GOPs | 273 GOPs |
+| NPU 1タイル | 6.6 s | 2.98 s |
+| GPU(DML) 1タイル | 約4.5 s | 1.29 s |
+| NPU bf16 と fp32 の一致 | 38.5 dB | 47.7 dB |
+
+演算量が1/11でもNPUは2.2倍速にしかならない。実効92 GOPS/s で、
+XDNA2 + VAIML の transformer 実行は op 数に比例した固定コスト（約0.9 ms/op）が支配的と読める。
+チャネル幅の削減は効かず、層数（op数）を減らす以外に速度は出ない。3.0 s/タイルでも
+TDR ライブダンプは発生した（閾値は3秒未満）。
+
+画質は目視で不採用。bicubic / x4plus / SwinIR-M / SwinIR-S の4列比較
+（`tmp/swinir-eval/sheets/`）で、SwinIR-S は小さな正方形のタイルを敷き詰めたような
+格子状の破綻が全体に出て、4者の中で明確に最も悪かった。bicubic 劣化で学習した軽量モデルは
+実写・アニメの実素材には向かない。GUI には登録しない。
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
