@@ -28,6 +28,8 @@ from .settings import (
     HELPER_MODEL_AMD_RRDB,
     HELPER_MODEL_ADCSR,
     HELPER_MODEL_SWINIR,
+    HELPER_DEFAULT_OVERLAP,
+    HELPER_MODEL_OVERLAP,
     canonical_helper_model,
     ModelFamily,
     UpscaleBackend,
@@ -38,7 +40,7 @@ WINML_HELPER_ENV = "UEU_WINML_HELPER"
 MODELS_DIR_ENV = "UEU_MODELS_DIR"
 NPU_PYTHON_ENV = "UEU_NPU_PYTHON"
 NPU_CACHE_ENV = "UEU_NPU_CACHE"
-OVERLAP = 16
+OVERLAP = 16  # 全モデル共通の既定値（settings.HELPER_DEFAULT_OVERLAP と同じ）。
 HELPER_BACKENDS = frozenset({UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE})
 
 
@@ -97,6 +99,16 @@ def _model_key(settings: UpscaleSettings) -> str:
     return model_key
 
 
+def overlap_for_model(model: str | ModelFamily | None) -> int:
+    """serve の --overlap（片側マージン、入力 px）をモデル別に返す。
+
+    AdcSR だけ 32（128 タイル → コア 64）。それ以外は既定 16。
+    """
+    return HELPER_MODEL_OVERLAP.get(canonical_helper_model(model), HELPER_DEFAULT_OVERLAP)
+
+
+# _discarded_pixels / choose_gpu_tile は 256/512 タイル用なので既定 16 のまま。
+# AdcSR（128 タイル）は overlap_for_model で 32 を使い、コアは 64 になる。
 def _discarded_pixels(width: int, height: int, tile: int, overlap: int = OVERLAP) -> int:
     core = tile - 2 * overlap
     padded_w = math.ceil(width / core) * core
@@ -239,8 +251,10 @@ def open_session(
     progress = progress or _noop
     try:
         backend, _tile, model_path = _session_spec(settings, width, height)
+        model_key = _model_key(settings)
+        overlap = overlap_for_model(model_key)
         if settings.backend == UpscaleBackend.NPU_NATIVE and backend == UpscaleBackend.WINML_GPU:
-            if _model_key(settings) == HELPER_MODEL_ADCSR:
+            if model_key == HELPER_MODEL_ADCSR:
                 progress(0.0, "AdcSRはNPU非対応のためGPUで実行…")
             else:
                 progress(0.0, "短辺480px未満のためGPUへ自動切替…")
@@ -253,7 +267,7 @@ def open_session(
             command = [
                 str(helper), "serve", "--model", str(model_path),
                 "--ep-name", "DmlExecutionProvider",
-                "--overlap", str(OVERLAP), "--warmup", "1",
+                "--overlap", str(overlap), "--warmup", "1",
             ]
             workdir = helper.parent
             timeout = 120.0
@@ -265,7 +279,7 @@ def open_session(
             command = [
                 str(python), str(script), "--model", str(model_path),
                 "--cache-dir", str(cache),
-                "--overlap", str(OVERLAP), "--warmup", "1",
+                "--overlap", str(overlap), "--warmup", "1",
             ]
             workdir = binaries.repo_root()
             # 初回VAIMLコンパイルはモデル次第で長い（av3dp512: 約15分、SwinIR-M: 約51分）。

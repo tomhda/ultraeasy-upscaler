@@ -1,6 +1,9 @@
 from app.core import helper_backend
 from app.core.settings import (
     HELPER_MODEL_AMD_RRDB,
+    HELPER_MODEL_ANIME,
+    HELPER_MODEL_SPAN,
+    HELPER_MODEL_SWINIR,
     HELPER_MODEL_ADCSR,
     UpscaleBackend,
     UpscaleSettings,
@@ -113,3 +116,75 @@ def test_adcsr_alias_family_and_vulkan_fallback() -> None:
     fallback = vulkan_fallback_settings(settings)
     assert fallback.model == "realesrgan-x4plus"
     assert fallback.backend == UpscaleBackend.VULKAN
+
+def test_overlap_for_model_gives_adcsr_32_and_default_16() -> None:
+    assert helper_backend.overlap_for_model(HELPER_MODEL_ADCSR) == 32
+    assert helper_backend.overlap_for_model("adcsr") == 32
+    assert helper_backend.overlap_for_model(HELPER_MODEL_ANIME) == 16
+    assert helper_backend.overlap_for_model(HELPER_MODEL_SPAN) == 16
+    assert helper_backend.overlap_for_model(HELPER_MODEL_AMD_RRDB) == 16
+    assert helper_backend.overlap_for_model(HELPER_MODEL_SWINIR) == 16
+    assert helper_backend.overlap_for_model("unknown-model") == 16
+    assert helper_backend.overlap_for_model(None) == 16
+
+
+class _CapturingServeClient:
+    last_command: list = []
+
+    def __init__(self, command, workdir, env=None) -> None:
+        type(self).last_command = list(command)
+
+    def connect(self, **kwargs) -> None:
+        return None
+
+
+def _serve_overlap(monkeypatch, settings, width=1280, height=534) -> str:
+    from pathlib import Path
+
+    model_dir = helper_backend.binaries.repo_root() / "tmp" / "adcsr" / "onnx"
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(model_dir))
+    monkeypatch.setattr(helper_backend, "_winml_helper", lambda: Path("winml-sr.exe"))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    session = helper_backend.open_session(settings, width, height)
+    assert session.backend == UpscaleBackend.WINML_GPU
+    command = _CapturingServeClient.last_command
+    return command[command.index("--overlap") + 1]
+
+
+def test_adcsr_serve_uses_overlap_32(monkeypatch) -> None:
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=HELPER_MODEL_ADCSR)
+    assert _serve_overlap(monkeypatch, settings) == "32"
+
+
+def test_non_adcsr_serve_uses_overlap_16(monkeypatch, tmp_path) -> None:
+    filename = "realesrgan_nchw_256x256_fp32.onnx"
+    (tmp_path / filename).touch()
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(tmp_path))
+    from pathlib import Path
+
+    monkeypatch.setattr(helper_backend, "_winml_helper", lambda: Path("winml-sr.exe"))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=HELPER_MODEL_AMD_RRDB)
+    session = helper_backend.open_session(settings, 854, 480)
+    assert session.backend == UpscaleBackend.WINML_GPU
+    command = _CapturingServeClient.last_command
+    assert command[command.index("--overlap") + 1] == "16"
+
+
+def test_npu_serve_goes_through_overlap_for_model(monkeypatch, tmp_path) -> None:
+    from pathlib import Path
+
+    filename = "realesrgan_nchw_256x256_bf16cast.onnx"
+    (tmp_path / filename).touch()
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(helper_backend, "_npu_python", lambda: tmp_path / "python.exe")
+    monkeypatch.setattr(helper_backend, "_npu_script", lambda: tmp_path / "npu_serve.py")
+    monkeypatch.setattr(helper_backend, "_cache_hit", lambda _path: True)
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_AMD_RRDB)
+    session = helper_backend.open_session(settings, 854, 480)
+    assert session.backend == UpscaleBackend.NPU_NATIVE
+    command = _CapturingServeClient.last_command
+    assert command[command.index("--overlap") + 1] == str(
+        helper_backend.overlap_for_model(HELPER_MODEL_AMD_RRDB)
+    )

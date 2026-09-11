@@ -152,7 +152,7 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 | 4xNomosUni SPAN (`4xNomosUni`) | `4xNomosUni_span_multijpg` | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
 | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) | AMD縮小RRDB版 | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
 | SwinIR-M (`SwinIR`) | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | SwinIR（window attention） | 約53秒 | 約79秒 | 256 / 256 | 38.5 dB |
-| AdcSR (`AdcSR`) | AdcSR net_params_200（SD2.1-base派生） | 生成型1ステップ拡散（UNet+VAEデコーダ） | 約1.0〜1.2秒/128タイル | NPU非対応 | 128 / - | - |
+| AdcSR (`AdcSR`) | AdcSR net_params_200（SD2.1-base派生） | 生成型1ステップ拡散（UNet+VAEデコーダ） | 約1.3〜1.6秒/128タイル | NPU非対応 | 128 / - | - |
 
 \* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
 \*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
@@ -177,7 +177,7 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 短い動画では固定費が効き、3秒以上ではTensorRTが僅かに逆転したが、12秒でも差は約0.8%だった。
 モデル別では、3秒動画のE2EがAnime Video v3で7.570秒 / 7.513秒、purephotoで8.405秒 / **7.576秒**、Real-ESRGANで**23.310秒** / 24.694秒（DirectML / TensorRT）となり、TensorRTの優位はモデル依存だった。
 
-AdcSRは静止画専用のため動画には使用できない。`tos`（1280x534）では128タイル84枚、DirectMLで約80〜100秒だった。
+AdcSRは静止画専用のため動画には使用できない。`tos`（1280x534）では128タイル180枚（マージン32・コア64）、DirectMLで約260〜280秒（約4.5分）だった。マージンを16から32に広げたのは継ぎ目の低周波の暗部を減らすため（docs/adcsr-tile-diagnosis.md 参照）。
 
 動画（rawvideoパイプライン・音声保持・3秒クリップのE2E実測）:
 

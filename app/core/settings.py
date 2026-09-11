@@ -49,6 +49,14 @@ HELPER_MODEL_SWINIR = "SwinIR"
 HELPER_MODEL_ADCSR = "AdcSR"
 DEFAULT_HELPER_MODEL = HELPER_MODEL_ANIME
 
+# helper serve 起動時に --overlap へ渡す片側マージン（入力 px）の既定値。
+HELPER_DEFAULT_OVERLAP = 16
+# モデル別の上書き。AdcSR は 128 タイルで overlap 32（コア 64）にし、
+# 継ぎ目の低周波の暗部を減らす（docs/adcsr-tile-diagnosis.md 参照）。
+HELPER_MODEL_OVERLAP = {
+    HELPER_MODEL_ADCSR: 32,
+}
+
 VULKAN_FALLBACK_MODELS = {
     HELPER_MODEL_ANIME: "realesr-animevideov3",
     HELPER_MODEL_SPAN: "realesrgan-x4plus",
