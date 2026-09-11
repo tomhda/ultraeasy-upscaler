@@ -158,8 +158,28 @@ HELPER_MODEL_FILES = {
         HELPER_MODEL_SWINIR: {
             256: "swinir_nchw_256x256_bf16cast.onnx",
         },
+        # AdcSR の NPU 版は前半 (F) のみ。後半 (G) は HELPER_MODEL_NPU_BACK。
+        # NPU_NATIVE×AdcSR は前半/後半の 2 プロセス構成 (2 段モード) で実行する。
+        HELPER_MODEL_ADCSR: {
+            128: "adcsr_front_nchw_128x128_bf16cast.onnx",
+        },
     },
 }
+
+
+# NPU 2段モードの後半モデル。キーは具体的なモデルキー、値はタイルの一辺。
+# 前半は HELPER_MODEL_FILES[NPU_NATIVE] の同タイルを使う。
+HELPER_MODEL_NPU_BACK = {
+    HELPER_MODEL_ADCSR: "adcsr_back_nchw_128x128_bf16cast.onnx",
+}
+
+# NPU 2段モードのマニフェスト名 (models ディレクトリ直下)。
+# F/G のファイル名・SHA-256・cache_key・境界テンソル名・ツール版を持つ。
+# 無ければ 2 段モード不可として従来どおり GPU 転送する。
+ADCSR_NPU_MANIFEST = "adcsr_npu_manifest.json"
+
+# AdcSR NPU 2段モードの即時無効化フラグ。UEU_ADCSR_NPU2=0 で従来の GPU 転送に戻る。
+ADCSR_NPU2_ENV = "UEU_ADCSR_NPU2"
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

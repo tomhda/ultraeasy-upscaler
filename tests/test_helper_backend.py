@@ -1,3 +1,7 @@
+import numpy as np
+import pytest
+from pathlib import Path
+
 from app.core import helper_backend
 from app.core.settings import (
     HELPER_MODEL_AMD_RRDB,
@@ -131,7 +135,7 @@ def test_overlap_for_model_gives_adcsr_32_and_default_16() -> None:
 class _CapturingServeClient:
     last_command: list = []
 
-    def __init__(self, command, workdir, env=None) -> None:
+    def __init__(self, command, workdir, env=None, log=None) -> None:
         type(self).last_command = list(command)
 
     def connect(self, **kwargs) -> None:
@@ -242,3 +246,161 @@ def test_seam_template_path_resolution() -> None:
     assert ov16.name == "adcsr_ov16_p384.json"
     assert helper_backend.seam_template_path(HELPER_MODEL_ANIME, 16) is None
     assert helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 99) is None
+
+
+def _stage_two_stage_files(monkeypatch, tmp_path):
+    """front/back/manifest＋キャッシュをそろえ、解決先を向ける。"""
+    import hashlib
+    import json
+
+    front = tmp_path / "adcsr_front_nchw_128x128_bf16cast.onnx"
+    back = tmp_path / "adcsr_back_nchw_128x128_bf16cast.onnx"
+    front.write_bytes(b"front-model")
+    back.write_bytes(b"back-model")
+    for name in ("cache_f", "cache_b"):
+        cache = tmp_path / name
+        cache.mkdir(parents=True, exist_ok=True)
+        (cache / "context.json").write_text("{}", encoding="utf-8")
+        (cache / "x.rai").write_bytes(b"r")
+    manifest = {
+        "model_family": "AdcSR",
+        "front": {"file": front.name,
+                  "sha256": hashlib.sha256(b"front-model").hexdigest(),
+                  "cache_key": "cache_f"},
+        "back": {"file": back.name,
+                 "sha256": hashlib.sha256(b"back-model").hexdigest(),
+                 "cache_key": "cache_b"},
+        "boundary": ["main", "mean", "std"],
+    }
+    (tmp_path / "adcsr_npu_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (tmp_path / "adcsr_nchw_128x128_fp32.onnx").write_bytes(b"gpu-model")
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(helper_backend, "npu_cache_dir", lambda: tmp_path)
+    monkeypatch.delenv("UEU_ADCSR_NPU2", raising=False)
+    return front, back
+
+
+def test_npu_two_stage_settings_tables() -> None:
+    from app.core.settings import (
+        ADCSR_NPU2_ENV,
+        ADCSR_NPU_MANIFEST,
+        HELPER_MODEL_FILES,
+        HELPER_MODEL_NPU_BACK,
+    )
+
+    assert HELPER_MODEL_FILES[UpscaleBackend.NPU_NATIVE][HELPER_MODEL_ADCSR] == {
+        128: "adcsr_front_nchw_128x128_bf16cast.onnx"
+    }
+    assert HELPER_MODEL_NPU_BACK[HELPER_MODEL_ADCSR] == "adcsr_back_nchw_128x128_bf16cast.onnx"
+    assert ADCSR_NPU_MANIFEST == "adcsr_npu_manifest.json"
+    assert ADCSR_NPU2_ENV == "UEU_ADCSR_NPU2"
+
+
+def test_adcsr_npu_two_stage_spec_stays_npu(monkeypatch, tmp_path) -> None:
+    front, _back = _stage_two_stage_files(monkeypatch, tmp_path)
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    backend, tile, path = helper_backend._session_spec(settings, 1280, 534)
+    assert backend == UpscaleBackend.NPU_NATIVE
+    assert tile == 128
+    assert path == front.resolve()
+
+
+def test_adcsr_npu_two_stage_disabled_or_missing_falls_back(monkeypatch, tmp_path) -> None:
+    _stage_two_stage_files(monkeypatch, tmp_path)
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    monkeypatch.setenv("UEU_ADCSR_NPU2", "0")
+    backend, _tile, _path = helper_backend._session_spec(settings, 1280, 534)
+    assert backend == UpscaleBackend.WINML_GPU
+    monkeypatch.delenv("UEU_ADCSR_NPU2")
+    (tmp_path / "adcsr_npu_manifest.json").unlink()
+    backend, _tile, _path = helper_backend._session_spec(settings, 1280, 534)
+    assert backend == UpscaleBackend.WINML_GPU
+
+
+def _open_npu_session(monkeypatch, settings, width=1280, height=534):
+    monkeypatch.setattr(helper_backend, "_npu_python", lambda: Path("python.exe"))
+    monkeypatch.setattr(helper_backend, "_npu_script", lambda: Path("npu_serve.py"))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    return helper_backend.open_session(settings, width, height)
+
+
+def test_adcsr_npu_two_stage_command_hit(monkeypatch, tmp_path) -> None:
+    _stage_two_stage_files(monkeypatch, tmp_path)
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    session = _open_npu_session(monkeypatch, settings)
+    assert session.backend == UpscaleBackend.NPU_NATIVE
+    command = _CapturingServeClient.last_command
+    assert "--model-back" in command
+    assert "--manifest" in command
+    assert "--seam-template" in command
+    assert "--require-cache" in command
+    assert "--allow-compile" not in command
+
+
+def test_adcsr_npu_two_stage_command_miss_allows_compile(monkeypatch, tmp_path) -> None:
+    _stage_two_stage_files(monkeypatch, tmp_path)
+    (tmp_path / "cache_f" / "x.rai").unlink()
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    _open_npu_session(monkeypatch, settings)
+    command = _CapturingServeClient.last_command
+    assert "--allow-compile" in command
+    assert "--require-cache" not in command
+
+
+def test_non_adcsr_npu_has_no_two_stage_flags(monkeypatch, tmp_path) -> None:
+    filename = "realesrgan_nchw_256x256_bf16cast.onnx"
+    (tmp_path / filename).touch()
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(tmp_path))
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_AMD_RRDB)
+    _open_npu_session(monkeypatch, settings)
+    assert "--model-back" not in _CapturingServeClient.last_command
+    assert "--manifest" not in _CapturingServeClient.last_command
+
+
+def test_two_stage_fatal_retries_on_gpu(monkeypatch) -> None:
+    from app.core.serve_client import HelperOutputInvalid
+
+    image = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    class _FailClient:
+        def upscale(self, img, cancel=None):
+            raise HelperOutputInvalid("TWO_STAGE_FATAL stage=front tensor=main x")
+
+    class _GpuClient:
+        def upscale(self, img, cancel=None):
+            return img + 1
+
+        def close(self, force=False):
+            return None
+
+    opened = {}
+
+    def fake_open(settings, width, height, progress=None, cancel=None):
+        opened["backend"] = settings.backend
+        return helper_backend.HelperSession(
+            client=_GpuClient(), backend=settings.backend, model_path=Path("g.onnx"))
+
+    monkeypatch.setattr(helper_backend, "open_session", fake_open)
+    session = helper_backend.HelperSession(
+        client=_FailClient(), backend=UpscaleBackend.NPU_NATIVE, model_path=Path("f.onnx"))
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    out = helper_backend._upscale_with_adcsr_gpu_retry(
+        session, settings, 8, 8, image, lambda _f, _m: None, None)
+    assert np.all(out == 1)
+    assert opened["backend"] == UpscaleBackend.WINML_GPU
+
+
+def test_two_stage_fatal_reraises_for_non_npu(monkeypatch) -> None:
+    from app.core.serve_client import HelperOutputInvalid
+
+    class _FailClient:
+        def upscale(self, img, cancel=None):
+            raise HelperOutputInvalid("TWO_STAGE_FATAL x")
+
+    session = helper_backend.HelperSession(
+        client=_FailClient(), backend=UpscaleBackend.WINML_GPU, model_path=Path("g.onnx"))
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=HELPER_MODEL_ADCSR)
+    with pytest.raises(HelperOutputInvalid):
+        helper_backend._upscale_with_adcsr_gpu_retry(
+            session, settings, 8, 8, np.zeros((8, 8, 3), dtype=np.uint8),
+            lambda _f, _m: None, None)

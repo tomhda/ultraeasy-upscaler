@@ -127,3 +127,29 @@ def test_receive_cancel_terminates_blocked_helper():
     thread.join()
     assert fake.returncode == -15
     assert client.proc is None
+
+
+def test_two_stage_fatal_becomes_helper_output_invalid(monkeypatch) -> None:
+    message = "TWO_STAGE_FATAL stage=front tensor=main nonfinite_rate=1.0 recoveries=1 x"
+    stream = _ready() + b"UEUE" + struct.pack("<i", len(message)) + message.encode()
+    fake = _FakeProc(stream)
+    monkeypatch.setattr(serve_client.subprocess, "Popen", lambda *_a, **_kw: fake)
+    client = serve_client.ServeClient(["fake-helper"])
+    client.connect(timeout=1)
+    with pytest.raises(serve_client.HelperOutputInvalid, match="TWO_STAGE_FATAL"):
+        client.upscale(np.zeros((1, 1, 3), dtype=np.uint8))
+    client.close()
+
+
+def test_stderr_lines_capped_at_2000(monkeypatch) -> None:
+    lines = "".join(f"line {i}\n" for i in range(2500)).encode()
+    fake = _FakeProc(_ready(), lines)
+    monkeypatch.setattr(serve_client.subprocess, "Popen", lambda *_a, **_kw: fake)
+    client = serve_client.ServeClient(["fake-helper"])
+    client.connect(timeout=1)
+    assert client._stderr_thread is not None
+    client._stderr_thread.join(timeout=10)
+    assert len(client.stderr_lines) == 2000
+    assert client.stderr_lines[-1] == "line 2499"
+    assert client.stderr_lines[0] == "line 500"
+    client.close()

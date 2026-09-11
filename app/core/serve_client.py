@@ -26,6 +26,34 @@ class ServeClientError(RuntimeError):
     """ヘルパーの起動・接続・プロトコル自体が利用できない。"""
 
 
+class HelperOutputInvalid(RuntimeError):
+    """2 段モードの TWO_STAGE_FATAL。画像単位の GPU 再処理へ回す合図。"""
+
+
+_STDERR_MAX_LINES = 2000
+
+
+def _spawn_helper(command, **kwargs):
+    """Windows では Job Object に所属させて起動する (親死亡時にツリーごと消える)。
+
+    入れ子 Job (アプリ所有 Job) になり、中継親の子 Job と階層を成す。
+    失敗時は通常の Popen に戻る。
+    """
+    if sys.platform == "win32":
+        try:
+            tools_serve = Path(__file__).resolve().parents[2] / "tools" / "npu-serve"
+            if str(tools_serve) not in sys.path:
+                sys.path.insert(0, str(tools_serve))
+            import npu_job
+
+            if npu_job.job_supported():
+                return npu_job.spawn_in_job(
+                    command, cwd=kwargs.get("cwd"), env=kwargs.get("env"))
+        except Exception:
+            pass
+    return subprocess.Popen(command, **kwargs)
+
+
 class ServeClient:
     """起動引数をそのまま受け取り、UEUプロトコルでRGB画像を処理する。"""
 
@@ -63,7 +91,7 @@ class ServeClient:
             raise ServeClientError("helper is already connected")
 
         try:
-            self.proc = subprocess.Popen(
+            self.proc = _spawn_helper(
                 self.command,
                 cwd=self.workdir,
                 stdin=subprocess.PIPE,
@@ -122,8 +150,8 @@ class ServeClient:
             self.close(force=True)
             raise
 
-    def send(self, image: np.ndarray) -> None:
-        """RGB24フレームを送信する。"""
+    def send(self, image: np.ndarray, timeout: float | None = 60.0) -> None:
+        """RGB24フレームを送信する。timeout 秒で打ち切る (既定 60 秒)。"""
         proc = self._require_connected()
         if image.dtype != np.uint8 or image.ndim != 3 or image.shape[2] != 3:
             raise ValueError(f"expected HxWx3 uint8 RGB, got {image.dtype} {image.shape}")
@@ -131,12 +159,45 @@ class ServeClient:
         if width <= 0 or height <= 0:
             raise ValueError(f"invalid image size: {width}x{height}")
         payload = np.ascontiguousarray(image).tobytes()
+        packet = MAGIC_FRAME + struct.pack("<ii", width, height) + payload
         try:
             assert proc.stdin is not None
-            proc.stdin.write(MAGIC_FRAME + struct.pack("<ii", width, height) + payload)
-            proc.stdin.flush()
+            self._write_timed(proc, packet, timeout)
         except (BrokenPipeError, OSError) as exc:
             raise ServeClientError(self._failure_message("AI helperへの送信に失敗しました")) from exc
+
+    def _write_timed(self, proc, packet: bytes, timeout: float | None) -> None:
+        """write+flush を別スレッドで行い、期限切れは強制終了して打ち切る。"""
+        if timeout is None:
+            assert proc.stdin is not None
+            proc.stdin.write(packet)
+            proc.stdin.flush()
+            return
+        box: dict[str, object] = {}
+
+        def _target() -> None:
+            try:
+                assert proc.stdin is not None
+                proc.stdin.write(packet)
+                proc.stdin.flush()
+            except BaseException as exc:  # noqa: BLE001 - 呼び出し側へ引き渡す
+                box["error"] = exc
+
+        thread = threading.Thread(target=_target, name="ueu-send", daemon=True)
+        thread.start()
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            self.close(force=True)
+            raise ServeClientError(
+                self._failure_message(f"AI helperへの送信が{timeout:g}秒以内に完了しませんでした")
+            )
+        error = box.get("error")
+        if isinstance(error, (BrokenPipeError, OSError)):
+            raise ServeClientError(self._failure_message("AI helperへの送信に失敗しました")) from error  # type: ignore[misc]
+        if isinstance(error, BaseException):
+            raise ServeClientError(
+                self._failure_message(f"AI helperへの送信に失敗しました: {error}")
+            ) from error
 
     def receive(self, cancel=None) -> np.ndarray:
         """次の応答を読む。UEUEはそのフレームだけのValueErrorにする。"""
@@ -175,6 +236,8 @@ class ServeClient:
                 if length < 0 or length > 16 * 1024 * 1024:
                     raise ServeClientError(f"invalid UEUE length: {length}")
                 message = self._read_exact(length).decode("utf-8", errors="replace")
+                if message.startswith("TWO_STAGE_FATAL"):
+                    raise HelperOutputInvalid(message)
                 raise ValueError(message)
             if magic != MAGIC_DATA:
                 raise ServeClientError(f"unexpected response magic: {magic!r}")
@@ -252,6 +315,8 @@ class ServeClient:
                     if not line:
                         continue
                     self.stderr_lines.append(line)
+                    if len(self.stderr_lines) > _STDERR_MAX_LINES:
+                        del self.stderr_lines[: len(self.stderr_lines) - _STDERR_MAX_LINES]
                     if self.log is not None:
                         self.log(line)
                     else:

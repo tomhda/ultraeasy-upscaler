@@ -106,8 +106,8 @@ python -m quark.onnx.tools.convert_fp32_to_bf16 \
 | 実写の毛・肌・背景の質感を残す | 自動 / GPU | 4xNomosUni SPAN (`4xNomosUni`) |
 | 実写の輪郭を強く見せる | 自動 / GPU | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) |
 | 静止画を最高画質で拡大（低速） | 自動 / GPU / NPU | SwinIR-M (`SwinIR`) |
-| 実写を生成型1ステップで拡大（静止画専用） | 自動 / GPU / NPU（GPU実行） | AdcSR (`AdcSR`) |
-| GPUを他の作業へ空ける | NPU | 同じ4モデル。Anime/実写質感は512、AMD-RRDBとSwinIRは256 |
+| 実写を生成型1ステップで拡大（静止画専用） | 自動 / GPU / NPU | AdcSR (`AdcSR`) |
+| GPUを他の作業へ空ける | NPU | 同じ5モデル。Anime/実写質感は512、AMD-RRDBとSwinIRは256、AdcSRは128（前半/後半の2プロセス構成） |
 | 既存モデル・2x等を使う | Vulkan | Vulkan選択時の従来モデル一覧 |
 
 新AIを試す場合は「自動（GPU優先）」から始める。ヘルパーが無い環境でも、
@@ -128,7 +128,19 @@ git clone https://github.com/Guaishou74851/AdcSR.git <AdcSR clone>
 .venv\Scripts\python.exe scripts/adcsr/export_adcsr.py --repo <AdcSR clone> --sd <SD2.1-base ディレクトリ> --weights <net_params_200.pkl> --half-decoder <halfDecoder.ckpt> --size 128 --out tmp/npu-anime/span/adcsr_nchw_128x128_fp32.onnx
 ```
 
-AdcSRはDirectML専用の静止画モデルで、NPUには対応しない。
+AdcSRのNPU実行は前半/後半の2プロセス構成（VitisAI EPの不具合回避。詳細は [docs/npu-research.md](docs/npu-research.md) のAdcSR節）。
+初回のみVAIMLコンパイルが発生する（この検証機で前半約93分＋後半約30分。次回はキャッシュを利用）。
+`UEU_ADCSR_NPU2=0` で無効化すると従来のGPU実行に戻る。
+NPU用モデルは fp32 の export 後、N5書換え → bf16cast → 前半/後半への切断の順で用意する。
+
+```powershell
+.venv\Scripts\python.exe scripts/adcsr/rewrite_in_to_n5.py --input <fp32 onnx> --output <N5 fp32 onnx>
+<Ryzen AI環境のpython> -m quark.onnx.tools.convert_fp32_to_bf16 --input <N5 fp32 onnx> --output <N5 bf16 onnx> --format with_cast
+.venv\Scripts\python.exe scripts/adcsr/split_adcsr_npu.py --input <N5 bf16 onnx> --out-dir <models> --cache-key-front <前半cache_key> --cache-key-back <後半cache_key> --fp32 <N5 fp32 onnx> --ref-image <参照png>
+```
+
+切断後は前半・後半のONNXと `adcsr_npu_manifest.json` を models ディレクトリに置く。
+既知の制約: EPの不具合回避に依存する構成のため、SDK更新後は起動時セルフテストで検知する。
 
 SwinIRをNPUで動かす手順・回避策の英語まとめ: [docs/swinir-npu.md](docs/swinir-npu.md)
 (Running SwinIR on an AMD Ryzen AI NPU)。
@@ -152,7 +164,7 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 | 4xNomosUni SPAN (`4xNomosUni`) | `4xNomosUni_span_multijpg` | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
 | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) | AMD縮小RRDB版 | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
 | SwinIR-M (`SwinIR`) | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | SwinIR（window attention） | 約53秒 | 約79秒 | 256 / 256 | 38.5 dB |
-| AdcSR (`AdcSR`) | AdcSR net_params_200（SD2.1-base派生） | 生成型1ステップ拡散（UNet+VAEデコーダ） | 約1.3〜1.6秒/128タイル | NPU非対応 | 128 / - | - |
+| AdcSR (`AdcSR`) | AdcSR net_params_200（SD2.1-base派生） | 生成型1ステップ拡散（UNet+VAEデコーダ） | 約1.3〜1.6秒/128タイル | 約2.05秒/128タイル（前半/後半の2プロセス構成） | 128 / 128 | - |
 
 \* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
 \*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。

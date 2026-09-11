@@ -238,6 +238,29 @@ TDR ライブダンプは発生した（閾値は3秒未満）。
 格子状の破綻が全体に出て、4者の中で明確に最も悪かった。bicubic 劣化で学習した軽量モデルは
 実写・アニメの実素材には向かない。GUI には登録しない。
 
+## AdcSR の NPU 対応（2026-09 追記）
+
+AdcSR（net_params_200、SD2.1-base派生・1ステップ）は 1 グラフで NPU 常駐すると
+2 回目以降全画素 NaN になる。切り分けの経緯: 1 グラフで 2 回目以降 NaN →
+73 分割では正常 → N5 書換えで 1 サブグラフ化しても NaN →
+UNet 出力直後で前半 F / 後半 G に切断すると F 単独・G 単独は何回でも正常だが、
+同一プロセスで G を 1 回実行すると F が恒久 NaN（一方向 G→F 汚染）→
+別プロセスに分けると 100/100 回正常（tmp/adcsr-npu/round5/b1/RESULT.md §3〜§4、
+tmp/adcsr-npu/round5/b2/RESULT.md）。
+
+条件: N5 書換え済み bf16cast、境界 3 テンソル（main [1,256,64,64]、
+mean/std [1,3,1,1]、いずれも float32。名前で照合）。
+F の VAIML 受理は 4786/4797 op・498.809 GOPs（単一サブグラフ、約93分）、
+G は 1520/1520 op・658.343 GOPs（約30分）。
+反復は逐次で 2.05 s/タイル（F 0.71＋転送 2.5 ms＋G 1.33）。
+重ね実行は 2.20 s/タイルと遅くなるため逐次に固定。
+
+実装は tools/npu-serve/npu_worker.py（役割別テンソル実行器）と
+tools/npu-serve/npu_twostage.py（TwoStageSession: 起動時セルフテスト、
+タイル単位の健全性検査、1 画像 1 回の内部復旧、復旧不能時は
+TWO_STAGE_FATAL を 1 件。画像単位で同じ AdcSR の DirectML へ再処理）。
+`UEU_ADCSR_NPU2=0` で従来の GPU 実行に戻る。
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。

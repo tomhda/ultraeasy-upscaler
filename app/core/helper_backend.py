@@ -5,11 +5,14 @@ GUIから選ばれる新NPU経路は、旧 ``npu_worker`` ではなく
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import time
 import os
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +21,7 @@ from PIL import Image, ImageOps
 
 from . import binaries, jobs, media
 from .jobs import ProgressCb
-from .serve_client import ServeClient, ServeClientError
+from .serve_client import HelperOutputInvalid, ServeClient, ServeClientError
 from .settings import (
     DEFAULT_HELPER_MODEL,
     DEFAULT_MODEL,
@@ -31,6 +34,9 @@ from .settings import (
     HELPER_MODEL_SWINIR,
     HELPER_DEFAULT_OVERLAP,
     HELPER_MODEL_OVERLAP,
+    ADCSR_NPU2_ENV,
+    ADCSR_NPU_MANIFEST,
+    HELPER_MODEL_NPU_BACK,
     HELPER_SEAM_TEMPLATES,
     canonical_helper_model,
     ModelFamily,
@@ -44,6 +50,12 @@ NPU_PYTHON_ENV = "UEU_NPU_PYTHON"
 NPU_CACHE_ENV = "UEU_NPU_CACHE"
 OVERLAP = 16  # 全モデル共通の既定値（settings.HELPER_DEFAULT_OVERLAP と同じ）。
 HELPER_BACKENDS = frozenset({UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE})
+
+
+# NPU 2段モード (AdcSR 前半/後半) の既定値。
+NPU2_WORKER_TIMEOUT = 60.0
+NPU2_STARTUP_TIMEOUT_HIT = 15 * 60.0
+NPU2_COMPILE_TIMEOUT = 4 * 3600.0
 
 
 class HelperBackendUnavailable(RuntimeError):
@@ -248,6 +260,75 @@ def _helper_env() -> dict[str, str]:
     return env
 
 
+def adcsr_npu2_enabled() -> bool:
+    """UEU_ADCSR_NPU2=0 で無効。それ以外は既定有効。"""
+    return os.environ.get(ADCSR_NPU2_ENV, "1") != "0"
+
+
+def _search_model_file(filename: str) -> Path | None:
+    """models 探索順で filename を探す。無ければ None。"""
+    root = models_dir()
+    root_dirs = (root, root / "span")
+    search_dirs = (
+        (*root_dirs, DEFAULT_VENDOR_MODELS_DIR)
+        if MODELS_DIR_ENV in os.environ
+        else (DEFAULT_VENDOR_MODELS_DIR, *root_dirs)
+    )
+    for search_dir in search_dirs:
+        candidate = search_dir / filename
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def adcsr_two_stage_files() -> tuple[Path, Path, Path] | None:
+    """2 段モードの (front, back, manifest)。揃わなければ None。"""
+    try:
+        front_name = HELPER_MODEL_FILES[UpscaleBackend.NPU_NATIVE][HELPER_MODEL_ADCSR][128]
+        back_name = HELPER_MODEL_NPU_BACK[HELPER_MODEL_ADCSR]
+    except KeyError:
+        return None
+    front = _search_model_file(front_name)
+    back = _search_model_file(back_name)
+    manifest = _search_model_file(ADCSR_NPU_MANIFEST)
+    if front is None or back is None or manifest is None:
+        return None
+    return front, back, manifest
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _two_stage_cache_hit(manifest_path: Path, front_path: Path, back_path: Path) -> bool:
+    """F/G 両方のキャッシュ照合。context.json＋.rai＋マニフェスト SHA-256 一致。"""
+    try:
+        manifest = json.loads(manifest_path.read_bytes().decode("utf-8"))
+    except (OSError, ValueError):
+        return False
+    for side, model_path in (("front", front_path), ("back", back_path)):
+        try:
+            entry = manifest[side]
+            cache = npu_cache_dir() / entry["cache_key"]
+        except (KeyError, TypeError):
+            return False
+        if not (cache / "context.json").is_file():
+            return False
+        if not any(cache.rglob("*.rai")):
+            return False
+        try:
+            digest = _sha256_file(model_path)
+        except OSError:
+            return False
+        if digest != entry.get("sha256"):
+            return False
+    return True
+
+
 def _session_spec(
     settings: UpscaleSettings, width: int, height: int
 ) -> tuple[UpscaleBackend, int, Path]:
@@ -257,7 +338,9 @@ def _session_spec(
     backend = effective_backend(requested, width, height)
     model_key = _model_key(settings)
     if model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
-        backend = UpscaleBackend.WINML_GPU
+        two_stage_pre = adcsr_two_stage_files() if adcsr_npu2_enabled() else None
+        if two_stage_pre is None:
+            backend = UpscaleBackend.WINML_GPU
     if model_key == HELPER_MODEL_ADCSR:
         tile = 128
     elif model_key in (HELPER_MODEL_AMD_RRDB, HELPER_MODEL_SWINIR):
@@ -309,7 +392,20 @@ def open_session(
             python = _npu_python()
             script = _npu_script()
             cache = npu_cache_dir()
-            cache_hit = _cache_hit(model_path)
+            two_stage: tuple[Path, Path, Path] | None = None
+            back_path: Path | None = None
+            manifest_path: Path | None = None
+            if model_key == HELPER_MODEL_ADCSR and adcsr_npu2_enabled():
+                two_stage = adcsr_two_stage_files()
+            if two_stage is not None:
+                front_path, back_path, manifest_path = two_stage
+                model_path = front_path
+                cache_hit = _two_stage_cache_hit(manifest_path, front_path, back_path)
+            elif model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
+                raise HelperBackendUnavailable(
+                    "AdcSR の NPU 2段モード用ファイル (front/back/manifest) が見つかりません")
+            else:
+                cache_hit = _cache_hit(model_path)
             command = [
                 str(python), str(script), "--model", str(model_path),
                 "--cache-dir", str(cache),
@@ -319,14 +415,50 @@ def open_session(
             if seam_template is not None:
                 command += ["--seam-template", str(seam_template)]
             workdir = binaries.repo_root()
+            if two_stage is not None:
+                assert back_path is not None and manifest_path is not None
+                command += [
+                    "--model-back", str(back_path),
+                    "--manifest", str(manifest_path),
+                    "--worker-timeout", str(NPU2_WORKER_TIMEOUT),
+                ]
+                command += ["--allow-compile"] if not cache_hit else ["--require-cache"]
             # 初回VAIMLコンパイルはモデル次第で長い（av3dp512: 約15分、SwinIR-M: 約51分）。
             # キャッシュ有無でタイムアウトを分け、初回コンパイルを打ち切らない。
-            timeout = 15 * 60.0 if cache_hit else 120 * 60.0
+            if two_stage is not None:
+                timeout = NPU2_STARTUP_TIMEOUT_HIT if cache_hit else NPU2_COMPILE_TIMEOUT
+            else:
+                timeout = 15 * 60.0 if cache_hit else 120 * 60.0
             if not cache_hit:
-                progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回から数秒）")
+                if two_stage is not None:
+                    progress(0.0, "NPU 前半を最適化中 1/2（初回のみ。次回はキャッシュを利用）")
+                else:
+                    progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回はキャッシュを利用）")
 
         env = _helper_env()
-        client = ServeClient(command, workdir, env=env)
+        stage_state: dict[str, object] = {"tag": None}
+        boot_start = time.monotonic()
+
+        def _format_stage(tag: str, elapsed: float) -> str:
+            mm_ss = f"{int(elapsed // 60):02d}:{int(elapsed % 60):02d}"
+            if tag == "front-compile":
+                return f"NPU 前半を最適化中 1/2（経過 {mm_ss}。この検証機では約93分）"
+            if tag == "back-compile":
+                return f"NPU 後半を最適化中 2/2（経過 {mm_ss}。この検証機では約30分）"
+            if tag == "selftest":
+                return f"NPU 動作検査中（経過 {mm_ss}）"
+            if tag == "ready":
+                return "NPU 準備完了"
+            return "AI準備中…"
+
+        def _log_line(line: str) -> None:
+            for tag in ("front-compile", "back-compile", "selftest", "ready"):
+                if f"[stage] {tag}" in line:
+                    stage_state["tag"] = tag
+                    progress(0.0, _format_stage(tag, time.monotonic() - boot_start))
+                    break
+
+        client = ServeClient(command, workdir, env=env, log=_log_line)
 
         last_second = -1
 
@@ -337,7 +469,14 @@ def open_session(
                 return
             last_second = second
             if backend == UpscaleBackend.NPU_NATIVE and not cache_hit:
-                progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回から数秒）")
+                tag = stage_state["tag"]
+                if two_stage is not None:
+                    if isinstance(tag, str):
+                        progress(0.0, _format_stage(tag, elapsed))
+                    else:
+                        progress(0.0, _format_stage("front-compile", elapsed))
+                else:
+                    progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回はキャッシュを利用）")
             else:
                 progress(0.0, "AI準備中…")
 
@@ -399,6 +538,41 @@ def _folder_outputs(images: list[Path], target: Path, fmt: str, overwrite: bool)
     return outputs
 
 
+def _upscale_with_adcsr_gpu_retry(
+    session: HelperSession,
+    settings: UpscaleSettings,
+    width: int,
+    height: int,
+    image: "np.ndarray",
+    progress: ProgressCb,
+    cancel=None,
+) -> "np.ndarray":
+    """NPU 2段の TWO_STAGE_FATAL時は同じ AdcSR の DirectML で画像単位に再処理する。
+
+    フォルダ処理で完了済みの画像は再処理しない (呼び出し側が画像単位で呼ぶ)。
+    """
+    try:
+        if cancel is not None:
+            return session.upscale(image, cancel=cancel)
+        return session.upscale(image)
+    except HelperOutputInvalid:
+        if session.backend != UpscaleBackend.NPU_NATIVE:
+            raise
+        if _model_key(settings) != HELPER_MODEL_ADCSR:
+            raise
+        progress(0.1, "NPU 2段で失敗したためGPUで再処理…")
+        gpu_session = open_session(
+            replace(settings, backend=UpscaleBackend.WINML_GPU),
+            width, height, progress, cancel,
+        )
+        try:
+            if cancel is not None:
+                return gpu_session.upscale(image, cancel=cancel)
+            return gpu_session.upscale(image)
+        finally:
+            gpu_session.close(force=cancel is not None and cancel.is_set())
+
+
 def upscale_image(
     in_path: str,
     out_path: str,
@@ -415,7 +589,7 @@ def upscale_image(
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
         progress(0.1, "アップスケール中…")
-        output = session.upscale(image, cancel=cancel) if cancel is not None else session.upscale(image)
+        output = _upscale_with_adcsr_gpu_retry(session, settings, width, height, image, progress, cancel)
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
         _save_rgb(output, Path(out_path), alpha=loaded.alpha, icc_profile=loaded.icc_profile)
@@ -447,6 +621,29 @@ def upscale_folder(
     sessions: dict[tuple[UpscaleBackend, Path], HelperSession] = {}
     fmt = (settings.image_format or "png").lower().replace("jpeg", "jpg")
     outputs = _folder_outputs(images, target, fmt, settings.overwrite)
+    gpu_retry: HelperSession | None = None
+
+    def _upscale_one(active: HelperSession, image: np.ndarray, index: int) -> np.ndarray:
+        nonlocal gpu_retry
+        try:
+            if cancel is not None:
+                return active.upscale(image, cancel=cancel)
+            return active.upscale(image)
+        except HelperOutputInvalid:
+            if active.backend != UpscaleBackend.NPU_NATIVE:
+                raise
+            if _model_key(settings) != HELPER_MODEL_ADCSR:
+                raise
+            progress((index - 1) / total, f"{index}/{total} 枚 NPU 2段で失敗したためGPUで再処理…")
+            height0, width0 = image.shape[:2]
+            if gpu_retry is None:
+                gpu_retry = open_session(
+                    replace(settings, backend=UpscaleBackend.WINML_GPU),
+                    width0, height0, progress, cancel,
+                )
+            if cancel is not None:
+                return gpu_retry.upscale(image, cancel=cancel)
+            return gpu_retry.upscale(image)
     try:
         for index, path in enumerate(images, start=1):
             if cancel is not None and cancel.is_set():
@@ -466,10 +663,12 @@ def upscale_folder(
                     cancel=cancel,
                 )
                 sessions[key] = session
-            output = session.upscale(image, cancel=cancel) if cancel is not None else session.upscale(image)
+            output = _upscale_one(session, image, index)
             _save_rgb(output, outputs[path], alpha=loaded.alpha, icc_profile=loaded.icc_profile)
             progress(index / total, f"{index}/{total} 枚")
     finally:
         force = cancel is not None and cancel.is_set()
         for session in sessions.values():
             session.close(force=force)
+        if gpu_retry is not None:
+            gpu_retry.close(force=force)

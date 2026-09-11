@@ -1,0 +1,15 @@
+{
+  "output": {
+    "center8x8_mean": 0.214385986328125,
+    "mean": 0.29120829701423645,
+    "std": 0.14302636682987213
+  },
+  "provenance": "tmp/adcsr-npu/round5/b1/P_iter01_out.npy: healthy NPU F->G output for the selftest tile (B1 same-process pipe iter01, PSNR 46.79dB vs fp32; B2 steady runs differ only 0.01-0.03dB)",
+  "tile": "adcsr_tile.npy (copy of tmp/adcsr-npu/round5/b1/input_tile.npy: tos center 128, CHW float32 0-1)",
+  "tolerance": {
+    "center8x8_mean": 0.02,
+    "mean": 0.01,
+    "std": 0.01
+  },
+  "units": "float 0-1 (CHW), center8x8 = rows/cols 248:256 all channels"
+}

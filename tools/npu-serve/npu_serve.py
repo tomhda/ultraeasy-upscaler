@@ -15,6 +15,8 @@ os.environ.setdefault("XLNX_ENABLE_CACHE", "1")
 import numpy as np
 import onnxruntime as ort
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 MAGIC_READY = b"UEUH"
 MAGIC_FRAME = b"UEUF"
 MAGIC_DATA = b"UEUD"
@@ -188,6 +190,10 @@ class NpuSession:
 
 
 def serve(args: argparse.Namespace) -> int:
+    if getattr(args, "model_back", None):
+        import npu_twostage
+
+        return npu_twostage.serve_two_stage(args)
     model_path = Path(args.model).resolve()
     if not model_path.is_file():
         raise FileNotFoundError(f"model not found: {model_path}")
@@ -255,6 +261,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--cache-dir", required=True)
     parser.add_argument("--overlap", type=int, default=16)
     parser.add_argument("--warmup", type=int, default=1)
+    # 2 段モード (AdcSR 前半/後半)。--model-back 指定時のみ有効。
+    # 1 モデル経路の既存オプションの意味は変えない。
+    parser.add_argument("--model-back", default=None)
+    parser.add_argument("--manifest", default=None)
+    parser.add_argument("--seam-template", default=None)
+    parser.add_argument("--worker-timeout", type=float, default=60.0)
+    parser.add_argument("--compile-timeout", type=float, default=4 * 3600.0)
+    two_stage_mode = parser.add_mutually_exclusive_group()
+    two_stage_mode.add_argument("--require-cache", action="store_true", default=False)
+    two_stage_mode.add_argument("--allow-compile", action="store_true", default=False)
     return parser
 
 
