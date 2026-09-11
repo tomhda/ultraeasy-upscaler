@@ -12,6 +12,8 @@ B2 の worker_f.py / worker_g.py を置き換える製品版。1プロセスに1
       [--compile-timeout <s>] [--generation <n>]
 
   - stdin/stdout は O_BINARY。stdout はプロトコル専用、ログは stderr のみ。
+    セッション生成中は fd レベルでも stdout を退避する (AIE コンパイラ等の
+    ネイティブ stdout 汚染からプロトコルを守る。詳細は _guard_stdout_during_build)。
   - セッション生成後、READY で入出力の name/dtype/shape/byte 長を JSON で返す。
   - --require-cache (既定): 生成が 60 秒を超えたらキャッシュ未ヒット疑いで
     自ら終了する (開発・検証時の安全弁。再コンパイル開始の保証ではない)。
@@ -33,6 +35,7 @@ nan_to_num で隠さず ERROR 応答に段階・テンソル名・非有限値�
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 import threading
@@ -121,6 +124,54 @@ def _nonfinite_rate(arr) -> float:
     return float((~finite).mean()) if finite.size else 0.0
 
 
+def _set_binary_1() -> None:
+    if os.name == "nt":
+        try:
+            import msvcrt
+
+            msvcrt.setmode(1, os.O_BINARY)
+        except Exception:
+            pass
+
+
+@contextlib.contextmanager
+def _guard_stdout_during_build(target_fd: int = 2):
+    """セッション生成中だけ fd1 (stdout) を target_fd へ向ける。
+
+    stdout は UW2P プロトコル専用だが、VAIML コンパイル中の AIE コンパイラ等
+    ネイティブ側は "Old buffers:" のような行を fd1 へ書く (b1 ログで確認)。
+    アプリ経路ではそれがプロトコル混線→親の desync 終了を起こすため、
+    生成中は fd レベルで退避し、終了後に復元する (Python の print 規律だけでは
+    ネイティブ/孫プロセスの書込みを防げない)。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    saved = None
+    try:
+        saved = os.dup(1)
+        os.dup2(target_fd, 1)
+        _set_binary_1()
+    except OSError as exc:
+        _log(f"stdout guard unavailable ({exc}); continuing unguarded")
+        saved = None
+    try:
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+        if saved is not None:
+            try:
+                os.dup2(saved, 1)
+            finally:
+                os.close(saved)
+            _set_binary_1()
+
+
 def _build_session(args: argparse.Namespace):
     """ORT セッションを別スレッドで生成し、期限で打ち切る。"""
     if ort is None:
@@ -155,8 +206,9 @@ def _build_session(args: argparse.Namespace):
             box["build_s"] = time.perf_counter() - started
 
     thread = threading.Thread(target=_build, name="ort-build", daemon=True)
-    thread.start()
-    thread.join(timeout=deadline)
+    with _guard_stdout_during_build():
+        thread.start()
+        thread.join(timeout=deadline)
     if thread.is_alive():
         mode = "compile" if allow_compile else "require-cache"
         _log(f"WATCHDOG exceeded ({mode} {deadline:g}s) -> exit")

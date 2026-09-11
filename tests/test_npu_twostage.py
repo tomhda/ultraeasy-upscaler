@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import struct
 import sys
 import types
@@ -726,6 +727,82 @@ def test_split_script_help_works_without_onnx() -> None:
         )
         assert proc.returncode == 0, proc.stderr
         assert "--help" in proc.stdout or "usage" in proc.stdout.lower()
+
+
+def test_build_guard_redirects_fd1_and_restores(tmp_path: Path, capfd) -> None:
+    """セッション生成ガード: fd1 への書込みを退避し、終了後に復元する。"""
+    import npu_worker
+
+    sink_path = tmp_path / "sink.bin"
+    with open(sink_path, "wb") as sink:
+        with npu_worker._guard_stdout_during_build(target_fd=sink.fileno()):
+            os.write(1, b"Old buffers:\n")
+    # 退避中は sink へ (バイナリのため \r\n 化なし)
+    assert sink_path.read_bytes() == b"Old buffers:\n"
+    # 復元後は fd1 が元に戻り、sink へは追記されない
+    os.write(1, b"guard-restored\n")
+    assert "guard-restored" in capfd.readouterr().out
+    assert sink_path.read_bytes() == b"Old buffers:\n"
+
+
+def test_build_chatter_does_not_pollute_protocol(monkeypatch, tmp_path: Path,
+                                                 capfd) -> None:
+    """AIE コンパイラ相当の stdout 汚染があっても READY/DATA が壊れない。"""
+    import npu_proto as proto_check
+
+    (tmp_path / "model.onnx").write_bytes(b"fake")
+    expected = np.zeros((1, 3, 512, 512), dtype=np.float32)
+    npu_worker = _install_fake_worker(monkeypatch, [expected])
+
+    real_inference_session = npu_worker.ort.InferenceSession
+
+    def noisy_build(*args, **kwargs):
+        os.write(1, b"Old buffers:\nL3_OFM_Buffer_spill_layer_47\n")
+        return real_inference_session(*args, **kwargs)
+
+    monkeypatch.setattr(npu_worker.ort, "InferenceSession", noisy_build)
+    stdin = io.BytesIO()
+    proto_check.send_message(stdin, proto_check.T_DATA, 5, 7, proto_check.pack_tensors(
+        [np.zeros((1, 256, 64, 64), dtype=np.float32).tobytes(),
+         np.zeros((1, 3, 1, 1), dtype=np.float32).tobytes(),
+         np.zeros((1, 3, 1, 1), dtype=np.float32).tobytes()]))
+    proto_check.send_message(stdin, proto_check.T_QUIT, 5, 0, b"")
+    out = _run_worker(npu_worker, _worker_args(tmp_path), stdin.getvalue())
+    assert b"Old buffers" not in out
+    captured = capfd.readouterr()
+    assert "Old buffers" in captured.err
+    stream = io.BytesIO(out)
+    mtype, _gen, _rid, length = proto_check.recv_header(stream)
+    assert mtype == proto_check.T_READY
+
+
+def test_start_workers_announces_back_compile_between_readies(monkeypatch,
+                                                              tmp_path: Path) -> None:
+    """後半ビルド開始時点で [stage] back-compile を出す (前半表示のままにしない)。"""
+    import npu_twostage
+
+    order: list[str] = []
+
+    class _RecConn(_FakeConn):
+        def wait_ready(self, timeout: float) -> dict:
+            order.append(f"{self.role}-ready")
+            return _front_ready() if self.role == "front" else _back_ready()
+
+    _FakeConn.instances.clear()
+    monkeypatch.setattr(npu_twostage, "_WorkerConn", _RecConn)
+    monkeypatch.setattr(npu_twostage, "_log", lambda msg: order.append(f"log:{msg}"))
+    (tmp_path / "front.onnx").write_bytes(b"front")
+    (tmp_path / "back.onnx").write_bytes(b"back")
+    session = npu_twostage.TwoStageSession(
+        front_model=tmp_path / "front.onnx", front_cache_key="ck_f",
+        back_model=tmp_path / "back.onnx", back_cache_key="ck_b",
+        cache_dir=tmp_path / "cache", boundary_names=["main", "mean", "std"],
+        overlap=32, worker_timeout=5.0, require_cache=True, model_family="AdcSR")
+    session._start_workers()
+    assert order[0] == "front-ready"
+    assert order[1] == "log:[stage] back-compile"
+    assert order[2] == "back-ready"
+    assert order[3].startswith("log:[stage] workers-ready")
 
 
 def test_split_manifest_satisfies_loader(tmp_path: Path) -> None:

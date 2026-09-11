@@ -832,6 +832,9 @@ class TwoStageSession:
             front.abort()
             front._close_pipes()
             raise
+        # 前半 READY〜後半ビルド開始を宣言する (後半コンパイル中も「前半 1/2」と
+        # 出たままになるのを防ぐ。start() 側の同タグは冗長のため除去)。
+        _log("[stage] back-compile")
         back = _WorkerConn(
             role="back", model=self.back_model, cache_dir=self.cache_dir,
             cache_key=self.back_cache_key, generation=self.generation,
@@ -977,7 +980,6 @@ class TwoStageSession:
         _log("[stage] front-compile")
         self._log_startup_block()
         self._start_workers()
-        _log("[stage] back-compile")
         self._selftest()
         _log(f"[stage] ready (scale x{self.scale}, tile {self.tile_w}x{self.tile_h}, "
              f"overlap={self.overlap})")
