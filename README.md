@@ -56,6 +56,10 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 | `UEU_MODELS_DIR` | `tmp/npu-anime` | GPU fp32 / SPANモデルの探索先 |
 | `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU常駐サーバーを起動するPython |
 | `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU EPのセッションキャッシュ |
+| `UEU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA環境のPython |
+| `UEU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M重みの明示指定 |
+| `UEU_SWINIR_STARTUP_TIMEOUT` | `1800`秒 | CUDA workerの起動待ち（30～86400秒） |
+| `UEU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100～300フレーム） |
 | `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264出力の最大幅×高さ（例: `1920x1080`） |
 
 機械固有の絶対パスはソースへ埋め込まない。重み・ONNX・NPUキャッシュは新規にgitへ
@@ -190,6 +194,29 @@ Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
 モデル別では、3秒動画のE2EがAnime Video v3で7.570秒 / 7.513秒、purephotoで8.405秒 / **7.576秒**、Real-ESRGANで**23.310秒** / 24.694秒（DirectML / TensorRT）となり、TensorRTの優位はモデル依存だった。
 
 AdcSRは静止画専用のため動画には使用できない。`tos`（1280x534）では128タイル180枚（マージン32・コア64）、DirectMLで約260〜280秒（約4.5分）だった。マージンを16から32に広げたのは継ぎ目の低周波の暗部を減らすため（docs/adcsr-tile-diagnosis.md 参照）。合成時は継ぎ目の格子補正（平坦領域限定・固定テンプレート）を適用する（同文書の追記参照）。
+
+### SwinIR-M（NVIDIA / PyTorch CUDA・超低速）
+
+公式SwinIR-M real-world x4を、実写の質感復元を重視する任意機能として利用できる。
+PyTorch CUDA環境と重みは大きいため、通常環境とは分けて `tmp/` に導入する。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_swinir.ps1
+```
+
+導入後、GUIの「AI実行先」で `SwinIR-M（CUDA・超低速）` を選ぶ。4x・BF16固定で、
+既定タイルは256。詳細設定の「メモリ節約」「強めに節約」は128/64タイルとして反映される。
+起動できない場合に別モデルへ自動変更はしない。
+
+動画は150フレーム単位でH.264チャンクを確定する。中止・異常終了後に同じ入力と設定で再実行すると、
+完了済みチャンクを飛ばして続きから再開する。再開データは出力先の
+`.＜出力名＞.swinir-work-*` に残り、正式出力の完成後だけ自動削除される。SwinIR CUDA動画と
+RIFEの併用、HDR動画には未対応。開始時に入力全体のSHA-256とCFR変換後の正確なフレーム数を確認する。
+音声保持、フレーム進捗、キャンセル、4K自動フィットには対応する。
+
+RTX 5060 Tiでは実写1秒でもE2E約19秒、640x480アニメ1秒で約57秒だった。FP16は実画像で
+数値不安定だったため使用せず、測定値・比較画像・ライセンスは
+[docs/swinir-experimental.md](docs/swinir-experimental.md) にまとめている。
 
 動画（rawvideoパイプライン・音声保持・3秒クリップのE2E実測）:
 

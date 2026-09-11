@@ -48,8 +48,17 @@ WINML_HELPER_ENV = "UEU_WINML_HELPER"
 MODELS_DIR_ENV = "UEU_MODELS_DIR"
 NPU_PYTHON_ENV = "UEU_NPU_PYTHON"
 NPU_CACHE_ENV = "UEU_NPU_CACHE"
+SWINIR_PYTHON_ENV = "UEU_SWINIR_PYTHON"
+SWINIR_MODEL_ENV = "UEU_SWINIR_MODEL"
+SWINIR_STARTUP_TIMEOUT_ENV = "UEU_SWINIR_STARTUP_TIMEOUT"
+SWINIR_DEFAULT_STARTUP_TIMEOUT = 30 * 60.0
+SWINIR_MODEL_NAME = "003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth"
 OVERLAP = 16  # 全モデル共通の既定値（settings.HELPER_DEFAULT_OVERLAP と同じ）。
-HELPER_BACKENDS = frozenset({UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE})
+HELPER_BACKENDS = frozenset({
+    UpscaleBackend.WINML_GPU,
+    UpscaleBackend.NPU_NATIVE,
+    UpscaleBackend.SWINIR_CUDA,
+})
 
 
 # NPU 2段モード (AdcSR 前半/後半) の既定値。
@@ -238,6 +247,51 @@ def _npu_script() -> Path:
     return script.resolve()
 
 
+def _swinir_python() -> Path:
+    default = binaries.repo_root() / "tmp" / "swinir-venv" / "Scripts" / "python.exe"
+    candidate = Path(os.environ.get(SWINIR_PYTHON_ENV, str(default))).expanduser()
+    if not candidate.is_file():
+        raise HelperBackendUnavailable(
+            "SwinIR用Pythonが見つかりません。"
+            "scripts\\setup_swinir.ps1を実行するか、"
+            f"{SWINIR_PYTHON_ENV}を指定してください: {candidate}"
+        )
+    return candidate.resolve()
+
+
+def _swinir_script() -> Path:
+    script = binaries.repo_root() / "tools" / "swinir" / "worker.py"
+    if not script.is_file():
+        raise HelperBackendUnavailable(f"SwinIRワーカーが見つかりません: {script}")
+    return script.resolve()
+
+
+def _swinir_model() -> Path:
+    default = binaries.repo_root() / "tmp" / "swinir-models" / SWINIR_MODEL_NAME
+    candidate = Path(os.environ.get(SWINIR_MODEL_ENV, str(default))).expanduser()
+    if not candidate.is_file():
+        raise HelperBackendUnavailable(
+            "SwinIR-Mモデルが見つかりません。"
+            "scripts\\setup_swinir.ps1を実行するか、"
+            f"{SWINIR_MODEL_ENV}を指定してください: {candidate}"
+        )
+    return candidate.resolve()
+
+
+def _swinir_startup_timeout() -> float:
+    """CUDA初期化が遅い環境向けに、起動待ちを秒単位で上書き可能にする。"""
+    raw = os.environ.get(SWINIR_STARTUP_TIMEOUT_ENV)
+    if raw is None:
+        return SWINIR_DEFAULT_STARTUP_TIMEOUT
+    try:
+        seconds = float(raw)
+    except ValueError:
+        return SWINIR_DEFAULT_STARTUP_TIMEOUT
+    if not math.isfinite(seconds):
+        return SWINIR_DEFAULT_STARTUP_TIMEOUT
+    return max(30.0, min(24 * 60 * 60.0, seconds))
+
+
 def _cache_hit(model_path: Path) -> bool:
     cache = npu_cache_dir() / f"modelcachekey_{model_path.stem}"
     return (cache / "context.json").is_file() and any(cache.rglob("*.rai"))
@@ -337,6 +391,10 @@ def _session_spec(
     requested = settings.backend
     backend = effective_backend(requested, width, height)
     model_key = _model_key(settings)
+    if backend == UpscaleBackend.SWINIR_CUDA:
+        if model_key != HELPER_MODEL_SWINIR:
+            raise HelperBackendUnavailable("CUDA版SwinIRはSwinIR-Mモデル専用です。")
+        return backend, 256, _swinir_model()
     if model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
         two_stage_pre = adcsr_two_stage_files() if adcsr_npu2_enabled() else None
         if two_stage_pre is None:
@@ -364,7 +422,9 @@ def open_session(
         backend, _tile, model_path = _session_spec(settings, width, height)
         model_key = _model_key(settings)
         overlap = overlap_for_model(model_key)
-        if settings.backend == UpscaleBackend.NPU_NATIVE and backend == UpscaleBackend.WINML_GPU:
+        if backend == UpscaleBackend.SWINIR_CUDA:
+            progress(0.0, "SwinIR-MをCUDAへ読み込み中…")
+        elif settings.backend == UpscaleBackend.NPU_NATIVE and backend == UpscaleBackend.WINML_GPU:
             if model_key == HELPER_MODEL_ADCSR:
                 progress(0.0, "AdcSRはNPU非対応のためGPUで実行…")
             else:
@@ -373,7 +433,30 @@ def open_session(
             progress(0.0, "AI準備中…")
 
         cache_hit = True
-        if backend == UpscaleBackend.WINML_GPU:
+        if backend == UpscaleBackend.SWINIR_CUDA:
+            python = _swinir_python()
+            script = _swinir_script()
+            swinir_tile = int(settings.tile_size) if int(settings.tile_size) > 0 else 256
+            if swinir_tile % 8:
+                raise HelperBackendUnavailable("SwinIRのタイルサイズは8の倍数にしてください。")
+            swinir_overlap = min(32, swinir_tile // 2)
+            swinir_device = (
+                f"cuda:{int(settings.gpu_id)}"
+                if int(settings.gpu_id) >= 0
+                else "cuda"
+            )
+            command = [
+                str(python), str(script), "serve",
+                "--model", str(model_path),
+                "--model-kind", "real_sr_m",
+                "--device", swinir_device,
+                "--precision", "bf16",
+                "--tile", str(swinir_tile),
+                "--tile-overlap", str(swinir_overlap),
+            ]
+            workdir = script.parent
+            timeout = _swinir_startup_timeout()
+        elif backend == UpscaleBackend.WINML_GPU:
             helper = _winml_helper()
             command = [
                 str(helper), "serve", "--model", str(model_path),
@@ -468,7 +551,9 @@ def open_session(
             if second == last_second:
                 return
             last_second = second
-            if backend == UpscaleBackend.NPU_NATIVE and not cache_hit:
+            if backend == UpscaleBackend.SWINIR_CUDA:
+                progress(0.0, "SwinIR-MをCUDAへ読み込み中…")
+            elif backend == UpscaleBackend.NPU_NATIVE and not cache_hit:
                 tag = stage_state["tag"]
                 if two_stage is not None:
                     if isinstance(tag, str):

@@ -58,9 +58,14 @@ _BACKEND_OPTIONS = [
     ("自動（GPU優先）", "auto"),
     ("GPU（DirectML）", UpscaleBackend.WINML_GPU.value),
     ("NPU（GPU温存）", UpscaleBackend.NPU_NATIVE.value),
+    ("SwinIR-M（CUDA・超低速）", UpscaleBackend.SWINIR_CUDA.value),
     ("Vulkan", UpscaleBackend.VULKAN.value),
 ]
-_HELPER_BACKENDS = {UpscaleBackend.WINML_GPU, UpscaleBackend.NPU_NATIVE}
+_HELPER_BACKENDS = {
+    UpscaleBackend.WINML_GPU,
+    UpscaleBackend.NPU_NATIVE,
+    UpscaleBackend.SWINIR_CUDA,
+}
 _MODEL_LABELS = {
     "realesrgan-x4plus": "Real-ESRGAN",
     "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
@@ -84,11 +89,16 @@ _HELPER_MODEL_OPTIONS = [
 _HELPER_MODEL_VALUES = {
     value for _label, value in _HELPER_MODEL_OPTIONS if value is not None
 }
+_SWINIR_CUDA_MODEL_OPTIONS = [
+    ("なし（拡大しない）", None),
+    ("SwinIR-M（real-world x4）", HELPER_MODEL_SWINIR),
+]
 
 # バックエンド自体の説明（選択に連動して説明行の先頭に出す）
 _BACKEND_DESC = {
     UpscaleBackend.WINML_GPU: "GPU：DirectMLで実行。起動できない場合はVulkanへ切替",
     UpscaleBackend.NPU_NATIVE: "NPU：GPUを温存。Ryzen AIの常駐サーバーで実行",
+    UpscaleBackend.SWINIR_CUDA: "CUDA：実写の質感重視。動画は1秒あたり数十秒かかる超低速処理",
     UpscaleBackend.VULKAN: "GPU：最速クラス。処理中は他の作業と競合し発熱大",
     UpscaleBackend.NPU: "NPU：GPUを使わないので静かで、他の作業と並走できる",
 }
@@ -132,6 +142,8 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str],
         ("△", "◎", "○", "◎", None),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SWINIR):
         ("✕", "◎", "○", "◎", "静止画"),
+    (UpscaleBackend.SWINIR_CUDA, HELPER_MODEL_SWINIR):
+        ("極遅", "◎◎", "△", "◎", "実写・再開可"),
 }
 
 
@@ -283,6 +295,7 @@ class MainWindow(QWidget):
             self.backend_combo.addItem(label, value)
         self.backend_combo.setToolTip(
             "自動はDirectML GPUを優先します。GPU/NPUのヘルパーが起動できない場合はVulkanへ切り替えます。\n"
+            "SwinIR CUDAは別途セットアップが必要で、動画は非常に時間がかかります。\n"
             "新AIモデルは4x固定、Vulkanを選ぶと従来モデルを表示します。"
         )
         row.addLayout(self._field("AI実行先", self._compact(self.backend_combo)), 1)
@@ -530,14 +543,25 @@ class MainWindow(QWidget):
         backend = self._selected_backend()
         if backend in _HELPER_BACKENDS:
             selected = self.model_combo.currentData()
+            options = (
+                _SWINIR_CUDA_MODEL_OPTIONS
+                if backend == UpscaleBackend.SWINIR_CUDA
+                else _HELPER_MODEL_OPTIONS
+            )
+            allowed = {value for _label, value in options}
             # 初回（項目未構築）だけ具体的な既定モデルを使う。
             # 既に「なし」が選択されている場合は、バックエンド切替時にも
             # その明示的な選択を維持する。
+            default_model = (
+                HELPER_MODEL_SWINIR
+                if backend == UpscaleBackend.SWINIR_CUDA
+                else DEFAULT_HELPER_MODEL
+            )
             if self.model_combo.count() == 0:
-                selected = DEFAULT_HELPER_MODEL
-            elif selected is not None and selected not in _HELPER_MODEL_VALUES:
-                selected = DEFAULT_HELPER_MODEL
-            self._replace_model_items(_HELPER_MODEL_OPTIONS, selected)
+                selected = default_model
+            elif selected is not None and selected not in allowed:
+                selected = default_model
+            self._replace_model_items(options, selected)
             self._refresh_scale_enabled()
             return
 

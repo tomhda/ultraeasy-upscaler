@@ -56,10 +56,11 @@ _BACKEND_OPTIONS = [
     ("自動（GPU優先）", "auto"),
     ("GPU（DirectML）", UpscaleBackend.WINML_GPU.value),
     ("NPU（GPU温存）", UpscaleBackend.NPU_NATIVE.value),
+    ("SwinIR-M（CUDA・超低速）", UpscaleBackend.SWINIR_CUDA.value),
     ("Vulkan", UpscaleBackend.VULKAN.value),
 ]
 _HELP = {
-    "backend": "AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。",
+    "backend": "AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。SwinIR CUDAは実写向けですが動画処理は非常に低速です。",
     "image_format": "画像を書き出す形式です。pngは劣化なし、jpgは容量小、webpは容量を抑えやすい形式です。",
     "video_format": "動画ファイルの保存形式です。mp4は再生互換性が高く、mkv/movは用途に合わせて選びます。",
     "video_quality": "CRF/QPは動画の圧縮品質です。数字が小さいほど高画質で容量は大きくなります。",

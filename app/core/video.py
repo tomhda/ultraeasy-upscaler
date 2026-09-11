@@ -8,21 +8,31 @@
 """
 from __future__ import annotations
 
-import re
-import queue
+import hashlib
+import json
 import os
+import queue
+import re
 import shutil
 import subprocess
 import tempfile
 import threading
 import time
+from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 from . import binaries
 from .jobs import Cancelled, ProgressCb
-from .settings import UpscaleSettings
+from .settings import (
+    HELPER_MODEL_SWINIR,
+    UpscaleBackend,
+    UpscaleSettings,
+    canonical_helper_model,
+)
 
 # 抽出フレームのファイル名パターン（抽出と再結合で必ず一致させる）
 FRAME_PATTERN = "frame_%08d.png"
@@ -508,6 +518,558 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
 
     if progress:
         progress(1.0, "再結合完了")
+
+
+SWINIR_PYTHON_ENV = "UEU_SWINIR_PYTHON"
+SWINIR_MODEL_ENV = "UEU_SWINIR_MODEL"
+SWINIR_CHUNK_FRAMES_ENV = "UEU_SWINIR_CHUNK_FRAMES"
+SWINIR_DEFAULT_CHUNK_FRAMES = 150
+SWINIR_MODEL_NAME = "003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth"
+
+
+def _swinir_file_sha256(path: Path, cancel=None) -> str:
+    """再開対象の内容を厳密に照合するため、ファイル全体をハッシュする。"""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while True:
+            if cancel is not None and cancel.is_set():
+                raise Cancelled()
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _swinir_paths() -> tuple[Path, Path, Path]:
+    """SwinIR CUDA worker, script, and weight pathsを解決する。"""
+    root = binaries.repo_root()
+    python = Path(os.environ.get(
+        SWINIR_PYTHON_ENV,
+        str(root / "tmp" / "swinir-venv" / "Scripts" / "python.exe"),
+    )).expanduser()
+    model = Path(os.environ.get(
+        SWINIR_MODEL_ENV,
+        str(root / "tmp" / "swinir-models" / SWINIR_MODEL_NAME),
+    )).expanduser()
+    script = root / "tools" / "swinir" / "worker.py"
+    if not python.is_file():
+        raise RuntimeError(f"SwinIR CUDA用Pythonが見つかりません: {python}")
+    if not script.is_file():
+        raise RuntimeError(f"SwinIR CUDAワーカーが見つかりません: {script}")
+    if not model.is_file():
+        raise RuntimeError(f"SwinIR CUDAの重みが見つかりません: {model}")
+    return python.resolve(), script.resolve(), model.resolve()
+
+
+def _swinir_identity(
+    in_path: str,
+    settings: UpscaleSettings,
+    video_encoder: str,
+    cancel=None,
+) -> dict[str, object]:
+    """再開可否を決める入力・設定・モデルの同一性情報を作る。"""
+    source = Path(in_path).resolve()
+    stat = source.stat()
+    _python, script, model = _swinir_paths()
+
+    def file_identity(path: Path) -> dict[str, object]:
+        try:
+            item = path.stat()
+        except OSError:
+            return {"path": str(path), "missing": True}
+        return {
+            "path": str(path), "size": item.st_size,
+            "mtime_ns": item.st_mtime_ns,
+            "sha256": _swinir_file_sha256(path, cancel),
+        }
+
+    def normalize(value):
+        # JSON再読込後はtupleがlistになるため、保存前から同じ形へ揃える。
+        if hasattr(value, "value"):
+            return normalize(value.value)
+        if isinstance(value, dict):
+            return {str(key): normalize(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [normalize(item) for item in value]
+        return value
+
+    normalized = normalize(asdict(settings))
+    return {
+        "input": {
+            "path": str(source), "size": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+            "sha256": _swinir_file_sha256(source, cancel),
+        },
+        "settings": normalized,
+        "video_encoder": video_encoder,
+        "model": file_identity(model),
+        "worker": file_identity(script),
+    }
+
+
+def swinir_workdir(in_path: str, out_path: str, settings: UpscaleSettings) -> Path:
+    """SwinIRの再開用作業ディレクトリを返す（生成・削除は呼び出し側）。"""
+    del settings
+    # 内容の厳密なSHA-256検証は処理側で一度だけ行う。ここでは長尺入力を
+    # 二重に全読み込みしないよう、安定した入出力パスだけで作業名を決める。
+    payload = json.dumps(
+        {
+            "input": str(Path(in_path).resolve()),
+            "output": str(Path(out_path).resolve()),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    out = Path(out_path).resolve()
+    return out.parent / f".{out.name}.swinir-work-{digest}"
+
+
+def _atomic_json(path: Path, value: object) -> None:
+    """manifestを同一ディレクトリ内でfsyncして原子的に更新する。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(value, stream, ensure_ascii=False, sort_keys=True, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(name, path)
+    except BaseException:
+        try:
+            os.unlink(name)
+        except OSError:
+            pass
+        raise
+
+
+def _swinir_chunk_size() -> int:
+    value = os.environ.get(SWINIR_CHUNK_FRAMES_ENV)
+    if value is None:
+        return SWINIR_DEFAULT_CHUNK_FRAMES
+    try:
+        count = int(value)
+    except ValueError:
+        return SWINIR_DEFAULT_CHUNK_FRAMES
+    return max(100, min(300, count))
+
+
+def _run_capture_cancelable(cmd: list[str], cancel) -> tuple[int, str, str]:
+    """stdout/stderrを詰まらせず、キャンセル可能な形でコマンドを待つ。"""
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=_NO_WINDOW,
+    )
+    try:
+        while True:
+            try:
+                stdout, stderr = proc.communicate(timeout=0.2)
+                return proc.returncode, stdout or "", stderr or ""
+            except subprocess.TimeoutExpired:
+                if cancel is not None and cancel.is_set():
+                    _terminate(proc)
+                    raise Cancelled()
+    finally:
+        if proc.poll() is None:
+            _terminate(proc)
+
+
+def _swinir_count_cfr_frames(in_path: str, fps: float, cancel) -> int:
+    """本処理と同じCFR変換を空出力し、実際のrawフレーム数を先に確定する。"""
+    cmd = [
+        binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-progress", "pipe:1", "-nostats",
+        "-i", in_path, "-map", "0:v:0", "-fps_mode", "cfr",
+        "-r", repr(float(fps)), "-f", "null", os.devnull,
+    ]
+    returncode, stdout, stderr = _run_capture_cancelable(cmd, cancel)
+    if returncode != 0:
+        raise RuntimeError("SwinIR動画のフレーム数確認に失敗しました:\n" + stderr)
+    frames = 0
+    for line in stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key == "frame":
+            try:
+                frames = max(frames, int(value))
+            except ValueError:
+                pass
+    if frames <= 0:
+        raise RuntimeError("SwinIR動画のCFR変換後フレーム数を取得できません")
+    return frames
+
+
+def _drain_binary_lines(stream, target: list[str]) -> None:
+    """ffmpegのstderrを処理中から排出し、OSパイプの上限で止まるのを防ぐ。"""
+    if stream is None:
+        return
+    try:
+        for raw in iter(stream.readline, b""):
+            target.append(raw.decode("utf-8", errors="replace").rstrip())
+    except Exception:
+        pass
+
+
+def _swinir_session(
+    settings: UpscaleSettings,
+    width: int,
+    height: int,
+    progress: ProgressCb,
+    cancel,
+):
+    """共通helper解決を使ってPyTorch CUDA workerを常駐起動する。"""
+    from . import helper_backend
+
+    return helper_backend.open_session(settings, width, height, progress, cancel)
+
+
+def _swinir_open_decoder(in_path: str, fps: float):
+    """動画を一度だけraw RGB24へ展開するdecoderを起動する。"""
+    cmd = [
+        binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-i", in_path, "-map", "0:v:0", "-fps_mode", "cfr",
+        "-r", repr(float(fps)),
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+    ]
+    return subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL, bufsize=0, creationflags=_NO_WINDOW,
+    )
+
+
+def _swinir_discard_frames(decoder, frame_bytes: int, count: int, cancel) -> None:
+    """既に完了済みのチャンクをAI処理せずdecoderから読み捨てる。"""
+    assert decoder.stdout is not None
+    for _ in range(count):
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        if _read_raw_frame(decoder.stdout, frame_bytes) is None:
+            raise RuntimeError("SwinIR動画decoderのフレーム数が不足しています")
+
+
+def _swinir_encode_chunk(
+    path: Path,
+    width: int,
+    height: int,
+    fps: float,
+    settings: UpscaleSettings,
+    video_encoder: str,
+    video_filter: str,
+):
+    """H.264チャンクのencoderを起動する。チャンクごとに一度だけencodeする。"""
+    command = [
+        binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s:v", f"{width}x{height}",
+        "-r", repr(float(fps)), "-i", "pipe:0", "-vf", video_filter,
+        *_encoder_args(video_encoder, settings.video_quality), "-pix_fmt", "yuv420p",
+        "-r", repr(float(fps)), "-an", "-reset_timestamps", "1",
+        "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+        str(path),
+    ]
+    return subprocess.Popen(
+        command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE, bufsize=0, creationflags=_NO_WINDOW,
+    )
+
+
+def _swinir_run_chunk(
+    in_path: str,
+    chunk_path: Path,
+    start: int,
+    count: int,
+    width: int,
+    height: int,
+    out_width: int,
+    out_height: int,
+    fps: float,
+    settings: UpscaleSettings,
+    video_encoder: str,
+    video_filter: str,
+    session,
+    progress: ProgressCb,
+    processed_before: int,
+    total_frames: int,
+    cancel,
+    *,
+    decoder_proc=None,
+) -> int:
+    """1チャンクを処理し、成功時だけH.264ファイルを残す。"""
+    del in_path, start
+    if decoder_proc is None:
+        raise ValueError("SwinIRチャンク処理には共有decoderが必要です")
+    # 拡張子はffmpegの出力形式判定に使われるため、.tmpを拡張子の前へ置く。
+    tmp = chunk_path.with_name(f".{chunk_path.stem}.tmp{chunk_path.suffix}")
+    tmp.unlink(missing_ok=True)
+    decoder = decoder_proc
+    encoder = None
+    decoded = encoded = 0
+    encoder_stderr: list[str] = []
+    encoder_drain = None
+    try:
+        frame_bytes = width * height * 3
+        encoder = _swinir_encode_chunk(
+            tmp,
+            out_width,
+            out_height,
+            fps,
+            settings,
+            video_encoder,
+            video_filter,
+        )
+        assert decoder.stdout is not None and encoder.stdin is not None
+        encoder_drain = threading.Thread(
+            target=_drain_binary_lines,
+            args=(encoder.stderr, encoder_stderr),
+            name="ueu-swinir-encode-stderr",
+            daemon=True,
+        )
+        encoder_drain.start()
+        while decoded < count:
+            if cancel is not None and cancel.is_set():
+                raise Cancelled()
+            raw = _read_raw_frame(decoder.stdout, frame_bytes)
+            if raw is None:
+                break
+            image = np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3).copy()
+            output = session.upscale(image, cancel=cancel)
+            encoder.stdin.write(np.ascontiguousarray(output).tobytes())
+            decoded += 1
+            encoded += 1
+            progress(
+                0.97 * (processed_before + encoded) / total_frames,
+                f"SwinIR動画 {processed_before + encoded}/{total_frames}フレーム",
+            )
+        encoder.stdin.close()
+        encoder_ret = encoder.wait()
+        encoder_drain.join(timeout=2.0)
+        if decoded != count:
+            raise RuntimeError(f"SwinIRチャンクのフレーム数が不足しています: {decoded}/{count}")
+        if encoder_ret != 0:
+            raise RuntimeError(
+                "SwinIRチャンクのffmpeg処理に失敗しました:\n"
+                + "\n".join(encoder_stderr[-15:])
+            )
+        if not tmp.is_file() or tmp.stat().st_size == 0:
+            raise RuntimeError("SwinIRチャンクが生成されませんでした")
+        os.replace(tmp, chunk_path)
+        return encoded
+    except BaseException:
+        if encoder is not None and encoder.poll() is None:
+            _terminate(encoder)
+        if encoder_drain is not None:
+            encoder_drain.join(timeout=2.0)
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _swinir_concat_mux(
+    chunks: list[Path],
+    source: str,
+    out_path: str,
+    settings: UpscaleSettings,
+    cancel=None,
+) -> None:
+    """H.264映像をstream copyし、元音声だけAACへ再エンコードする。"""
+    list_path = chunks[0].parent / "concat.txt"
+    list_path.write_text(
+        "".join(f"file '{path.as_posix().replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n" for path in chunks),
+        encoding="utf-8",
+    )
+    cmd = [
+        binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
+        "-f", "concat", "-safe", "0", "-i", str(list_path), "-i", source,
+        "-map", "0:v:0",
+    ]
+    if settings.keep_audio:
+        cmd += ["-map", "1:a:0?", "-c:a", "aac", "-b:a", "192k"]
+    else:
+        cmd += ["-an"]
+    cmd += ["-c:v", "copy"]
+    if Path(out_path).suffix.lower() in {".mp4", ".mov"}:
+        cmd += ["-movflags", "+faststart"]
+    cmd += [str(out_path)]
+    try:
+        returncode, _stdout, stderr = _run_capture_cancelable(cmd, cancel)
+    finally:
+        list_path.unlink(missing_ok=True)
+    if returncode != 0:
+        raise RuntimeError("SwinIRチャンクの結合に失敗しました:\n" + stderr)
+    if not Path(out_path).is_file() or Path(out_path).stat().st_size == 0:
+        raise RuntimeError(f"SwinIR動画出力が生成されませんでした: {out_path}")
+
+
+def upscale_video_swinir_chunked(
+    in_path: str,
+    out_path: str,
+    settings: UpscaleSettings,
+    work_dir: str | Path | None = None,
+    progress: Optional[ProgressCb] = None,
+    cancel=None,
+) -> Path:
+    """SwinIR CUDA動画をH.264チャンクへ保存し、manifestから再開する。"""
+    progress = progress or (lambda _fraction, _message: None)
+    if settings.backend != UpscaleBackend.SWINIR_CUDA:
+        raise ValueError("SwinIR CUDAチャンク経路にはSWINIR_CUDA backendが必要です")
+    if canonical_helper_model(settings.model) != HELPER_MODEL_SWINIR:
+        raise ValueError("SwinIR CUDA経路ではSwinIR-Mモデルを選択してください")
+    from . import media
+    info = media.probe(in_path)
+    if info.color_transfer in {"smpte2084", "arib-std-b67"}:
+        raise ValueError("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+    width, height = info.display_width, info.display_height
+    fps = info.fps or 30.0
+    if width <= 0 or height <= 0:
+        raise RuntimeError("SwinIR動画の解像度を取得できません")
+    work = Path(work_dir) if work_dir is not None else swinir_workdir(in_path, out_path, settings)
+    work.mkdir(parents=True, exist_ok=True)
+    progress(0.0, "SwinIR動画の再開データを確認中…")
+    video_encoder = detect_hw_encoder("h264") if settings.hw_encode else None
+    video_encoder = video_encoder or "libx264"
+    identity = _swinir_identity(in_path, settings, video_encoder, cancel)
+    manifest_path = work / "manifest.json"
+    manifest: dict[str, object]
+    if manifest_path.is_file():
+        try:
+            loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = None
+        if isinstance(loaded, dict) and loaded.get("identity") == identity:
+            manifest = loaded
+        else:
+            # 旧設定のチャンクは同じwork_dirへ持ち込まず、新manifestで無効化する。
+            manifest = {"version": 2, "identity": identity, "chunks": []}
+    else:
+        manifest = {"version": 2, "identity": identity, "chunks": []}
+
+    cached_total = manifest.get("cfr_frame_count")
+    if isinstance(cached_total, int) and cached_total > 0:
+        total = cached_total
+    else:
+        progress(0.0, "SwinIR動画のフレーム数を確認中…")
+        total = _swinir_count_cfr_frames(in_path, fps, cancel)
+    manifest["identity"] = identity
+    manifest["version"] = 2
+    manifest["cfr_frame_count"] = total
+    manifest["total_frames"] = total
+    manifest["fps"] = fps
+    manifest["width"] = width
+    manifest["height"] = height
+    _atomic_json(manifest_path, manifest)
+
+    chunk_size = _swinir_chunk_size()
+    chunk_total = (total + chunk_size - 1) // chunk_size
+    records = manifest.get("chunks")
+    record_map = {int(item["index"]): item for item in records if isinstance(item, dict) and "index" in item} if isinstance(records, list) else {}
+    chunks = [work / f"chunk_{index:06d}.mp4" for index in range(chunk_total)]
+
+    def valid_chunk(index: int) -> bool:
+        record = record_map.get(index)
+        path = chunks[index]
+        if not isinstance(record, dict) or not path.is_file():
+            return False
+        stat = path.stat()
+        return (
+            record.get("start") == index * chunk_size
+            and record.get("count") == min(chunk_size, total - index * chunk_size)
+            and record.get("size") == stat.st_size
+            and isinstance(record.get("sha256"), str)
+            and record["sha256"] == _swinir_file_sha256(path, cancel)
+        )
+
+    valid = {index for index in range(chunk_total) if valid_chunk(index)}
+    pending = [index for index in range(chunk_total) if index not in valid]
+    session = None
+    decoder = None
+    decoder_stderr: list[str] = []
+    decoder_drain = None
+    try:
+        if pending:
+            session = _swinir_session(settings, width, height, progress, cancel)
+            out_width, out_height = width * int(session.scale), height * int(session.scale)
+            max_dim = resolve_max_video_dim(settings)
+            video_filter, _fit_dim = _video_filter_for_dimensions(out_width, out_height, max_dim)
+            decoder = _swinir_open_decoder(in_path, fps)
+            if decoder is not None:
+                decoder_drain = threading.Thread(
+                    target=_drain_binary_lines,
+                    args=(decoder.stderr, decoder_stderr),
+                    name="ueu-swinir-decode-stderr",
+                    daemon=True,
+                )
+                decoder_drain.start()
+            frame_bytes = width * height * 3
+            cursor = 0
+            for index in range(chunk_total):
+                if cancel is not None and cancel.is_set():
+                    raise Cancelled()
+                start = cursor
+                count = min(chunk_size, total - start)
+                # decoderは全体で1本だけ維持する。完了済みチャンクは入力だけ
+                # 読み捨て、未完了チャンクのみAIとH.264 encodeを実行する。
+                if index in valid:
+                    _swinir_discard_frames(decoder, frame_bytes, count, cancel)
+                    cursor += count
+                    continue
+                _swinir_run_chunk(
+                    in_path, chunks[index], start, count, width, height,
+                    out_width, out_height, fps, settings, video_encoder,
+                    video_filter, session,
+                    progress, start, total, cancel, decoder_proc=decoder,
+                )
+                cursor += count
+                record_map[index] = {
+                    "index": index,
+                    "start": start,
+                    "count": count,
+                    "path": chunks[index].name,
+                    "size": chunks[index].stat().st_size,
+                    "sha256": _swinir_file_sha256(chunks[index], cancel),
+                }
+                manifest["chunks"] = [record_map[key] for key in sorted(record_map)]
+                _atomic_json(manifest_path, manifest)
+            if decoder is not None:
+                # 事前確認と本番decoderは同じCFR条件なので、余剰は入力変化か
+                # ffmpeg条件の不一致を示す。黙って切り捨てずチェックポイントを守る。
+                assert decoder.stdout is not None
+                extra_frames = 0
+                while _read_raw_frame(decoder.stdout, frame_bytes) is not None:
+                    if cancel is not None and cancel.is_set():
+                        raise Cancelled()
+                    extra_frames += 1
+                decoder_ret = decoder.wait()
+                if decoder_drain is not None:
+                    decoder_drain.join(timeout=2.0)
+                if decoder_ret != 0:
+                    raise RuntimeError(
+                        "SwinIR動画のデコードに失敗しました:\n"
+                        + "\n".join(decoder_stderr[-15:])
+                    )
+                if extra_frames:
+                    raise RuntimeError(
+                        "SwinIR動画のフレーム数が事前確認後に変化しました: "
+                        f"{total}+{extra_frames}"
+                    )
+        progress(0.98, "SwinIR動画のチャンクを結合中…")
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        _swinir_concat_mux(chunks, in_path, out_path, settings, cancel=cancel)
+        progress(1.0, "完了")
+        return Path(out_path)
+    finally:
+        if decoder is not None and decoder.poll() is None:
+            _terminate(decoder)
+        if decoder_drain is not None:
+            decoder_drain.join(timeout=2.0)
+        if session is not None:
+            session.close(force=cancel is not None and cancel.is_set())
 
 
 def _read_raw_frame(stream, size: int) -> bytes | None:

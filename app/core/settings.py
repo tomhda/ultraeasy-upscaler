@@ -15,6 +15,7 @@ class UpscaleBackend(str, Enum):
     # GUIの「自動（GPU優先）」は、設定へはWINML_GPUとして正規化する。
     WINML_GPU = "winml_gpu"    # UEU helper / DirectML GPU
     NPU_NATIVE = "npu_native"  # UEU helper / Ryzen AI VitisAI EP
+    SWINIR_CUDA = "swinir_cuda"  # PyTorch CUDA / SwinIR-M（低速・実写向け）
     VULKAN = "vulkan"          # realesrgan-ncnn-vulkan fallback
     # 旧GUI/API互換用。新しいGUIのNPU選択はNPU_NATIVEへ寄せる。
     NPU = "npu"                # deprecated: legacy npu_worker route
