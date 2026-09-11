@@ -188,3 +188,57 @@ def test_npu_serve_goes_through_overlap_for_model(monkeypatch, tmp_path) -> None
     assert command[command.index("--overlap") + 1] == str(
         helper_backend.overlap_for_model(HELPER_MODEL_AMD_RRDB)
     )
+
+
+def _serve_command_for_settings(monkeypatch, settings, width=1280, height=534):
+    from pathlib import Path
+
+    model_dir = helper_backend.binaries.repo_root() / "tmp" / "adcsr" / "onnx"
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(model_dir))
+    monkeypatch.setattr(helper_backend, "_winml_helper", lambda: Path("winml-sr.exe"))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    session = helper_backend.open_session(settings, width, height)
+    return session, list(_CapturingServeClient.last_command)
+
+
+def test_adcsr_serve_includes_seam_template(monkeypatch) -> None:
+    from pathlib import Path
+
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=HELPER_MODEL_ADCSR)
+    _session, command = _serve_command_for_settings(monkeypatch, settings)
+    assert "--seam-template" in command
+    template = Path(command[command.index("--seam-template") + 1])
+    assert template.is_file()
+    assert template.name == "adcsr_ov32_p256.json"
+
+
+def test_adcsr_npu_request_gets_seam_template_via_gpu(monkeypatch) -> None:
+    settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
+    session, command = _serve_command_for_settings(monkeypatch, settings)
+    assert session.backend == UpscaleBackend.WINML_GPU
+    assert "--seam-template" in command
+
+
+def test_non_adcsr_serve_has_no_seam_template(monkeypatch, tmp_path) -> None:
+    from pathlib import Path
+
+    filename = "realesrgan_nchw_256x256_fp32.onnx"
+    (tmp_path / filename).touch()
+    monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(helper_backend, "_winml_helper", lambda: Path("winml-sr.exe"))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    settings = UpscaleSettings(backend=UpscaleBackend.WINML_GPU, model=HELPER_MODEL_AMD_RRDB)
+    helper_backend.open_session(settings, 854, 480)
+    assert "--seam-template" not in _CapturingServeClient.last_command
+
+
+def test_seam_template_path_resolution() -> None:
+    resolved = helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 32)
+    assert resolved is not None and resolved.is_file()
+    assert resolved.name == "adcsr_ov32_p256.json"
+    assert helper_backend.seam_template_path("adcsr", 32) == resolved
+    ov16 = helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 16)
+    assert ov16 is not None and ov16.is_file()
+    assert ov16.name == "adcsr_ov16_p384.json"
+    assert helper_backend.seam_template_path(HELPER_MODEL_ANIME, 16) is None
+    assert helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 99) is None

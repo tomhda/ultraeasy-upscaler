@@ -57,6 +57,14 @@ HELPER_MODEL_OVERLAP = {
     HELPER_MODEL_ADCSR: 32,
 }
 
+# AdcSR の格子補正（平坦領域限定・固定テンプレート減算）のファイル名（overlap 別）。
+# 実体は tools/winml-sr/seam_templates/ に置き、ビルド時に exe と同じ出力先へ配布する。
+# P = コア幅 × scale（overlap 32: (128−64)×4 = 256）。
+HELPER_SEAM_TEMPLATES = {
+    32: "adcsr_ov32_p256.json",
+    16: "adcsr_ov16_p384.json",
+}
+
 VULKAN_FALLBACK_MODELS = {
     HELPER_MODEL_ANIME: "realesr-animevideov3",
     HELPER_MODEL_SPAN: "realesrgan-x4plus",

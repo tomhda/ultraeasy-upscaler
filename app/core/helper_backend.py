@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 import os
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -30,6 +31,7 @@ from .settings import (
     HELPER_MODEL_SWINIR,
     HELPER_DEFAULT_OVERLAP,
     HELPER_MODEL_OVERLAP,
+    HELPER_SEAM_TEMPLATES,
     canonical_helper_model,
     ModelFamily,
     UpscaleBackend,
@@ -105,6 +107,32 @@ def overlap_for_model(model: str | ModelFamily | None) -> int:
     AdcSR だけ 32（128 タイル → コア 64）。それ以外は既定 16。
     """
     return HELPER_MODEL_OVERLAP.get(canonical_helper_model(model), HELPER_DEFAULT_OVERLAP)
+
+
+def seam_template_path(
+    model: str | ModelFamily | None,
+    overlap: int,
+    helper_dir: Path | str | None = None,
+) -> Path | None:
+    """AdcSR の格子補正テンプレートの絶対パスを返す。無ければ None。
+
+    AdcSR 以外・overlap に対応するファイル名が無い・ファイルが無い場合は
+    補正なし（None）。探索順は exe と同じ出力先（helper_dir/seam_templates/）、
+    次にリポジトリの tools/winml-sr/seam_templates/。
+    """
+    if canonical_helper_model(model) != HELPER_MODEL_ADCSR:
+        return None
+    filename = HELPER_SEAM_TEMPLATES.get(overlap)
+    if filename is None:
+        return None
+    candidates: list[Path] = []
+    if helper_dir is not None:
+        candidates.append(Path(helper_dir) / "seam_templates" / filename)
+    candidates.append(binaries.repo_root() / "tools" / "winml-sr" / "seam_templates" / filename)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
 
 
 # _discarded_pixels / choose_gpu_tile は 256/512 タイル用なので既定 16 のまま。
@@ -269,6 +297,12 @@ def open_session(
                 "--ep-name", "DmlExecutionProvider",
                 "--overlap", str(overlap), "--warmup", "1",
             ]
+            seam_template = seam_template_path(model_key, overlap, helper.parent)
+            if seam_template is not None:
+                command += ["--seam-template", str(seam_template)]
+            elif model_key == HELPER_MODEL_ADCSR:
+                print("警告: AdcSR の格子補正テンプレートが見つからないため補正なしで実行",
+                      file=sys.stderr, flush=True)
             workdir = helper.parent
             timeout = 120.0
         else:
@@ -281,6 +315,9 @@ def open_session(
                 "--cache-dir", str(cache),
                 "--overlap", str(overlap), "--warmup", "1",
             ]
+            seam_template = seam_template_path(model_key, overlap)
+            if seam_template is not None:
+                command += ["--seam-template", str(seam_template)]
             workdir = binaries.repo_root()
             # 初回VAIMLコンパイルはモデル次第で長い（av3dp512: 約15分、SwinIR-M: 約51分）。
             # キャッシュ有無でタイムアウトを分け、初回コンパイルを打ち切らない。

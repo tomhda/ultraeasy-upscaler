@@ -88,6 +88,7 @@ internal static class Program
         bool blend = !Has(args, "--no-blend");
         bool compile = Has(args, "--compile");
         bool download = Has(args, "--download");
+        string? seamTemplatePath = Value(args, "--seam-template");
 
         if (epPolicy is null && epName is null)
         {
@@ -153,10 +154,16 @@ internal static class Program
         var (img, w, h) = LoadImageChw(inputPath);
         Console.WriteLine($"[image] {Path.GetFileName(inputPath)} {w}x{h}");
 
+        SeamFix.SeamTemplate? seamTemplate = seamTemplatePath is null ? null : SeamFix.Load(seamTemplatePath);
+        if (seamTemplate is not null)
+        {
+            Console.WriteLine($"[seam-fix] template {Path.GetFileName(seamTemplatePath)} pitch={seamTemplate.Pitch}");
+        }
+
         // タイル分割 → 推論（ウォームアップ含む）→ 結合 → 保存
         var timings = new TileTimings();
         float[] merged = UpscaleChw(tileRunner, img, w, h, tileW, tileH, scale, overlap,
-            warmup, timings, Console.WriteLine, blend);
+            warmup, timings, Console.WriteLine, blend, seamTemplate, Console.WriteLine);
         SaveImageChw(merged, w * scale, h * scale, outputPath);
 
         // 統計
@@ -528,7 +535,8 @@ internal static class Program
     /// </summary>
     private static float[] UpscaleChw(
         TileRunner runner, float[] img, int w, int h, int tileW, int tileH,
-        int scale, int overlap, int warmup, TileTimings timings, Action<string>? log, bool blend = true)
+        int scale, int overlap, int warmup, TileTimings timings, Action<string>? log, bool blend = true,
+        SeamFix.SeamTemplate? seamTemplate = null, Action<string>? seamLog = null)
     {
         // タイル分割（reflect padding + overlap）。タイル配列は作らず、runner.InputBufferへ直接充填する。
         var plan = TilePlan.Create(w, h, tileW, tileH, overlap);
@@ -569,6 +577,14 @@ internal static class Program
             timings.TotalMs.Add(swTile.Elapsed.TotalMilliseconds);
         }
 
+        // 格子補正（固定テンプレート減算・平坦領域限定）。MergeTile 完了後の
+        // float バッファに適用し、既存の uint8 化へ渡す。未指定なら何もしない。
+        if (seamTemplate is not null)
+        {
+            double seamMs = SeamFix.ApplyInPlace(merged, outW, outH, seamTemplate);
+            seamLog?.Invoke($"[timing] seam-fix total={seamMs:F1} ms (pitch={seamTemplate.Pitch}, size={outW}x{outH})");
+        }
+
         return merged;
     }
 
@@ -600,6 +616,7 @@ internal static class Program
         int warmup = int.Parse(Value(args, "--warmup") ?? "2");
         bool blend = !Has(args, "--no-blend");
         bool download = Has(args, "--download");
+        string? seamTemplatePath = Value(args, "--seam-template");
 
         if (epPolicy is null && epName is null)
         {
@@ -623,6 +640,12 @@ internal static class Program
         Console.Error.WriteLine($"[model] input {tileW}x{tileH}, scale x{scale}, output {outTileW}x{outTileH}");
 
         using var tileRunner = new TileRunner(session, inputName, outputName, tileW, tileH, outTileW, outTileH);
+
+        SeamFix.SeamTemplate? seamTemplate = seamTemplatePath is null ? null : SeamFix.Load(seamTemplatePath);
+        if (seamTemplate is not null)
+        {
+            Console.Error.WriteLine($"[seam-fix] template {Path.GetFileName(seamTemplatePath)} pitch={seamTemplate.Pitch}");
+        }
 
         // ウォームアップ（乱数ダミータイル）
         var rnd = new Random(12345);
@@ -664,7 +687,7 @@ internal static class Program
         var stats = new ServeStats();
         Task receiveTask = Task.Run(() => ReceiveLoop(stdin, received, pipelineCts.Token, Fail, stats));
         Task inferenceTask = Task.Run(() => InferenceLoop(received, inferred, pipelineCts.Token, Fail,
-            tileRunner, scale, overlap, blend, stats));
+            tileRunner, scale, overlap, blend, stats, seamTemplate));
         Task sendTask = Task.Run(() => SendLoop(inferred, stdout, pipelineCts.Token, Fail, scale, stats));
 
         try
@@ -842,7 +865,7 @@ internal static class Program
 
     private static void InferenceLoop(BlockingCollection<ServeFrame> input, BlockingCollection<ServeFrame> output,
         CancellationToken cancellationToken, Action<Exception> fail, TileRunner runner,
-        int scale, int overlap, bool blend, ServeStats stats)
+        int scale, int overlap, bool blend, ServeStats stats, SeamFix.SeamTemplate? seamTemplate)
     {
         try
         {
@@ -854,7 +877,8 @@ internal static class Program
                     {
                         var timings = new TileTimings();
                         frame.MergedChw = UpscaleChw(runner, frame.ImageChw!, frame.Width, frame.Height,
-                            runner.TileW, runner.TileH, scale, overlap, warmup: 0, timings, log: null, blend: blend);
+                            runner.TileW, runner.TileH, scale, overlap, warmup: 0, timings, log: null, blend: blend,
+                            seamTemplate: seamTemplate, seamLog: s => Console.Error.WriteLine(s));
                         frame.Timings = timings;
                         stats.AddTiming(timings);
                     }
@@ -1240,8 +1264,10 @@ internal static class Program
         Console.WriteLine("             [--ep-policy npu|gpu|cpu|default|power|perf|efficiency]");
         Console.WriteLine("             [--ep-name <EpName> [--device-type NPU|GPU|CPU] [--device-index n]]");
         Console.WriteLine("             [--overlap 16] [--compile] [--download] [--warmup 2]");
+        Console.WriteLine("             [--seam-template <template.json>]");
         Console.WriteLine("winml-sr serve --model <onnx> (--ep-name <EP> [--device-type T] [--device-index n] | --ep-policy <p>)");
-        Console.WriteLine("               [--overlap 16] [--warmup 2]   # stdin/stdoutバイナリプロトコル常駐モード");
+        Console.WriteLine("               [--overlap 16] [--warmup 2] [--seam-template <template.json>]");
+        Console.WriteLine("               # stdin/stdoutバイナリプロトコル常駐モード");
         Console.WriteLine("winml-sr psnr --a <img> --b <img>");
     }
 }
