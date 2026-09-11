@@ -121,6 +121,8 @@ def _process_video(job, settings, progress, cancel) -> Path:
 
     if canonical_helper_model(settings.model) == HELPER_MODEL_ADCSR:
         raise ValueError("AdcSRは静止画専用です。動画には他のモデルを選んでください")
+    if settings.backend == UpscaleBackend.SWINIR_CUDA and settings.interpolation_enabled:
+        raise ValueError("SwinIR CUDA動画ではフレーム補間を併用できません")
     if not settings.upscale_enabled and not settings.interpolation_enabled:
         raise ValueError(
             "アップスケーラーモデルまたはフレーム補間モデルを選択してください。"
@@ -135,6 +137,33 @@ def _process_video(job, settings, progress, cancel) -> Path:
         progress(0.01, "動画を解析中…")
         info = media.probe(str(job.input_path))
         fps = info.fps or job.fps or 30.0
+
+        # PyTorch CUDA版SwinIRは、長時間ジョブを再開できるチャンク経路へ
+        # 明示的に分岐する。既存のDirectML/NPU rawパイプは変更しない。
+        if (
+            settings.backend == UpscaleBackend.SWINIR_CUDA
+            and settings.upscale_enabled
+            and not settings.interpolation_enabled
+        ):
+            out = _video_output(job, settings)
+            out_tmp = _part_path(out)
+            work_dir = video.swinir_workdir(str(job.input_path), str(out), settings)
+            try:
+                video.upscale_video_swinir_chunked(
+                    str(job.input_path), str(out_tmp), settings,
+                    work_dir=work_dir,
+                    progress=lambda f, m: progress(0.02 + 0.98 * f, m),
+                    cancel=cancel,
+                )
+                os.replace(out_tmp, out)
+            except BaseException:
+                out_tmp.unlink(missing_ok=True)
+                raise
+            else:
+                # チェックポイントは、正式出力が確定してからのみ削除する。
+                shutil.rmtree(work_dir, ignore_errors=True)
+                progress(1.0, "完了")
+                return out
 
         # RIFEはフレームファイルを前提にするため、補間が有効なジョブでは
         # 必ず従来のPNG経路を使う。RIFEなしの新AIヘルパーだけrawパイプへ進む。

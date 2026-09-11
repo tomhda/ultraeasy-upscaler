@@ -130,11 +130,13 @@ def test_overlap_for_model_gives_adcsr_32_and_default_16() -> None:
 
 class _CapturingServeClient:
     last_command: list = []
+    last_connect_kwargs: dict = {}
 
     def __init__(self, command, workdir, env=None) -> None:
         type(self).last_command = list(command)
 
     def connect(self, **kwargs) -> None:
+        type(self).last_connect_kwargs = dict(kwargs)
         return None
 
 
@@ -242,3 +244,91 @@ def test_seam_template_path_resolution() -> None:
     assert ov16.name == "adcsr_ov16_p384.json"
     assert helper_backend.seam_template_path(HELPER_MODEL_ANIME, 16) is None
     assert helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 99) is None
+
+
+def test_swinir_cuda_serve_uses_separate_python_worker(monkeypatch, tmp_path) -> None:
+    python = tmp_path / "python.exe"
+    model = tmp_path / "swinir.pth"
+    python.touch()
+    model.touch()
+    monkeypatch.setenv(helper_backend.SWINIR_PYTHON_ENV, str(python))
+    monkeypatch.setenv(helper_backend.SWINIR_MODEL_ENV, str(model))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.SWINIR_CUDA,
+        model=HELPER_MODEL_SWINIR,
+    )
+    session = helper_backend.open_session(settings, 640, 480)
+    command = _CapturingServeClient.last_command
+
+    assert session.backend == UpscaleBackend.SWINIR_CUDA
+    assert session.model_path == model.resolve()
+    assert command[0] == str(python.resolve())
+    assert command[1].endswith("tools\\swinir\\worker.py")
+    assert command[2] == "serve"
+    assert command[command.index("--precision") + 1] == "bf16"
+    assert command[command.index("--tile") + 1] == "256"
+    assert command[command.index("--tile-overlap") + 1] == "32"
+    assert _CapturingServeClient.last_connect_kwargs["timeout"] == 30 * 60.0
+
+
+def test_swinir_cuda_startup_timeout_can_be_extended(monkeypatch, tmp_path) -> None:
+    python = tmp_path / "python.exe"
+    model = tmp_path / "swinir.pth"
+    python.touch()
+    model.touch()
+    monkeypatch.setenv(helper_backend.SWINIR_PYTHON_ENV, str(python))
+    monkeypatch.setenv(helper_backend.SWINIR_MODEL_ENV, str(model))
+    monkeypatch.setenv(helper_backend.SWINIR_STARTUP_TIMEOUT_ENV, "7200")
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+
+    helper_backend.open_session(
+        UpscaleSettings(
+            backend=UpscaleBackend.SWINIR_CUDA,
+            model="swinir-m",
+        ),
+        640,
+        480,
+    )
+
+    assert _CapturingServeClient.last_connect_kwargs["timeout"] == 7200.0
+
+
+def test_swinir_cuda_rejects_other_models(monkeypatch, tmp_path) -> None:
+    model = tmp_path / "swinir.pth"
+    model.touch()
+    monkeypatch.setenv(helper_backend.SWINIR_MODEL_ENV, str(model))
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.SWINIR_CUDA,
+        model=HELPER_MODEL_ANIME,
+    )
+
+    try:
+        helper_backend._session_spec(settings, 640, 480)
+    except helper_backend.HelperBackendUnavailable as exc:
+        assert "SwinIR-Mモデル専用" in str(exc)
+    else:
+        raise AssertionError("SwinIR CUDA accepted a non-SwinIR model")
+
+
+def test_swinir_cuda_respects_memory_tile_and_gpu(monkeypatch, tmp_path) -> None:
+    python = tmp_path / "python.exe"
+    model = tmp_path / "swinir.pth"
+    python.touch()
+    model.touch()
+    monkeypatch.setenv(helper_backend.SWINIR_PYTHON_ENV, str(python))
+    monkeypatch.setenv(helper_backend.SWINIR_MODEL_ENV, str(model))
+    monkeypatch.setattr(helper_backend, "ServeClient", _CapturingServeClient)
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.SWINIR_CUDA,
+        model=HELPER_MODEL_SWINIR,
+        tile_size=128,
+        gpu_id=1,
+    )
+
+    helper_backend.open_session(settings, 640, 480)
+    command = _CapturingServeClient.last_command
+    assert command[command.index("--device") + 1] == "cuda:1"
+    assert command[command.index("--tile") + 1] == "128"
+    assert command[command.index("--tile-overlap") + 1] == "32"

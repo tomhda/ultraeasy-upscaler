@@ -353,6 +353,34 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
     app.processEvents()
 
 
+def test_swinir_cuda_backend_only_offers_swinir_and_warns_about_speed(app):
+    from app.core.settings import HELPER_MODEL_SWINIR, UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    app.processEvents()
+    index = win.backend_combo.findData(UpscaleBackend.SWINIR_CUDA.value)
+    assert index >= 0
+    win.backend_combo.setCurrentIndex(index)
+    app.processEvents()
+
+    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
+        None,
+        HELPER_MODEL_SWINIR,
+    ]
+    settings = win.build_settings()
+    assert settings.backend == UpscaleBackend.SWINIR_CUDA
+    assert settings.model == HELPER_MODEL_SWINIR
+    assert settings.scale == 4
+    assert win._scale_btns[2].isEnabled() is False
+    assert win._scale_btns[4].isEnabled() is True
+    assert "超低速" in win.model_hint.text()
+    assert win.drawer.backend.findData(UpscaleBackend.SWINIR_CUDA.value) >= 0
+
+    win.close()
+    app.processEvents()
+
+
 def test_model_combo_filters_legacy_npu_api_is_removed_from_gui(app):
     """旧npu_worker用のNPU値は新しいGUIの選択肢に出さない。"""
     from app.core.settings import UpscaleBackend

@@ -216,6 +216,50 @@ def test_video_raw_helper_failure_falls_back_to_vulkan(monkeypatch, tmp_path: Pa
     assert seen == [UpscaleBackend.VULKAN]
 
 
+def test_swinir_cuda_failure_does_not_silently_change_model(monkeypatch, tmp_path: Path) -> None:
+    """CUDA版SwinIRの起動失敗を別モデルへの成功として扱わない。"""
+    from app.core import helper_backend
+
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"fake")
+    job = Job(input_path=src, kind=JobKind.VIDEO)
+    monkeypatch.setattr(
+        media,
+        "probe",
+        lambda _path: media.MediaInfo(
+            kind="video", width=16, height=16, fps=30.0, frame_count=1
+        ),
+    )
+    monkeypatch.setattr(
+        video,
+        "upscale_video_swinir_chunked",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            helper_backend.HelperBackendUnavailable("SwinIR setup missing")
+        ),
+    )
+    monkeypatch.setattr(
+        video,
+        "extract_frames",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("SwinIR must not fall back to another model")
+        ),
+    )
+    settings = UpscaleSettings(
+        backend=UpscaleBackend.SWINIR_CUDA,
+        model="SwinIR",
+        output_location=engine.OutputLocation.CUSTOM,
+        output_dir=str(tmp_path),
+        create_subfolder=False,
+    )
+
+    try:
+        engine.process_job(job, settings)
+    except helper_backend.HelperBackendUnavailable as exc:
+        assert "SwinIR setup missing" in str(exc)
+    else:
+        raise AssertionError("SwinIR failure was silently replaced by another model")
+
+
 def test_video_can_interpolate_without_upscaling(monkeypatch, tmp_path: Path) -> None:
     src = tmp_path / "clip.mp4"
     src.write_bytes(b"fake")

@@ -1,0 +1,5 @@
+# Optional dependencies for the experimental tools/swinir worker.
+# Keep these out of the main requirements.txt: PyTorch CUDA wheels are large.
+numpy>=2.0
+pillow>=10
+timm==1.0.28
