@@ -240,6 +240,8 @@ TDR ライブダンプは発生した（閾値は3秒未満）。
 
 ## AdcSR の NPU 対応（2026-09 追記）
 
+*English summary for searchability: [adcsr-npu.md](adcsr-npu.md)*
+
 AdcSR（net_params_200、SD2.1-base派生・1ステップ）は 1 グラフで NPU 常駐すると
 2 回目以降全画素 NaN になる。切り分けの経緯: 1 グラフで 2 回目以降 NaN →
 73 分割では正常 → N5 書換えで 1 サブグラフ化しても NaN →

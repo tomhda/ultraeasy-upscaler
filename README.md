@@ -147,6 +147,7 @@ NPU用モデルは fp32 の export 後、N5書換え → bf16cast → 前半/後
 既知の制約: EPの不具合回避に依存する構成のため、SDK更新後は起動時セルフテストで検知する。
 
 SwinIRをNPUで動かす手順・回避策の英語まとめ: [docs/swinir-npu.md](docs/swinir-npu.md)
+AdcSR（生成型1ステップ）をNPUで動かす手順・回避策の英語まとめ: [docs/adcsr-npu.md](docs/adcsr-npu.md)
 (Running SwinIR on an AMD Ryzen AI NPU)。
 
 帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Hofmann/Phips**
