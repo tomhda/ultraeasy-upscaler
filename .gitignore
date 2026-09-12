@@ -13,6 +13,7 @@ __pycache__/
 /tools/winml-sr/obj/
 /vendor/amd-npu-1.8/
 /vendor/amd-npu/modelcachekey_*/
+/models/ai/
 *.log
 .DS_Store
 Thumbs.db
@@ -25,3 +26,4 @@ Thumbs.db
 
 # エージェント向けローカル規約（公開しない・各マシンに手動配置）
 AGENTS.md
+/vendor/winml-sr/

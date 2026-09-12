@@ -139,7 +139,8 @@ def seam_template_path(
 
     AdcSR 以外・overlap に対応するファイル名が無い・ファイルが無い場合は
     補正なし（None）。探索順は exe と同じ出力先（helper_dir/seam_templates/）、
-    次にリポジトリの tools/winml-sr/seam_templates/。
+    次に配布版の vendor/winml-sr/seam_templates/、最後に開発用の
+    tools/winml-sr/seam_templates/。
     """
     if canonical_helper_model(model) != HELPER_MODEL_ADCSR:
         return None
@@ -149,6 +150,7 @@ def seam_template_path(
     candidates: list[Path] = []
     if helper_dir is not None:
         candidates.append(Path(helper_dir) / "seam_templates" / filename)
+    candidates.append(binaries.repo_root() / "vendor" / "winml-sr" / "seam_templates" / filename)
     candidates.append(binaries.repo_root() / "tools" / "winml-sr" / "seam_templates" / filename)
     for candidate in candidates:
         if candidate.is_file():
@@ -210,6 +212,12 @@ def _winml_helper() -> Path:
         if candidate.is_file():
             return candidate.resolve()
         raise HelperBackendUnavailable(f"{WINML_HELPER_ENV} のファイルが見つかりません: {candidate}")
+
+    # 配布版（setup.ps1 が vendor/winml-sr/ へ展開したビルド済みヘルパー）を
+    # 開発ビルドより先に探す。UEU_WINML_HELPER の明示指定はこの前段で優先される。
+    distributed = binaries.repo_root() / "vendor" / "winml-sr" / "winml-sr.exe"
+    if distributed.is_file():
+        return distributed.resolve()
 
     helper_root = binaries.repo_root() / "tools" / "winml-sr" / "bin"
     patterns = (

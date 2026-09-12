@@ -10,11 +10,21 @@ Windows ローカル専用の、画像・動画のアップスケールとフレ
 
 ## 起動と必要物
 
-`run.bat` をダブルクリック、または:
+### Release から取得する場合（`setup.ps1`）
+
+GitHub Release の配布物（ビルド済み `winml-sr` と変換済み ONNX）を使う手順。
+`dotnet` SDK とモデルの変換作業は不要。
 
 ```
-.venv\Scripts\python.exe -m app.main
+powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
+
+`-WithAdcSR` で AdcSR（約 1.8GB）を追加取得、`-WithNpu` で NPU 用モデルを追加取得する。
+取得後は `run.bat` をダブルクリック、または `.venv\Scripts\python.exe -m app.main` で起動する。
+`setup.ps1` は前提の確認、SHA-256 の検証、`vendor/winml-sr/` と `models/ai/` への展開、
+サンプル画像での動作確認まで行う。NPU は Ryzen AI Software 1.8.0 の導入案内のみ表示する。
+
+### 自分でビルド・変換する場合
 
 | 必要物 | 用途 | 必須 |
 |---|---|---|
@@ -22,12 +32,13 @@ Windows ローカル専用の、画像・動画のアップスケールとフレ
 | ffmpeg / ffprobe（PATH 上） | 動画の抽出・再結合・エンコード | 必須 |
 | `vendor/realesrgan/`（realesrgan-ncnn-vulkan 一式 exe + models） | Vulkan 経路・フォールバック | 必須 |
 | `vendor/rife/`（rife-ncnn-vulkan.exe + rife-v4.6） | フレーム補間 | 任意 |
-| `dotnet` 8 SDK で `tools/winml-sr` をビルド | DirectML GPU 経路（ビルド済み exe は配布しない） | 任意 |
+| `dotnet` 8 SDK で `tools/winml-sr` をビルド | DirectML GPU 経路（自分でビルドする場合のみ） | 任意 |
 | Ryzen AI Software 1.8.0 相当の Python 環境と VitisAI EP | NPU 経路 | 任意 |
 | PyTorch CUDA 環境（`scripts/setup_swinir.ps1` で `tmp/` に導入） | SwinIR-M CUDA 経路 | 任意 |
 
 Vulkan / RIFE の資材は `.venv\Scripts\python.exe scripts\get_models.py` で取得する。
 超解像モデルの取得と変換は「[モデルの取得と変換](#モデルの取得と変換)」を参照。
+配布物と同じ zip を作り直すには `powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1` を実行する。
 
 ## AI 実行先
 
@@ -174,8 +185,8 @@ SDK 更新後は起動時のセルフテストで検知する。`UEU_ADCSR_NPU2=
 
 | 環境変数 | 既定値 | 用途 |
 |---|---|---|
-| `UEU_WINML_HELPER` | `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinML ヘルパーの明示指定 |
-| `UEU_MODELS_DIR` | `tmp/npu-anime` | GPU fp32 / NPU bf16cast モデルの探索先 |
+| `UEU_WINML_HELPER` | `vendor/winml-sr/winml-sr.exe`、次に `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinML ヘルパーの明示指定 |
+| `UEU_MODELS_DIR` | `models/ai` | GPU fp32 / NPU bf16cast モデルの探索先 |
 | `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU 常駐サーバーを起動する Python |
 | `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU EP のセッションキャッシュ |
 | `UEU_ADCSR_NPU2` | `1` | `0` で AdcSR の NPU 2 プロセス構成を無効化（GPU 実行へ） |
@@ -227,7 +238,8 @@ PowerShell で次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6 
 powershell -ExecutionPolicy Bypass -File scripts\build_portable.ps1
 ```
 
-展開後は `ultraeasy-upscaler.exe` をダブルクリックする。ポータブル版は Vulkan 経路のみ（DirectML / NPU / CUDA のヘルパーは含まない）。
+展開後は `ultraeasy-upscaler.exe` をダブルクリックする。既定のポータブル版は Vulkan 経路のみ（DirectML / NPU / CUDA のヘルパーは含まない）。
+`-WithHelper` を付けると `vendor/winml-sr/` と `models/ai/`（AdcSR を除く）も同梱し、DirectML GPU 経路が使える。
 
 ## アーキテクチャ
 
@@ -258,5 +270,6 @@ powershell -ExecutionPolicy Bypass -File scripts\build_portable.ps1
 - Anime Video v3 / Real-ESRGAN Anime の NPU モデル: BSD-3-Clause の [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) 重みから変換
 - 4xNomosUni_span_multijpg: CC-BY-4.0, by Philip Hofmann/Phips（取得元と SHA-256 は [docs/span-bench-results.md](docs/span-bench-results.md)）
 - 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN: Apache-2.0, by Jingyun Liang（SwinIR）。CUDA 経路の実装由来は `tools/swinir/NOTICE.md`
-- AdcSR: Apache-2.0, Guaishou74851（CVPR 2025）。基盤の Stable Diffusion 2.1-base は CreativeML OpenRAIL-M（使用制限あり、利用者が確認すること）
+- AdcSR: Apache-2.0, Guaishou74851（CVPR 2025）。基盤の Stable Diffusion 2.1-base は CreativeML Open RAIL++-M の適用対象で、使用前に利用者自身が使用条件を確認すること（全文は Hugging Face の配布ページにあり、ログインが必要）
+- Release 配布物の zip には上記のライセンス文（`scripts/release-licenses/` と同一内容）と各モデルの NOTICE を同梱する。`winml-sr-win-x64.zip` には Microsoft Windows ML Runtime の license.txt と ThirdPartyNotices.txt を同梱し、再配布条件（license.txt §3）を NOTICE-winml-sr.txt に記載する。AdcSR の zip には同系統の CreativeML Open RAIL-M 全文（使用制限 Attachment A を含む）を同梱し、再配布時は同じ使用制限を利用者に課す
 - ベンチマーク画像の素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)（© Blender Foundation, CC-BY 3.0）、Superman (1941) はパブリックドメイン

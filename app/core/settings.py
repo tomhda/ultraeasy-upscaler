@@ -186,7 +186,9 @@ ADCSR_NPU2_ENV = "UEU_ADCSR_NPU2"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 # マシン固有の絶対パスは使わず、リポジトリ相対の既定値にする。
 # 実運用ではUEU_MODELS_DIR / UEU_NPU_CACHEで上書きできる。
-DEFAULT_MODELS_DIR = _REPO_ROOT / "tmp" / "npu-anime"
+# 配布版の ONNX は setup.ps1 が models/ai/ へ展開する（開発時の tmp/npu-anime
+# は UEU_MODELS_DIR で指定する）。
+DEFAULT_MODELS_DIR = _REPO_ROOT / "models" / "ai"
 DEFAULT_VENDOR_MODELS_DIR = _REPO_ROOT / "vendor" / "amd-npu" / "onnx-models"
 DEFAULT_NPU_CACHE_DIR = _REPO_ROOT / "vendor" / "amd-npu-1.8"
 

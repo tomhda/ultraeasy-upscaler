@@ -1,5 +1,6 @@
 param(
-    [string]$Destination = ""
+    [string]$Destination = "",
+    [switch]$WithHelper
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,6 +68,29 @@ $ffmpeg = (Get-Command ffmpeg -ErrorAction Stop).Source
 $ffprobe = (Get-Command ffprobe -ErrorAction Stop).Source
 Copy-Item -LiteralPath $ffmpeg -Destination (Join-Path $ffmpegOut "ffmpeg.exe") -Force
 Copy-Item -LiteralPath $ffprobe -Destination (Join-Path $ffmpegOut "ffprobe.exe") -Force
+
+if ($WithHelper) {
+    $helperSource = Join-Path $repo "vendor\winml-sr"
+    if (-not (Test-Path -LiteralPath (Join-Path $helperSource "winml-sr.exe"))) {
+        throw "winml-sr helper is missing (run setup.ps1 first)"
+    }
+    $helperOut = Join-Path $vendorOut "winml-sr"
+    New-Item -ItemType Directory -Path $helperOut -Force | Out-Null
+    Copy-Item -Path (Join-Path $helperSource "*") -Destination $helperOut -Recurse -Force
+
+    # AdcSR（1.8GB 級）は同梱しない。それ以外の models/ai/*.onnx を同梱する。
+    $modelsSource = Join-Path $repo "models\ai"
+    $modelsOut = Join-Path $app "models\ai"
+    New-Item -ItemType Directory -Path $modelsOut -Force | Out-Null
+    $onnxFiles = Get-ChildItem -LiteralPath $modelsSource -Filter "*.onnx" -File `
+        -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike "adcsr*" }
+    if (-not $onnxFiles) {
+        throw "Helper models are missing in models/ai (run setup.ps1 first)"
+    }
+    foreach ($file in $onnxFiles) {
+        Copy-Item -LiteralPath $file.FullName -Destination $modelsOut -Force
+    }
+}
 
 Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination (Join-Path $app "README.md") -Force
 @"

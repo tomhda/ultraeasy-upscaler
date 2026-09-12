@@ -91,6 +91,68 @@ def test_winml_helper_uses_renamed_tool_layout(monkeypatch, tmp_path) -> None:
     assert helper_backend._winml_helper() == helper.resolve()
 
 
+def test_default_models_dir_is_models_ai(monkeypatch) -> None:
+    from app.core import settings as app_settings
+
+    assert app_settings.DEFAULT_MODELS_DIR == helper_backend.binaries.repo_root() / "models" / "ai"
+    monkeypatch.delenv(helper_backend.MODELS_DIR_ENV, raising=False)
+    assert helper_backend.models_dir() == app_settings.DEFAULT_MODELS_DIR
+
+
+def test_winml_helper_prefers_vendor_distribution(monkeypatch, tmp_path) -> None:
+    vendor_helper = tmp_path / "vendor" / "winml-sr" / "winml-sr.exe"
+    vendor_helper.parent.mkdir(parents=True)
+    vendor_helper.touch()
+    dev_helper = (
+        tmp_path / "tools" / "winml-sr" / "bin" / "Release"
+        / "net8.0-windows10.0.22621.0" / "win-x64" / "winml-sr.exe"
+    )
+    dev_helper.parent.mkdir(parents=True)
+    dev_helper.touch()
+    monkeypatch.setattr(helper_backend.binaries, "repo_root", lambda: tmp_path)
+    monkeypatch.delenv(helper_backend.WINML_HELPER_ENV, raising=False)
+
+    assert helper_backend._winml_helper() == vendor_helper.resolve()
+
+
+def test_winml_helper_env_override_beats_vendor(monkeypatch, tmp_path) -> None:
+    vendor_helper = tmp_path / "vendor" / "winml-sr" / "winml-sr.exe"
+    vendor_helper.parent.mkdir(parents=True)
+    vendor_helper.touch()
+    override = tmp_path / "custom" / "winml-sr.exe"
+    override.parent.mkdir(parents=True)
+    override.touch()
+    monkeypatch.setattr(helper_backend.binaries, "repo_root", lambda: tmp_path)
+    monkeypatch.setenv(helper_backend.WINML_HELPER_ENV, str(override))
+
+    assert helper_backend._winml_helper() == override.resolve()
+
+
+def test_seam_template_prefers_vendor_over_tools(monkeypatch, tmp_path) -> None:
+    vendor_template = (
+        tmp_path / "vendor" / "winml-sr" / "seam_templates" / "adcsr_ov32_p256.json"
+    )
+    vendor_template.parent.mkdir(parents=True)
+    vendor_template.write_text("{}", encoding="utf-8")
+    tools_template = (
+        tmp_path / "tools" / "winml-sr" / "seam_templates" / "adcsr_ov32_p256.json"
+    )
+    tools_template.parent.mkdir(parents=True)
+    tools_template.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(helper_backend.binaries, "repo_root", lambda: tmp_path)
+
+    assert (
+        helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 32)
+        == vendor_template.resolve()
+    )
+
+    vendor_template.unlink()
+    assert (
+        helper_backend.seam_template_path(HELPER_MODEL_ADCSR, 32)
+        == tools_template.resolve()
+    )
+
+
 def test_adcsr_uses_fixed_128_gpu_tile(monkeypatch) -> None:
     model = helper_backend.binaries.repo_root() / "tmp" / "adcsr" / "onnx" / "adcsr_nchw_128x128_fp32.onnx"
     monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(model.parent))
