@@ -263,6 +263,37 @@ tools/npu-serve/npu_twostage.py（TwoStageSession: 起動時セルフテスト�
 TWO_STAGE_FATAL を 1 件。画像単位で同じ AdcSR の DirectML へ再処理）。
 `UEU_ADCSR_NPU2=0` で従来の GPU 実行に戻る。
 
+## SinSR の下見（2026-09-12、不採用）
+
+AdcSR と同じ「1 ステップの拡散系超解像」である SinSR（ResShift の蒸留、CVPR 2024）が
+AdcSR より速いかを、NPU に載せる前の下見として DirectML（Radeon 860M）で確かめた。
+公式コードの推論経路（LR 前処理 → VQGAN encode → 1 ステップ UNet → VQGAN decode）を
+1 モジュールに包んで固定形状 ONNX（64→256 と 128→512、opset 17）にし、公式推論と一致を確認した。
+
+| | AdcSR 128→512 | SinSR 64→256 | SinSR 128→512 |
+|---|---|---|---|
+| ONNX ノード数 | 1510 | 1717 | 1729 |
+| GOPs/タイル | 1099 | 1111 | 5267 |
+| 出力 1MP あたり GOPs | 4193 | 16948 | 20093 |
+| DirectML 1 タイル | 1.1〜1.6 秒 | 0.73 秒 | GPU ハング（計測不可） |
+| tos 1280x534 1 枚 | 約 100 秒（84 タイル） | 502 秒（680 タイル） | — |
+| ライセンス | Apache-2.0 / OpenRAIL-M | CC BY-NC-SA 4.0 / S-Lab 1.0（非商用） | 同左 |
+
+- 出力画素あたりでは AdcSR の約 2.2 倍遅い。主因は VQGAN の encode/decode が出力サイズ（512 角）で動くことと
+  Swin attention（MatMul 40・Softmax 20・Erf 18）。
+- 128→512 版は VQ の距離計算 `Einsum`（16384×8192、約 537MB の中間テンソル）が iGPU のメモリを超えて
+  DXGI 887A0006 でハングする（64 版の同テンソルは約 134MB で完走。サイズ依存と整合）。
+- 画質は tos（実写）で AdcSR が明確に上（SinSR は平滑化が強い）。bbb（アニメ）は健闘するが背景に生成ノイズのまだらが出る。
+- NPU に載せた場合の見込みは op 数換算で約 6.5 秒/タイル（本機の約 0.9 ms/op 律速から。推測）で、AdcSR の約 3 倍。
+- 以上から不採用。作業物は `tmp/sinsr/`（git 管理外）。
+
+副産物として、DirectML の ONNX Runtime は **shape に `-1` を含む Reshape でセッション初期化に失敗する**
+（`MLOperatorAuthorImpl.cpp(2879)`、E_INVALIDARG。1 ノードの最小プローブで再現）。
+shape inference で求めた具体値に書き換えると通る（SinSR 128 版で 196 箇所）。
+同じ shape 定数を形状の異なる Reshape が共有している場合は形状ごとに定数を複製する必要がある。
+Erf・Einsum・ArgMin・cubic/nearest Resize・3D InstanceNormalization・Softmax（4D/5D）・
+負境界の Slice＋Concat は DML では問題なかった。
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
