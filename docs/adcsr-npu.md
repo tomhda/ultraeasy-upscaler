@@ -6,11 +6,15 @@ This document describes how we run **AdcSR** — a one-step generative
 super-resolution model distilled from Stable Diffusion 2.1-base (a UNet plus
 a VAE decoder, CVPR 2025) — on the **NPU** of an AMD Ryzen AI 300-series
 laptop with ONNX Runtime's VitisAI Execution Provider, and the runtime bug we
-had to work around to make repeated inference return finite values. As of
-2026-09 we are not aware of a prior public example of a diffusion-derived SR
-model running on a client NPU, so this page exists so that the next person
-searching "AdcSR NPU", "VitisAI NaN second run" or "Ryzen AI stable diffusion
-NPU" finds the recipe and the workaround.
+had to work around to make repeated inference return finite values.
+As of September 2026, we are not aware of any prior public implementation of
+AdcSR running on a client NPU. (Diffusion-based SR on mobile accelerators has
+been demonstrated before, e.g. Edge-SD-SR on Samsung devices; the claim here
+is limited to AdcSR and to a reproducible ONNX/VitisAI deployment.) This page
+documents the conversion pipeline, the NPU-specific graph rewrites, measured
+performance and the runtime workarounds, so that the next person searching
+"AdcSR NPU", "VitisAI NaN second run" or "Ryzen AI diffusion NPU" finds the
+recipe.
 
 ## Result
 
