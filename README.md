@@ -1,69 +1,131 @@
 # ultraeasy-upscaler
 
-Windows ローカル専用の、画像＆動画かんたんアップスケール＆フレーム補間ツール。
+Windows ローカル専用の、画像・動画のアップスケールとフレーム補間ツール。
+超解像モデルを DirectML GPU・AMD Ryzen AI NPU・NVIDIA CUDA・Vulkan のいずれかで実行する。
 
-## アーキテクチャ
-- **GUI**: PySide6（ダークテーマ・ネイティブ D&D）。`app/gui`
-- **コア（GUI 非依存・単体テスト可）**: `app/core`
-  - `binaries.py` 外部バイナリ/モデル探索
-  - `media.py` 種別判定・ffprobe メタ取得
-  - `upscaler.py` DirectML/NPU常駐ヘルパーと realesrgan-ncnn-vulkan の統合ラッパ（画像/フォルダ）
-  - `helper_backend.py` / `serve_client.py` 新AIバックエンドのモデル解決・常駐セッション・バイナリプロトコル
-  - `npu_backend.py` / `npu_worker.py` 旧NPU API（互換・スクリプト用に残置、GUIでは使用しない）
-  - `video.py` ffmpeg 抽出/再結合/HWエンコード
-  - `interpolator.py` RIFE NCNN/Vulkan フレーム補間
-  - `engine.py` ジョブのオーケストレーション
-  - `jobs.py` / `settings.py` データモデル
-- **新AIヘルパー**: `tools/winml-sr/`（DirectML GPU、任意のWindows ML実行ファイル）と
-  `tools/npu-serve/npu_serve.py`（Ryzen AI NPU）。どちらも常駐プロセスを使う。
+- 入力: 画像 1 枚、フォルダ、動画（音声保持・H.264 出力）
+- 拡大: 4 倍固定の超解像モデル（下表）と、従来の realesrgan-ncnn-vulkan（2x/4x）
+- フレーム補間: RIFE v4.6（NCNN/Vulkan）
+- SwinIR と AdcSR を AMD Ryzen AI NPU で動かした記録は [docs/swinir-npu.md](docs/swinir-npu.md)・[docs/adcsr-npu.md](docs/adcsr-npu.md)（英語）と [docs/npu-research.md](docs/npu-research.md)（日本語）
 
-## 必要物
-- Python 3.13（同梱の `.venv` を使用）
-- ffmpeg / ffprobe（PATH 上）
-- `vendor/realesrgan/` に realesrgan-ncnn-vulkan 一式（exe + models）
-- `vendor/rife/` に rife-ncnn-vulkan.exe + rife-v4.6
-- DirectML GPU経路: `dotnet` 8 SDKで `tools/winml-sr` をビルド（任意。ビルド済みexeは配布しない）
-- NPU経路: Ryzen AI Software 1.8.0相当のPython環境と対応するWindows ML/VitisAI EP（任意）
+## 起動と必要物
 
-## 新AIバックエンド（DirectML / ネイティブNPU）
+`run.bat` をダブルクリック、または:
 
-メインバーの「AI実行先」は次の4択。既定の「自動（GPU優先）」はDirectML GPUへ
-正規化され、ヘルパー起動に失敗した画像・フォルダ・動画は既存のVulkanへフォールバックする。
-新AIモデルは4x固定で、Vulkanを選んだ場合だけ従来のReal-ESRGANモデル一覧を表示する。
+```
+.venv\Scripts\python.exe -m app.main
+```
+
+| 必要物 | 用途 | 必須 |
+|---|---|---|
+| Python 3.13（同梱の `.venv`） | 本体 | 必須 |
+| ffmpeg / ffprobe（PATH 上） | 動画の抽出・再結合・エンコード | 必須 |
+| `vendor/realesrgan/`（realesrgan-ncnn-vulkan 一式 exe + models） | Vulkan 経路・フォールバック | 必須 |
+| `vendor/rife/`（rife-ncnn-vulkan.exe + rife-v4.6） | フレーム補間 | 任意 |
+| `dotnet` 8 SDK で `tools/winml-sr` をビルド | DirectML GPU 経路（ビルド済み exe は配布しない） | 任意 |
+| Ryzen AI Software 1.8.0 相当の Python 環境と VitisAI EP | NPU 経路 | 任意 |
+| PyTorch CUDA 環境（`scripts/setup_swinir.ps1` で `tmp/` に導入） | SwinIR-M CUDA 経路 | 任意 |
+
+Vulkan / RIFE の資材は `.venv\Scripts\python.exe scripts\get_models.py` で取得する。
+超解像モデルの取得と変換は「[モデルの取得と変換](#モデルの取得と変換)」を参照。
+
+## AI 実行先
+
+メインバーの「AI実行先」で実行方式を選ぶ。既定の「自動（GPU優先）」は DirectML GPU に正規化され、
+ヘルパーの起動に失敗した画像・フォルダ・動画は Vulkan へフォールバックする。
+DirectML / NPU / CUDA は 4 倍固定の常駐ヘルパー（別プロセス）で推論し、
+Vulkan を選んだ場合だけ従来の Real-ESRGAN モデル一覧（2x/4x）を表示する。
 
 | AI実行先 | 実行方式 | 必要環境 | 備考 |
 |---|---|---|---|
-| 自動（GPU優先） | DirectML GPU | `tools/winml-sr` のビルド済みexe | GPUを優先。起動失敗時はVulkan |
-| GPU（DirectML） | DirectML GPU | 同上 | 明示的にGPUを選択 |
-| NPU | `npu_serve.py` + Ryzen AI | Ryzen AI 1.8.0相当のPython、EP | bf16cast、キャッシュ再利用 |
-| Vulkan | realesrgan-ncnn-vulkan | `vendor/realesrgan` | 既存経路。2x/4x等の旧モデル |
+| 自動（GPU優先） | DirectML GPU（`tools/winml-sr`） | ビルド済み `winml-sr.exe` | 起動失敗時は Vulkan |
+| GPU（DirectML） | 同上 | 同上 | 明示的に GPU を選ぶ |
+| NPU | VitisAI EP（`tools/npu-serve`） | Ryzen AI 1.8.0 相当の Python と EP | bf16cast モデル。初回のみ VAIML コンパイル、以後はキャッシュ |
+| SwinIR-M（CUDA・超低速） | PyTorch CUDA（`tools/swinir`） | CUDA 環境と SwinIR-M 重み | NVIDIA 専用。起動できない場合に別モデルへ自動変更はしない |
+| Vulkan | realesrgan-ncnn-vulkan | `vendor/realesrgan` | 従来経路。フォールバック兼用 |
 
-新AIのモデルは具体的なモデル名で選択し、GPU/NPUで対応するONNX名とタイルが異なる。
+NPU の入力が短辺 480px 未満のときは GPU へ自動切替する。
+NPU 経路は GPU をほぼ占有しない（推論中の iGPU 3D エンジンは idle 水準、CPU 2〜7%）。
 
-| GUIのモデルキー | 表示名 | 主モデル | 用途 | 既定タイル |
-|---|---|---|---|---:|
-| `animevideov3` | Anime Video v3 | animevideov3 | アニメ・線画・CG | GPUは256/512自動、NPUは512 |
-| `4xNomosUni` | 4xNomosUni SPAN | 4xNomosUni_span_multijpg | 実写の自然な質感 | GPUは256/512自動、NPUは512 |
-| `AMD-RRDB` | Real-ESRGAN（AMD縮小版） | AMD縮小RRDB版 | 輪郭を強めたい実写 | 256 |
-| `SwinIR` | SwinIR-M | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | 静止画の最高画質（低速） | 256 |
-| `AdcSR` | AdcSR | AdcSR net_params_200（SD2.1-base派生・1ステップ） | 実写・静止画専用 | 128 |
+## モデル
 
-### パス設定（環境変数で上書き可能）
+DirectML / NPU では具体的なモデル名で選ぶ。GPU と NPU で対応する ONNX とタイルが異なる。
 
-| 環境変数 | 既定値 | 用途 |
+| GUIのモデルキー | 表示名 | 実体モデル | アーキテクチャ | 用途 | 実行先 | 既定タイル (GPU / NPU) |
+|---|---|---|---|---|---|---|
+| `animevideov3` | Anime Video v3 | realesr-animevideov3（NPU は PReLU 分解版 `dp`） | SRVGGNetCompact | アニメ・線画・CG | GPU / NPU | 256〜512 自動 / 512 |
+| `4xNomosUni` | 4xNomosUni SPAN | 4xNomosUni_span_multijpg | SPAN（48nf） | 実写の毛・肌・背景の質感を残す | GPU / NPU | 256〜512 自動 / 512 |
+| `AMD-RRDB` | Real-ESRGAN（AMD縮小版） | AMD 縮小 RRDB 版 | RRDB | 輪郭を強く見せたい実写 | GPU / NPU | 256 / 256 |
+| `SwinIR` | SwinIR-M | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | SwinIR（window attention） | 静止画の最高画質（低速） | GPU / NPU / CUDA | 256 / 256 |
+| `AdcSR` | AdcSR | AdcSR net_params_200（SD2.1-base 派生・1 ステップ） | 生成型 1 ステップ拡散（UNet + VAE デコーダ） | 実写の静止画専用（動画不可） | GPU / NPU | 128 / 128（マージン 32） |
+
+選び方の目安:
+
+- 迷ったら「自動（GPU優先）」。アニメ・CG は Anime Video v3、実写は 4xNomosUni SPAN から。
+- 静止画を時間をかけて最高画質にするなら SwinIR-M か AdcSR。AdcSR は生成型なので実写向きで、テクスチャを作り足す。
+- GPU を他の作業に使いたいときは NPU。同じモデルを GPU より遅く、GPU を使わずに回す。
+- AdcSR はタイルの継ぎ目に低周波の暗い格子が出るため、マージン 32 とクロスフェード合成に加え、平坦領域限定の固定テンプレート補正を合成時に適用する（[docs/adcsr-tile-diagnosis.md](docs/adcsr-tile-diagnosis.md)）。
+
+## 実測
+
+### AMD Ryzen AI 7 PRO 350（Radeon 860M / XDNA2 NPU）
+
+入力 854x480 → 4 倍（3416x1920）、タイル分割・結合・色変換込みの 1 枚あたり（常駐セッションの定常値、3 回の最良値）。
+GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の VitisAI EP（VAIML コンパイル）で実行。
+ドライバ 32.0.203.329、32GB LPDDR5-8000。
+
+| モデル | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | NPU bf16 忠実度* | NPU 初回コンパイル |
+|---|---|---|---|---|
+| Anime Video v3 | **0.46 秒** | 1.14 秒 | 48.3 dB | 15.2 分 |
+| 4xNomosUni SPAN | 0.51 秒 | **0.60 秒** | 43.1 dB | 12.9 分 |
+| Real-ESRGAN（AMD縮小版） | 2.78 秒 | 2.15 秒 | 37.9 dB** | 18.7 分 |
+| SwinIR-M | 約 53 秒 | 約 79 秒 | 38.5 dB | 約 51 分 |
+| AdcSR | 約 1.3〜1.6 秒 / 128 タイル | 約 2.05 秒 / 128 タイル（前半 0.7 + 後半 1.3） | 45.4 dB*** | 前半約 93 分 + 後半約 30 分 |
+
+\* 同一モデルの fp32 出力との PSNR。40 dB 前後は目視でほぼ判別不能の水準。
+\*\* Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
+\*\*\* 1280x534 の写真 1 枚（180 タイル）を GPU 版と比較した値。AdcSR は 1280x534 で GPU 約 4.5 分、NPU 約 6.5 分。
+
+動画（rawvideo パイプライン・音声保持・3 秒クリップの E2E）:
+
+| 経路 | 実効 fps | 1 フレームあたり |
 |---|---|---|
-| `UEU_WINML_HELPER` | `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinMLヘルパーの明示指定 |
-| `UEU_MODELS_DIR` | `tmp/npu-anime` | GPU fp32 / SPANモデルの探索先 |
-| `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU常駐サーバーを起動するPython |
-| `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU EPのセッションキャッシュ |
-| `UEU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA環境のPython |
-| `UEU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M重みの明示指定 |
-| `UEU_SWINIR_STARTUP_TIMEOUT` | `1800`秒 | CUDA workerの起動待ち（30～86400秒） |
-| `UEU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100～300フレーム） |
-| `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264出力の最大幅×高さ（例: `1920x1080`） |
+| GPU (DirectML) × Anime Video v3 | **2.48 fps** | 0.40 秒 |
+| NPU (VitisAI) × Anime Video v3 | 0.83 fps | 1.21 秒 |
 
-機械固有の絶対パスはソースへ埋め込まない。重み・ONNX・NPUキャッシュは新規にgitへ
-追加しない。取得と変換は次の手順で行う。
+動画の 1 フレーム値が静止画より速いのは、デコード・変換と推論を重ねて隠すため。
+Vulkan 経路（realesrgan-ncnn-vulkan）の animevideov3 は実効約 0.7 秒 / 枚。
+
+### NVIDIA GeForce RTX 5060 Ti（Ryzen 7 9700X）
+
+2026-08-23 の実機確認。`animevideov3` 256 タイル、220x220 入力、overlap 16。
+
+| 経路 | セッション生成 | タイル処理 | wall total |
+|---|---:|---:|---:|
+| DirectML（NVIDIA GPU） | 1.5 秒 | 7.4 ms | 2.28 秒 |
+| NvTensorRTRTXExecutionProvider | 0.7 秒 | 7.6 ms | 1.67 秒 |
+
+両経路の出力 PSNR は 63.87 dB。854x480 入力の wall total は DirectML 1.50 秒、TensorRT 1.60 秒、Vulkan 1.888 秒（AMD 内蔵 GPU の DirectML は 3.11 秒）。
+動画（640x480→2560x1920、NVENC）では 12 秒クリップで DirectML 25.2 秒 / TensorRT 25.0 秒と差は約 0.8%、TensorRT の優位はモデル依存。
+SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 秒で約 57 秒。
+詳細は [docs/nvidia-smoke-results.md](docs/nvidia-smoke-results.md)、[docs/gpu-benchmark-2026-08-24.md](docs/gpu-benchmark-2026-08-24.md)、[docs/swinir-experimental.md](docs/swinir-experimental.md)。
+
+## 動画の処理
+
+- 「アップスケーラーモデル」と「フレーム補間モデル」は独立して選べ、双方に「なし」がある（アップスケールのみ／補間のみ／両方）。
+- 両方を選んだ場合の順序は詳細設定「処理の順番」で選ぶ。既定は「アプコン→補間」（重いモデルの対象フレーム数を補間前に抑えられる）。高解像度出力でメモリが厳しい場合のみ「補間→アプコン」。
+- 出力は再生互換性を優先して H.264、元音声を保持する。最大出力サイズは `UEU_MAX_VIDEO_DIM`（既定 3840x2160）。
+- RIFE 補間が有効な動画は PNG フレーム経路を使う。補間なしの動画は rawvideo 3 スレッドパイプライン（ffmpeg デコード → AI 推論 → ffmpeg エンコード）で、PNG の中間書き出しを省略する。
+- SwinIR-M CUDA の動画は 150 フレーム単位で H.264 チャンクを確定し、中止・異常終了後に同じ入力と設定で再実行すると完了済みチャンクを飛ばして再開する（再開データは出力先の `.＜出力名＞.swinir-work-*`、完成後に自動削除）。RIFE との併用と HDR 動画には未対応。
+- AdcSR は静止画専用で、動画には使えない。HDR 動画（PQ/HLG）は未対応。
+- 「一時停止」は現在のジョブ完了後に停止する。実行中ジョブを今すぐ中止するにはキュー行の × を押す。
+- 設定（モデル・倍率・出力先・詳細設定）は「開始」を押した時点の UI 値が保留中の全ジョブへ一括適用される。
+
+## モデルの取得と変換
+
+機械固有の絶対パスはソースへ埋め込まない。重み・ONNX・NPU キャッシュは git へ追加しない。
+
+### Anime Video v3 / 4xNomosUni SPAN / Real-ESRGAN（AMD縮小版）
 
 ```powershell
 .venv\Scripts\python.exe scripts\get_ai_models.py --list
@@ -71,71 +133,31 @@ Windows ローカル専用の、画像＆動画かんたんアップスケール
 .venv\Scripts\python.exe scripts\get_ai_models.py --pipeline purephoto --tile 512
 ```
 
-`get_ai_models.py` は重みURLとSHA-256を検証し、`scripts/npu/export_spandrel.py` による
-固定形状fp32 ONNX化と、Ryzen AI環境での次のbf16cast変換コマンドを表示する。
+`get_ai_models.py` は重み URL と SHA-256 を検証し、`scripts/npu/export_spandrel.py` による固定形状 fp32 ONNX 化と、
+Ryzen AI 環境での bf16cast 変換コマンドを表示する。
 
 ```text
-python -m quark.onnx.tools.convert_fp32_to_bf16 \
-  --input <fp32.onnx> --output <bf16cast.onnx> --format with_cast
+python -m quark.onnx.tools.convert_fp32_to_bf16 --input <fp32.onnx> --output <bf16cast.onnx> --format with_cast
 ```
 
-既存のVulkan/RIFE資材は従来どおり次で取得する。
+### SwinIR-M
 
-```powershell
-.venv\Scripts\python.exe scripts\get_models.py
-```
+`scripts/get_ai_models.py --download swinir` で重みを取得し、`scripts/npu/export_spandrel.py --tile 256` で ONNX を生成する。
+エクスポート時に、VAIML コンパイラが負の Slice 境界でクラッシュする問題（[amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)）の回避書き換えを自動適用する。
+NPU 用は上の bf16cast 変換を行う。CUDA 経路は `scripts\setup_swinir.ps1` で PyTorch CUDA 環境と重みを `tmp/` に導入する（[docs/swinir-experimental.md](docs/swinir-experimental.md)）。
 
-## 動画の処理
-- 「アップスケーラーモデル」と「フレーム補間モデル」は独立して選択でき、双方に「なし」がある。
-- アップスケールのみ、RIFE補間のみ、両方の3経路に対応。
-- 両方を選んだ場合の順序は詳細設定「処理の順番」で選べる。既定は「アプコン→補間」
-  （重いESRGANの対象フレーム数を補間前に抑えられるため速い）。高解像度出力で
-  メモリが厳しい場合のみ「補間→アプコン」（省メモリ）を選ぶ。
-- 動画は再生互換性を優先してH.264で出力し、元音声を維持する。
-- **RIFE補間が有効な動画は従来のPNGフレーム経路を使う**。補間をフレームファイルへ
-  渡す必要があるためで、フレーム拡大だけは新AIの常駐セッションを使い回せる。
-- **RIFEなし・新AIの動画はrawvideo 3スレッドパイプライン**（ffmpegデコード→AI推論→
-  ffmpegエンコード）を使い、PNGの中間書き出しを省略する。音声はAACで保持する。
-- 新AIバックエンドは4倍拡大固定。NPUの短辺480px未満入力は安全のためGPUへ自動切替する。
-- 「一時停止」は現在のジョブ完了後に停止する（動画1本の途中では効かない）。
-  実行中ジョブを今すぐ中止するにはキュー行の × を押す。
-- 設定（モデル・倍率・出力先・詳細設定）は「開始」を押した時点のUI値が
-  保留中の全ジョブへ一括適用される。追加時点の値は使われない。
+### AdcSR
 
-## モデル選択ガイド（新AI）
-
-| 目的 | AI実行先 | モデル |
-|---|---|---|
-| アニメ・線画・CGを自然に拡大 | 自動 / GPU | Anime Video v3 (`animevideov3`) |
-| 実写の毛・肌・背景の質感を残す | 自動 / GPU | 4xNomosUni SPAN (`4xNomosUni`) |
-| 実写の輪郭を強く見せる | 自動 / GPU | Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) |
-| 静止画を最高画質で拡大（低速） | 自動 / GPU / NPU | SwinIR-M (`SwinIR`) |
-| 実写を生成型1ステップで拡大（静止画専用） | 自動 / GPU / NPU | AdcSR (`AdcSR`) |
-| GPUを他の作業へ空ける | NPU | 同じ5モデル。Anime/実写質感は512、AMD-RRDBとSwinIRは256、AdcSRは128（前半/後半の2プロセス構成） |
-| 既存モデル・2x等を使う | Vulkan | Vulkan選択時の従来モデル一覧 |
-
-新AIを試す場合は「自動（GPU優先）」から始める。ヘルパーが無い環境でも、
-画像・フォルダはVulkanへ退避する。NPUはRyzen AI環境とEPが必要で、初回だけ
-モデルごとのVAIMLコンパイル時間が発生する（小型モデルは数分〜15分、
-SwinIR-M 256は約51分。2回目以降はキャッシュで数秒）。4xNomosUni SPANは
-`4xNomosUni_span_multijpg`を使う。
-
-SwinIRのONNXは `scripts/get_ai_models.py --download swinir` で重みを取得後、
-`scripts/npu/export_spandrel.py --tile 256` で生成する（エクスポート時に
-VitisAI(VAIML)コンパイラのSlice負値バグ回避の書き換えを自動適用する。
-詳細は [docs/npu-research.md](docs/npu-research.md) と
-[amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)）。
-AdcSRの取得と変換は、AdcSRリポジトリをcloneし、Hugging FaceのGuaishou74851/AdcSRから`net_params_200.pkl`と`halfDecoder.ckpt`を取得し、Stable Diffusion 2.1-baseのdiffusers形式ローカルディレクトリを用意した後、次で行う（公式リポジトリはgated化されているため、公開ミラー `sd2-community/stable-diffusion-2-1-base` などを使う）。
+AdcSR リポジトリを clone し、Hugging Face の Guaishou74851/AdcSR から `net_params_200.pkl` と `halfDecoder.ckpt` を取得し、
+Stable Diffusion 2.1-base の diffusers 形式ローカルディレクトリを用意する（公式リポジトリは gated のため、公開ミラー `sd2-community/stable-diffusion-2-1-base` などを使う）。
 
 ```powershell
 git clone https://github.com/Guaishou74851/AdcSR.git <AdcSR clone>
-.venv\Scripts\python.exe scripts/adcsr/export_adcsr.py --repo <AdcSR clone> --sd <SD2.1-base ディレクトリ> --weights <net_params_200.pkl> --half-decoder <halfDecoder.ckpt> --size 128 --out tmp/npu-anime/span/adcsr_nchw_128x128_fp32.onnx
+.venv\Scripts\python.exe scripts/adcsr/export_adcsr.py --repo <AdcSR clone> --sd <SD2.1-base ディレクトリ> --weights <net_params_200.pkl> --half-decoder <halfDecoder.ckpt> --size 128 --out <models>/adcsr_nchw_128x128_fp32.onnx
 ```
 
-AdcSRのNPU実行は前半/後半の2プロセス構成（VitisAI EPの不具合回避。詳細は [docs/npu-research.md](docs/npu-research.md) のAdcSR節）。
-初回のみVAIMLコンパイルが発生する（この検証機で前半約93分＋後半約30分。次回はキャッシュを利用）。
-`UEU_ADCSR_NPU2=0` で無効化すると従来のGPU実行に戻る。
-NPU用モデルは fp32 の export 後、N5書換え → bf16cast → 前半/後半への切断の順で用意する。
+これで GPU（DirectML）経路が使える。NPU 経路は前半（UNet）と後半（VAE デコーダ）の 2 プロセス構成で動かすため、
+fp32 の export 後に、正規化の 4D 化 → bf16cast → 前半/後半への切断、の順で用意する。
 
 ```powershell
 .venv\Scripts\python.exe scripts/adcsr/rewrite_in_to_n5.py --input <fp32 onnx> --output <N5 fp32 onnx>
@@ -143,110 +165,36 @@ NPU用モデルは fp32 の export 後、N5書換え → bf16cast → 前半/後
 .venv\Scripts\python.exe scripts/adcsr/split_adcsr_npu.py --input <N5 bf16 onnx> --out-dir <models> --cache-key-front <前半cache_key> --cache-key-back <後半cache_key> --fp32 <N5 fp32 onnx> --ref-image <参照png>
 ```
 
-切断後は前半・後半のONNXと `adcsr_npu_manifest.json` を models ディレクトリに置く。
-既知の制約: EPの不具合回避に依存する構成のため、SDK更新後は起動時セルフテストで検知する。
+切断後は前半・後半の ONNX と `adcsr_npu_manifest.json` を models ディレクトリに置く。
+初回起動時に前半・後半を順に VAIML コンパイルする（この検証機で前半約 93 分 + 後半約 30 分。次回はキャッシュを利用）。
+2 プロセス構成は VitisAI EP の不具合（同一プロセスで後半を実行すると前半の以後の出力が NaN になる。[amd/RyzenAI-SW#402](https://github.com/amd/RyzenAI-SW/issues/402)）の回避で、
+SDK 更新後は起動時のセルフテストで検知する。`UEU_ADCSR_NPU2=0` で GPU 実行に戻る。
 
-SwinIRをNPUで動かす手順・回避策の英語まとめ: [docs/swinir-npu.md](docs/swinir-npu.md)
-AdcSR（生成型1ステップ）をNPUで動かす手順・回避策の英語まとめ: [docs/adcsr-npu.md](docs/adcsr-npu.md)
-(Running SwinIR on an AMD Ryzen AI NPU)。
+## パス設定（環境変数で上書き可能）
 
-帰属表示: **4xNomosUni_span_multijpg — CC-BY-4.0, by Philip Hofmann/Phips**
-（取得元とSHA-256は [docs/span-bench-results.md](docs/span-bench-results.md)）、
-**003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN — Apache-2.0, by Jingyun Liang (SwinIR)**、
-**AdcSR — Apache-2.0, Guaishou74851（CVPR 2025）。基盤 Stable Diffusion 2.1-base は CreativeML OpenRAIL-M（使用制限あり、利用者が確認すること）**。
-
-## 実測ベンチマーク（現行構成）
-
-実測環境: AMD Ryzen AI 7 PRO 350（NPU: XDNA2 / ドライバ 32.0.203.329）・
-Radeon 860M（iGPU）・32GB LPDDR5-8000。入力 854x480 → 4倍（3416x1920）。
-数値はタイル分割・結合・色変換込みの「1枚あたり」実測（常駐セッションの定常値、
-ベストエフォート3回の最良値）。GPUは fp32 ONNX を DirectML で、NPUは bf16cast を
-Ryzen AI SW 1.8.0 の VitisAI EP（VAIMLコンパイル）で実行。
-
-| モデル | 実体モデル | アーキテクチャ | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | タイル (GPU/NPU) | NPU bf16忠実度* |
-|---|---|---|---|---|---|---|
-| Anime Video v3 (`animevideov3`) | realesr-animevideov3（NPUはPReLU分解版 `dp`） | SRVGGNetCompact | **0.46秒** | 1.14秒 | 256〜512自動 / 512 | 48.3 dB |
-| 4xNomosUni SPAN (`4xNomosUni`) | `4xNomosUni_span_multijpg` | SPAN（48nf） | 0.51秒 | **0.60秒** | 256〜512自動 / 512 | 43.1 dB |
-| Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) | AMD縮小RRDB版 | RRDB | 2.78秒 | 2.15秒 | 256 / 256 | 37.9 dB** |
-| SwinIR-M (`SwinIR`) | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | SwinIR（window attention） | 約53秒 | 約79秒 | 256 / 256 | 38.5 dB |
-| AdcSR (`AdcSR`) | AdcSR net_params_200（SD2.1-base派生） | 生成型1ステップ拡散（UNet+VAEデコーダ） | 約1.3〜1.6秒/128タイル | 約2.05秒/128タイル（前半/後半の2プロセス構成） | 128 / 128 | - |
-
-\* 同一モデルの fp32 出力との PSNR。40dB前後は目視でほぼ判別不能の水準。
-\*\* Real-ESRGAN の忠実度は Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
-
-### NVIDIA機の実機スモーク
-
-2026-08-23、AMD Ryzen 7 9700X と NVIDIA GeForce RTX 5060 Ti（ドライバ 610.62、16GB）で確認した。
-入力は `animevideov3_nchw_256x256_fp32.onnx`、220x220画像、overlap 16、ウォームアップ1回。
-
-| 経路 | セッション生成 | タイル処理 | pure-run | wall total |
-|---|---:|---:|---:|---:|
-| DirectML（NVIDIA GPU） | 1.5秒 | 7.4 ms | 5.8 ms | 2.28秒 |
-| NvTensorRTRTXExecutionProvider | 0.7秒 | 7.6 ms | 6.1 ms | 1.67秒 |
-
-両経路の出力PSNRは **63.87 dB**。DMLデバイスが複数ある構成では、ヘルパーがVendor ID `0x10DE` のNVIDIA GPUを1台選択する。
-動画3秒のrawvideo経路は72/72フレーム成功し、出力は2560x1920・H.264（`h264_nvenc`）・音声保持だった。
-詳細な条件とログは [docs/nvidia-smoke-results.md](docs/nvidia-smoke-results.md) に記録した。
-
-同じ854x480入力での速度比較では、RTX上のwall totalはDirectML 1.50秒、TensorRT 1.60秒、Vulkan 1.888秒、AMD内蔵GPUのDirectMLは3.11秒だった。
-推論・出力一致度を含む詳細は [docs/gpu-benchmark-2026-08-24.md](docs/gpu-benchmark-2026-08-24.md) を参照。
-動画（640x480→2560x1920、NVENC使用）では、1秒はDirectML 3.626秒 / TensorRT 3.635秒、3秒は7.570秒 / **7.513秒**、12秒は25.227秒 / **25.026秒**。
-短い動画では固定費が効き、3秒以上ではTensorRTが僅かに逆転したが、12秒でも差は約0.8%だった。
-モデル別では、3秒動画のE2EがAnime Video v3で7.570秒 / 7.513秒、purephotoで8.405秒 / **7.576秒**、Real-ESRGANで**23.310秒** / 24.694秒（DirectML / TensorRT）となり、TensorRTの優位はモデル依存だった。
-
-AdcSRは静止画専用のため動画には使用できない。`tos`（1280x534）では128タイル180枚（マージン32・コア64）、DirectMLで約260〜280秒（約4.5分）だった。マージンを16から32に広げたのは継ぎ目の低周波の暗部を減らすため（docs/adcsr-tile-diagnosis.md 参照）。合成時は継ぎ目の格子補正（平坦領域限定・固定テンプレート）を適用する（同文書の追記参照）。
-
-### SwinIR-M（NVIDIA / PyTorch CUDA・超低速）
-
-公式SwinIR-M real-world x4を、実写の質感復元を重視する任意機能として利用できる。
-PyTorch CUDA環境と重みは大きいため、通常環境とは分けて `tmp/` に導入する。
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup_swinir.ps1
-```
-
-導入後、GUIの「AI実行先」で `SwinIR-M（CUDA・超低速）` を選ぶ。4x・BF16固定で、
-既定タイルは256。詳細設定の「メモリ節約」「強めに節約」は128/64タイルとして反映される。
-起動できない場合に別モデルへ自動変更はしない。
-
-動画は150フレーム単位でH.264チャンクを確定する。中止・異常終了後に同じ入力と設定で再実行すると、
-完了済みチャンクを飛ばして続きから再開する。再開データは出力先の
-`.＜出力名＞.swinir-work-*` に残り、正式出力の完成後だけ自動削除される。SwinIR CUDA動画と
-RIFEの併用、HDR動画には未対応。開始時に入力全体のSHA-256とCFR変換後の正確なフレーム数を確認する。
-音声保持、フレーム進捗、キャンセル、4K自動フィットには対応する。
-
-RTX 5060 Tiでは実写1秒でもE2E約19秒、640x480アニメ1秒で約57秒だった。FP16は実画像で
-数値不安定だったため使用せず、測定値・比較画像・ライセンスは
-[docs/swinir-experimental.md](docs/swinir-experimental.md) にまとめている。
-
-動画（rawvideoパイプライン・音声保持・3秒クリップのE2E実測）:
-
-| 経路 | 実効fps | 1フレームあたり |
+| 環境変数 | 既定値 | 用途 |
 |---|---|---|
-| GPU (DirectML) × アニメ | **2.48fps** | 0.40秒 |
-| NPU (VitisAI) × アニメ | 0.83fps | 1.21秒 |
-
-動画の1フレーム値が静止画定常値より速い（GPU 0.40 vs 0.46秒）のは、
-パイプラインがデコード/変換と推論を重ねて隠すため。NPU動画はGPU使用率ほぼゼロの
-まま回るので、ゲーム・GPU作業と並走できる。
-
-補足:
-
-- NPUは初回のみモデル毎にVAIMLコンパイルが走る（実測: av3dp 512 = 15.2分 /
-  purephoto 512 = 12.9分 / Real-ESRGAN 256 = 18.7分）。以後はキャッシュから数秒で起動
-- NPUの純推論はタイル処理を除くと av3dp 512 で 1.03秒/枚（Python側前後処理が約0.12秒）
-- Vulkan経路（realesrgan-ncnn-vulkan・フォールバック兼用）: animevideov3 実効約0.7秒/枚
+| `UEU_WINML_HELPER` | `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinML ヘルパーの明示指定 |
+| `UEU_MODELS_DIR` | `tmp/npu-anime` | GPU fp32 / NPU bf16cast モデルの探索先 |
+| `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU 常駐サーバーを起動する Python |
+| `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU EP のセッションキャッシュ |
+| `UEU_ADCSR_NPU2` | `1` | `0` で AdcSR の NPU 2 プロセス構成を無効化（GPU 実行へ） |
+| `UEU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA 環境の Python |
+| `UEU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M 重みの明示指定 |
+| `UEU_SWINIR_STARTUP_TIMEOUT` | `1800` 秒 | CUDA worker の起動待ち（30〜86400 秒） |
+| `UEU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100〜300 フレーム） |
+| `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264 出力の最大幅×高さ（例: `1920x1080`） |
 
 ## モデルの画質比較
 
 列は左から（すべて GPU/DirectML・fp32 で実行）:
 
-1. オリジナル（lanczos 4x・AIなし）
-2. Anime Video v3 (`animevideov3`) = **realesr-animevideov3**（SRVGGNetCompact）
-3. 4xNomosUni SPAN (`4xNomosUni`) = **4xNomosUni_span_multijpg**（SPAN）
-4. Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) = **AMD縮小RRDB版**（RRDB）
+1. オリジナル（lanczos 4x・AI なし）
+2. Anime Video v3 (`animevideov3`) = realesr-animevideov3
+3. 4xNomosUni SPAN (`4xNomosUni`) = 4xNomosUni_span_multijpg
+4. Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) = AMD 縮小 RRDB 版
 
-トゥーンCG — Big Buck Bunny (480p):
+トゥーン CG — Big Buck Bunny (480p):
 
 ![Big Buck Bunny](docs/benchmarks/model_guide_bbb.png)
 
@@ -258,44 +206,57 @@ RTX 5060 Tiでは実写1秒でもE2E約19秒、640x480アニメ1秒で約57秒�
 
 ![Tears of Steel](docs/benchmarks/model_guide_tos.png)
 
-傾向:
+- Anime Video v3: 細部を整理してなめらかに。劣化した古い素材に最も強い
+- 4xNomosUni SPAN: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
+- Real-ESRGAN（AMD縮小版）: 輪郭や毛の 1 本 1 本を立てる知覚系。加工感は強め
 
-- **Anime Video v3 (`animevideov3`)**: 細部を整理してなめらかに。劣化した古い素材に最も強い
-- **4xNomosUni SPAN (`4xNomosUni`)**: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
-- **Real-ESRGAN（AMD縮小版） (`AMD-RRDB`)**: 輪郭や毛の1本1本を立てる知覚系。加工感は強め
+SwinIR-M と AdcSR の目視評価と用途別の推奨は [docs/npu-research.md](docs/npu-research.md) を参照。
 
-素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)
-© Blender Foundation (CC-BY 3.0)、Superman (1941) はパブリックドメイン。
+## NPU に関する技術メモ
 
-過去の測定履歴（旧Vulkan/旧Ryzen AI経路、int8/bf16検証、NPU特性の調査記録）は
-[docs/npu-research.md](docs/npu-research.md) と
-[docs/span-bench-results.md](docs/span-bench-results.md) を参照。
+- [docs/swinir-npu.md](docs/swinir-npu.md): SwinIR を NPU で動かす手順と VAIML コンパイラの回避策（英語）
+- [docs/adcsr-npu.md](docs/adcsr-npu.md): AdcSR を NPU で動かす手順、正規化の 4D 化、2 回目以降 NaN の回避策（英語）
+- [docs/npu-research.md](docs/npu-research.md): int8/bf16 の検証、TDR ライブダンプの解析、占有率測定など日本語の研究ノート
+- 報告済みの不具合: [amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)（負の Slice 境界での assertion）、[#398](https://github.com/amd/RyzenAI-SW/issues/398)（長い NPU カーネルでの TDR ライブダンプ）、[#402](https://github.com/amd/RyzenAI-SW/issues/402)（同一プロセスのセッション間で出力が NaN になる）
 
 ## ポータブル版
-PowerShellで次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6を同梱したzipを作成する。
+
+PowerShell で次を実行すると、Python・ffmpeg・Real-ESRGAN・RIFE v4.6 を同梱した zip を作成する。
+
 ```
 powershell -ExecutionPolicy Bypass -File scripts\build_portable.ps1
 ```
-展開後は `ultraeasy-upscaler.exe` をダブルクリックする。AMD Radeon / NVIDIA GeForce RTXはいずれもVulkan経路を使用する。
 
-## 起動
-`run.bat` をダブルクリック、または:
-```
-.venv\Scripts\python.exe -m app.main
-```
+展開後は `ultraeasy-upscaler.exe` をダブルクリックする。ポータブル版は Vulkan 経路のみ（DirectML / NPU / CUDA のヘルパーは含まない）。
+
+## アーキテクチャ
+
+- **GUI**: PySide6（ダークテーマ・ネイティブ D&D）。`app/gui`
+- **コア（GUI 非依存・単体テスト可）**: `app/core`
+  - `binaries.py` 外部バイナリ / モデル探索
+  - `media.py` 種別判定・ffprobe メタ取得
+  - `upscaler.py` 常駐ヘルパーと realesrgan-ncnn-vulkan の統合ラッパ（画像 / フォルダ）
+  - `helper_backend.py` / `serve_client.py` DirectML / NPU / CUDA ヘルパーのモデル解決・常駐セッション・バイナリプロトコル
+  - `video.py` ffmpeg 抽出 / 再結合 / HW エンコード、rawvideo パイプライン、SwinIR CUDA のチャンク再開
+  - `interpolator.py` RIFE NCNN/Vulkan フレーム補間
+  - `engine.py` ジョブのオーケストレーション、`jobs.py` / `settings.py` データモデル
+  - `npu_backend.py` / `npu_worker.py` 旧 NPU API（スクリプト互換のため残置、GUI では使用しない）
+- **ヘルパー（常駐プロセス）**: `tools/winml-sr/`（C#、DirectML。クロスフェード合成と AdcSR の格子補正を含む）、
+  `tools/npu-serve/`（Python、VitisAI EP。AdcSR は `npu_worker.py` × 2 と `npu_twostage.py` の 2 プロセス構成）、
+  `tools/swinir/`（Python、PyTorch CUDA）
 
 ## 開発
+
 ```
 .venv\Scripts\python.exe -m pytest        # コアの単体テスト
 ```
 
-## ライセンス
+## ライセンスと帰属
 
 - 本リポジトリのコード: [MIT](LICENSE)
-- `vendor/amd-npu/` の Real-ESRGAN NPUモデル: AMD公式モデル由来のため
-  [Research-only RAIL-MS](vendor/amd-npu/LICENSE)（研究用途限定）
-- その他のNPUモデル（Anime Video v3 / Real-ESRGAN Anime）: BSD-3-Clause の
-  [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) 重みから変換
-- purephoto（`4xNomosUni_span_multijpg`）: **CC-BY-4.0**, by **Philip Hofmann/Phips**
-- ベンチマーク画像の素材: Big Buck Bunny / Tears of Steel
-  （© Blender Foundation, CC-BY 3.0）、Superman (1941) はパブリックドメイン
+- `vendor/amd-npu/` の Real-ESRGAN NPU モデル: AMD 公式モデル由来のため [Research-only RAIL-MS](vendor/amd-npu/LICENSE)（研究用途限定）
+- Anime Video v3 / Real-ESRGAN Anime の NPU モデル: BSD-3-Clause の [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) 重みから変換
+- 4xNomosUni_span_multijpg: CC-BY-4.0, by Philip Hofmann/Phips（取得元と SHA-256 は [docs/span-bench-results.md](docs/span-bench-results.md)）
+- 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN: Apache-2.0, by Jingyun Liang（SwinIR）。CUDA 経路の実装由来は `tools/swinir/NOTICE.md`
+- AdcSR: Apache-2.0, Guaishou74851（CVPR 2025）。基盤の Stable Diffusion 2.1-base は CreativeML OpenRAIL-M（使用制限あり、利用者が確認すること）
+- ベンチマーク画像の素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)（© Blender Foundation, CC-BY 3.0）、Superman (1941) はパブリックドメイン
