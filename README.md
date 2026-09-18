@@ -74,7 +74,7 @@ DirectML / NPU では具体的なモデル名で選ぶ。GPU と NPU で対応�
 
 - 迷ったら「自動（GPU優先）」。アニメ・CG は Anime Video v3、実写は 4xNomosUni SPAN から。
 - 静止画を時間をかけて最高画質にするなら SwinIR-M か AdcSR。AdcSR は生成型なので実写向きで、テクスチャを作り足す。
-- GPU を他の作業に使いたいときは NPU。同じモデルを GPU より遅く、GPU を使わずに回す。
+- GPU を他の作業に使いたいときは NPU。GPU を使わずに回せる（4xNomosUni SPAN は NPU が GPU より速い。Anime Video v3 は GPU が速い）。
 - AdcSR はタイルの継ぎ目に低周波の暗い格子が出るため、マージン 32 とクロスフェード合成に加え、平坦領域限定の固定テンプレート補正を合成時に適用する（[docs/adcsr-tile-diagnosis.md](docs/adcsr-tile-diagnosis.md)）。
 
 ## 実測
@@ -87,8 +87,8 @@ GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の 
 
 | モデル | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | NPU bf16 忠実度* | NPU 初回コンパイル |
 |---|---|---|---|---|
-| Anime Video v3 | **0.46 秒** | 1.14 秒 | 48.3 dB | 15.2 分 |
-| 4xNomosUni SPAN | 0.51 秒 | **0.60 秒** | 43.1 dB | 12.9 分 |
+| Anime Video v3 | **0.46 秒** | 0.62 秒 | 49.4 dB | 9.4 分 |
+| 4xNomosUni SPAN | 0.51 秒 | **0.36 秒** | 46.9 dB | 9.0 分 |
 | Real-ESRGAN（AMD縮小版） | 2.78 秒 | 2.15 秒 | 37.9 dB** | 18.7 分 |
 | SwinIR-M | 約 53 秒 | 約 79 秒 | 38.5 dB | 約 51 分 |
 | AdcSR | 約 1.3〜1.6 秒 / 128 タイル | 約 2.05 秒 / 128 タイル（前半 0.7 + 後半 1.3） | 45.4 dB*** | 前半約 93 分 + 後半約 30 分 |
@@ -96,13 +96,14 @@ GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の 
 \* 同一モデルの fp32 出力との PSNR。40 dB 前後は目視でほぼ判別不能の水準。
 \*\* Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
 \*\*\* 1280x534 の写真 1 枚（180 タイル）を GPU 版と比較した値。AdcSR は 1280x534 で GPU 約 4.5 分、NPU 約 6.5 分。
+NPU は末尾の DepthToSpace 以降を CPU で実行する（tail-cut）。4xNomosUni SPAN の body は fp32 で、bf16cast 版より 2.4 dB 高い。
 
 動画（rawvideo パイプライン・音声保持・3 秒クリップの E2E）:
 
 | 経路 | 実効 fps | 1 フレームあたり |
 |---|---|---|
 | GPU (DirectML) × Anime Video v3 | **2.48 fps** | 0.40 秒 |
-| NPU (VitisAI) × Anime Video v3 | 0.83 fps | 1.21 秒 |
+| NPU (VitisAI) × Anime Video v3 | 1.46 fps | 0.68 秒 |
 
 動画の 1 フレーム値が静止画より速いのは、デコード・変換と推論を重ねて隠すため。
 Vulkan 経路（realesrgan-ncnn-vulkan）の animevideov3 は実効約 0.7 秒 / 枚。
@@ -190,6 +191,7 @@ SDK 更新後は起動時のセルフテストで検知する。`UEU_ADCSR_NPU2=
 | `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU 常駐サーバーを起動する Python |
 | `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU EP のセッションキャッシュ |
 | `UEU_ADCSR_NPU2` | `1` | `0` で AdcSR の NPU 2 プロセス構成を無効化（GPU 実行へ） |
+| `UEU_NPU_TAILCUT` | `1` | `0` で NPU tail-cut を無効化（全体モデルで実行） |
 | `UEU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA 環境の Python |
 | `UEU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M 重みの明示指定 |
 | `UEU_SWINIR_STARTUP_TIMEOUT` | `1800` 秒 | CUDA worker の起動待ち（30〜86400 秒） |

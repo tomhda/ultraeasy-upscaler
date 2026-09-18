@@ -294,6 +294,70 @@ shape inference で求めた具体値に書き換えると通る（SinSR 128 版
 Erf・Einsum・ArgMin・cubic/nearest Resize・3D InstanceNormalization・Softmax（4D/5D）・
 負境界の Slice＋Concat は DML では問題なかった。
 
+## 設定スイープと AI Analyzer の実測（2026-09 追記）
+
+測定記録は `tmp/npu-perf/RESULT.md`（round8）。条件は Ryzen AI SW 1.8.0、
+VitisAI EP、電源モード Default（変更なし）。
+
+- `xrt-smi validate` は 3 種すべて PASSED:
+  gemm 51.3 TOPS（公称 INT8 50 TOPS と一致）、latency 平均 67.5 us、
+  throughput 平均 60889.2 ops。SR 系の実効（約 0.5〜1 GOPS相当）は
+  ピークの約 1/100 で、律速は演算器のピークではない（事実）。
+- 設定スイープ（SPAN 512 タイル、bf16cast。基準 0.2457 s）:
+  O1 は 1.36〜1.38 s（約 5.6 倍遅い。コンパイルは速いが実行が遅い）。
+  O3・vectorized・unvectorized は基準と同等（出力が既存 cache とビット一致する
+  ものもあり、格納指定は SPAN に無効）。既定 O2/auto が最良のまま。
+- FP32 直接入力はモデル依存。SPAN は bf16cast と同速（0.256 s）で
+  fp32 参照比 PSNR が 44.51 dB → 46.94 dB に上がる（Quark 変換も不要）。
+  一方 AdcSR 後半 G の FP32 直接版は metaDef 6 個・計 76 ノードしか NPU に載らず、
+  残りが CPU で動いた（`vendor/amd-npu-1.8/modelcachekey_r8_g_fp32/context.json` で確認）。
+  新しい body を NPU 化したら metaDef が 1 個・全ノード NPU かを必ず確認する。
+- AI Analyzer（SPAN 512 タイル約 240 ms）:
+  中盤約 20 レイヤが一律 2.0〜2.3 ms（計 42 ms。サイズによらない固定費と推測）、
+  終盤レイヤ 43〜46（upsampler の DepthToSpace・L3 spill 系）が 17/42/20/18 ms
+  （計 97 ms）、id 50 区間 71 ms。終盤＋id 50 区間で約 7 割を占める。
+  実効 238.8 GOPs / 0.25 s = 約 950 GOPS。
+- AI Analyzer（AdcSR 後半 G、約 1400 ms/run）:
+  AIE レイヤ時間の 92%（1023 ms / 1111 ms）が `L3_OFM_Buffer_spill` で、
+  attention・Softmax・MatMul は 2 レイヤ 2.6 ms のみ。
+  G の時間の 9 割は大活性の搬送（spill）で、attention 等は律速ではない（事実）。
+
+## tail-cut: 末尾 DepthToSpace 以降の CPU 実行（2026-09 追記）
+
+上記の「終盤 upsampler 系が約 7 割」から、DepthToSpace の直前でグラフを切り、
+NPU は `[1,48,512,512]` を出力、PixelShuffle（Anime Video v3 は入力の最近傍
+4 倍加算を追加）を CPU の numpy で行う。要素数は同じなので転送量は変わらない。
+CPU 後処理は次タイルの NPU 実行と 2 スレッドで重ねる（キュー深さ 2）。
+実験記録は `tmp/npu-perf/tailcut/RESULT.md`、製品記録は
+`tmp/npu-perf/impl-tailcut/RESULT.md`。
+
+製品計測（UEU serve 経路、512 タイル overlap 16。2 回測定の小さい方。
+`--tail` なしの 1 モデル経路は変更前とビット一致を確認済み）:
+
+| モデル・入力 | 全体 NPU | tail-cut（NPU body＋CPU 後処理） | 全体版との PSNR |
+|---|---|---|---|
+| SPAN、bbb 853x480 | 0.608 秒 | **0.358 秒** | 46.91 dB |
+| SPAN、tos 1280x534 | 1.692 秒 | **0.914 秒** | 46.48 dB |
+| Anime Video v3、bbb 853x480 | 1.211 秒 | **0.615 秒** | 53.35 dB |
+| Anime Video v3、tos 1280x534 | 3.504 秒 | **1.635 秒** | 54.56 dB |
+
+- SPAN body は fp32 直接入力（73 ノード、238.776 GOPs、VAIML 対応 100%、
+  サブグラフ 1）。fp32 参照比 PSNR は bf16cast 全体版の 44.51 dB → 46.94 dB。
+  全体版との相互 PSNR 46.9 dB は bf16 量子化の差で、劣化ではない。
+- Anime body は PReLU 分解版の bf16cast（onnx 417 ノードのうち Cast 融合で
+  meta 311 ノード、328.087 GOPs、サブグラフ 1）。PReLU を含む fp32 版は
+  VAIML bf16 で無音の誤コンパイルを起こす既知問題があるため使わない。
+- CPU 後処理（SPAN 約 19 ms/タイル、Anime 約 57 ms/タイル）は NPU 実行より
+  短いためパイプラインで隠れる。`[timing] tail-post` に合計を出す。
+- アプリ経路（NPU_NATIVE、3 秒 72 フレーム動画の E2E）:
+  SPAN 1.57 fps → **2.44 fps**、Anime Video v3 0.79 fps → **1.46 fps**。
+  新旧出力の PSNR は 43〜53 dB。NPU 実行中の CPU 使用率（全体、5 秒ごと）は
+  新旧で同水準（10% 台前半。ffmpeg の伸縮・符号化が支配的）。
+  `UEU_NPU_TAILCUT=0` で従来の全体モデルに戻せる。
+- body とマニフェスト（`*.tail.json`）が models に無い環境では
+  従来の全体モデルへフォールバックする（v0.9.0 の配布物でも動作する）。
+
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
@@ -323,6 +387,7 @@ export_x4plus_anime.py   RRDBNet(6B) → 同上
 make_calib_patches.py    フレーム → 256pxキャリブパッチ（int8用・--src/--out/--count）
 quantize_animevideov3.py Quark XINT8 量子化（int8用・--prefix/--calib/--n）
 verify_animevideov3_npu.py  NPUコンパイル・割当・PSNR・速度の一括検証
+split_tail.py  末尾 DepthToSpace 以降の切断（body＋tail マニフェスト生成・CPU 一致検証）
 ```
 
 bf16 の実務手順は2行:

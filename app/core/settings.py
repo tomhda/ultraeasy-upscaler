@@ -174,6 +174,25 @@ HELPER_MODEL_NPU_BACK = {
     HELPER_MODEL_ADCSR: "adcsr_back_nchw_128x128_bf16cast.onnx",
 }
 
+# NPU tail-cut（末尾の DepthToSpace 以降を CPU で実行）の body とマニフェスト。
+# キーは具体的なモデルキー、値はタイルの一辺。値は (body ファイル名, tail
+# マニフェスト名)。両方が models ディレクトリにあれば body＋--tail を使い、
+# 無ければ従来の全体モデルへフォールバックする。
+HELPER_MODEL_NPU_TAIL = {
+    HELPER_MODEL_ANIME: {
+        512: (
+            "animevideov3dp_body_nchw_512x512_bf16cast.onnx",
+            "animevideov3dp_body_nchw_512x512.tail.json",
+        ),
+    },
+    HELPER_MODEL_SPAN: {
+        512: (
+            "purephoto_body_nchw_512x512_fp32.onnx",
+            "purephoto_body_nchw_512x512.tail.json",
+        ),
+    },
+}
+
 # NPU 2段モードのマニフェスト名 (models ディレクトリ直下)。
 # F/G のファイル名・SHA-256・cache_key・境界テンソル名・ツール版を持つ。
 # 無ければ 2 段モード不可として従来どおり GPU 転送する。
@@ -181,6 +200,9 @@ ADCSR_NPU_MANIFEST = "adcsr_npu_manifest.json"
 
 # AdcSR NPU 2段モードの即時無効化フラグ。UEU_ADCSR_NPU2=0 で従来の GPU 転送に戻る。
 ADCSR_NPU2_ENV = "UEU_ADCSR_NPU2"
+
+# NPU tail-cut の即時無効化フラグ。UEU_NPU_TAILCUT=0 で従来の全体モデルに戻る。
+NPU_TAILCUT_ENV = "UEU_NPU_TAILCUT"
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

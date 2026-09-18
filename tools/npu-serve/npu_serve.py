@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import math
 import os
+import queue
 import struct
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -16,6 +18,8 @@ import numpy as np
 import onnxruntime as ort
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from npu_tail import TAIL_QUEUE_DEPTH, load_tail_manifest, tail_postprocess
 
 MAGIC_READY = b"UEUH"
 MAGIC_FRAME = b"UEUF"
@@ -103,8 +107,64 @@ def _write_error(stream, exc: BaseException) -> None:
     stream.flush()
 
 
+def run_tail_tiles(run_tile, input_batches, manifest) -> tuple[list, float]:
+    """各タイルの body 実行と numpy 後処理を重ね、順序を保って返す。
+
+    ``run_tile(index, input_batch)`` は NPU body を実行して ``[1, C, H, W]``
+    を返す callable。``input_batches`` はモデル論理入力（NCHW）のバッチ列。
+    戻り値は（後処理済み CHW タイル列, 後処理合計 ms）。
+
+    後処理は別スレッド（キュー深さ :data:`TAIL_QUEUE_DEPTH`）で行い、
+    次タイルの NPU 実行と重ねる。実行側・後処理側どちらの例外も呼び出し側へ
+    伝播し、ワーカーは必ず回収する（スレッドを残さない）。
+    """
+    count = len(input_batches)
+    results: list = [None] * count
+    errors: list[BaseException] = []
+    post_ms = [0.0]
+    work: queue.Queue = queue.Queue(maxsize=TAIL_QUEUE_DEPTH)
+    done = object()
+
+    def _worker() -> None:
+        while True:
+            item = work.get()
+            if item is done:
+                return
+            index, body_out, model_in = item
+            try:
+                started = time.perf_counter()
+                output = tail_postprocess(body_out, model_in, manifest)
+                post_ms[0] += (time.perf_counter() - started) * 1000.0
+                results[index] = output[0]
+            except Exception as exc:  # noqa: BLE001 - 記録して排出し、呼び出し側で送出
+                if not errors:
+                    errors.append(exc)
+
+    thread = threading.Thread(target=_worker, name="npu-tail-post", daemon=True)
+    thread.start()
+    try:
+        for index, model_in in enumerate(input_batches):
+            body_out = run_tile(index, model_in)
+            work.put((index, body_out, model_in))
+    finally:
+        # ワーカーは DONE でのみ終了する（例外時は排出し続けて必ず到達）。
+        # BaseException でワーカーが死んだ場合に備え daemon=True にしてある。
+        work.put(done)
+        thread.join()
+    if errors:
+        raise errors[0]
+    return results, post_ms[0]
+
+
 class NpuSession:
-    def __init__(self, model_path: Path, cache_dir: Path, overlap: int, warmup: int) -> None:
+    def __init__(
+        self,
+        model_path: Path,
+        cache_dir: Path,
+        overlap: int,
+        warmup: int,
+        tail: dict | None = None,
+    ) -> None:
         providers = ort.get_available_providers()
         if "VitisAIExecutionProvider" not in providers:
             raise RuntimeError(f"VitisAIExecutionProvider is unavailable: {providers}")
@@ -149,6 +209,29 @@ class NpuSession:
             raise ValueError(f"invalid model scale: input={shape}, output={out_shape}")
         self.scale = scale_h
         self.overlap = overlap
+        self.tail = tail
+        if tail is not None:
+            if self.input_format != "nchw":
+                raise ValueError(f"tail-cut needs an nchw body, got input={shape}")
+            if self.output_name != tail["body_output"]:
+                raise ValueError(
+                    f"tail manifest body_output={tail['body_output']!r} "
+                    f"!= model output {self.output_name!r}"
+                )
+            blocksize = int(tail["blocksize"])
+            out_c = int(out_shape[1])
+            if out_c % (blocksize * blocksize) != 0:
+                raise ValueError(
+                    f"tail-cut body channels {out_c} not divisible "
+                    f"by blocksize^2 ({blocksize * blocksize})"
+                )
+            if int(out_shape[2]) != self.tile_h or int(out_shape[3]) != self.tile_w:
+                raise ValueError(
+                    f"tail-cut body output {tuple(out_shape)} must be "
+                    f"tile-sized [1, C, {self.tile_h}, {self.tile_w}]"
+                )
+            # body の出力はタイルと同寸なので、倍率はマニフェストから取る。
+            self.scale = int(tail["scale"])
 
         dummy = np.zeros((1, 3, self.tile_h, self.tile_w), dtype=np.float32)
         if self.input_format == "nhwc":
@@ -162,20 +245,48 @@ class NpuSession:
                 flush=True,
             )
 
+    def _run_body_tile(self, tile_batch_nchw: np.ndarray) -> np.ndarray:
+        """1 タイルの body を実行して ``[1, C, H, W]``（NCHW 論理）を返す。"""
+        feed = (
+            np.transpose(tile_batch_nchw, (0, 2, 3, 1))
+            if self.input_format == "nhwc"
+            else tile_batch_nchw
+        )
+        output = self.session.run(
+            [self.output_name], {self.input_name: np.ascontiguousarray(feed)}
+        )[0]
+        if self.input_format == "nhwc":
+            output = np.transpose(output, (0, 3, 1, 2))
+        return np.ascontiguousarray(output)
+
     def upscale(self, rgb: np.ndarray) -> tuple[np.ndarray, int]:
         img_chw = np.ascontiguousarray(np.transpose(rgb, (2, 0, 1)), dtype=np.float32) / 255.0
         tiles, orig_hw, padded_hw = _split_tiles(
             img_chw, (self.tile_h, self.tile_w), self.overlap
         )
         sr_tiles: list[np.ndarray] = []
-        for tile in tiles:
-            input_3d = np.transpose(tile, (1, 2, 0)) if self.input_format == "nhwc" else tile
-            output = self.session.run(
-                [self.output_name], {self.input_name: input_3d[None, ...]}
-            )[0][0]
-            if self.input_format == "nhwc":
-                output = np.transpose(output, (2, 0, 1))
-            sr_tiles.append(output)
+        if self.tail is not None:
+            sr_tiles, post_ms = run_tail_tiles(
+                lambda _index, tile_batch: self._run_body_tile(tile_batch),
+                [np.ascontiguousarray(tile[None, ...]) for tile in tiles],
+                self.tail,
+            )
+            print(
+                f"[timing] tail-post total={post_ms:.0f} ms",
+                file=sys.stderr,
+                flush=True,
+            )
+            # 後処理済みタイルは従来の 1 タイル出力と同じ形・同じ値域なので、
+            # 以降の _merge_tiles と量子化は共通である。
+        else:
+            for tile in tiles:
+                input_3d = np.transpose(tile, (1, 2, 0)) if self.input_format == "nhwc" else tile
+                output = self.session.run(
+                    [self.output_name], {self.input_name: input_3d[None, ...]}
+                )[0][0]
+                if self.input_format == "nhwc":
+                    output = np.transpose(output, (2, 0, 1))
+                sr_tiles.append(output)
 
         sr_chw = _merge_tiles(
             sr_tiles,
@@ -197,11 +308,17 @@ def serve(args: argparse.Namespace) -> int:
     model_path = Path(args.model).resolve()
     if not model_path.is_file():
         raise FileNotFoundError(f"model not found: {model_path}")
+    tail = None
+    if getattr(args, "tail", None):
+        if getattr(args, "model_back", None):
+            raise ValueError("--tail は 1 モデル経路専用（2 段モードとは併用不可）")
+        tail = load_tail_manifest(args.tail)
     session = NpuSession(
         model_path=model_path,
         cache_dir=Path(args.cache_dir).resolve(),
         overlap=args.overlap,
         warmup=args.warmup,
+        tail=tail,
     )
 
     stdin = sys.stdin.buffer
@@ -265,6 +382,9 @@ def _parser() -> argparse.ArgumentParser:
     # 1 モデル経路の既存オプションの意味は変えない。
     parser.add_argument("--model-back", default=None)
     parser.add_argument("--manifest", default=None)
+    # tail-cut モード (DepthToSpace 以降を CPU で実行)。--tail 指定時のみ有効。
+    # 未指定時の出力は従来と同一。
+    parser.add_argument("--tail", default=None)
     parser.add_argument("--seam-template", default=None)
     parser.add_argument("--worker-timeout", type=float, default=60.0)
     parser.add_argument("--compile-timeout", type=float, default=4 * 3600.0)

@@ -37,6 +37,8 @@ from .settings import (
     ADCSR_NPU2_ENV,
     ADCSR_NPU_MANIFEST,
     HELPER_MODEL_NPU_BACK,
+    HELPER_MODEL_NPU_TAIL,
+    NPU_TAILCUT_ENV,
     HELPER_SEAM_TEMPLATES,
     canonical_helper_model,
     ModelFamily,
@@ -327,6 +329,28 @@ def adcsr_npu2_enabled() -> bool:
     return os.environ.get(ADCSR_NPU2_ENV, "1") != "0"
 
 
+def npu_tailcut_enabled() -> bool:
+    """UEU_NPU_TAILCUT=0 で無効。それ以外は既定有効。"""
+    return os.environ.get(NPU_TAILCUT_ENV, "1") != "0"
+
+
+def npu_tail_files(model: str | ModelFamily | None, tile: int) -> tuple[Path, Path] | None:
+    """tail-cut の (body, manifest)。両方が models に無ければ None。
+
+    v0.9.0 の配布物しか無い環境では None になり、呼び出し側は従来の
+    全体モデルへフォールバックする。
+    """
+    entry = HELPER_MODEL_NPU_TAIL.get(canonical_helper_model(model), {}).get(tile)
+    if entry is None:
+        return None
+    body_name, manifest_name = entry
+    body = _search_model_file(body_name)
+    manifest = _search_model_file(manifest_name)
+    if body is None or manifest is None:
+        return None
+    return body, manifest
+
+
 def _search_model_file(filename: str) -> Path | None:
     """models 探索順で filename を探す。無ければ None。"""
     root = models_dir()
@@ -427,7 +451,7 @@ def open_session(
     """入力寸法に合うモデルとヘルパーを解決してUEUHまで接続する。"""
     progress = progress or _noop
     try:
-        backend, _tile, model_path = _session_spec(settings, width, height)
+        backend, tile, model_path = _session_spec(settings, width, height)
         model_key = _model_key(settings)
         overlap = overlap_for_model(model_key)
         if backend == UpscaleBackend.SWINIR_CUDA:
@@ -497,11 +521,26 @@ def open_session(
                     "AdcSR の NPU 2段モード用ファイル (front/back/manifest) が見つかりません")
             else:
                 cache_hit = _cache_hit(model_path)
+            tail_manifest: Path | None = None
+            if (
+                two_stage is None
+                and backend == UpscaleBackend.NPU_NATIVE
+                and model_key != HELPER_MODEL_ADCSR
+                and npu_tailcut_enabled()
+            ):
+                tail_found = npu_tail_files(model_key, tile)
+                if tail_found is not None:
+                    # body とマニフェストが両方あれば tail-cut。cache_hit は
+                    # body の stem で判定する。無ければ従来の全体モデルのまま。
+                    model_path, tail_manifest = tail_found
+                    cache_hit = _cache_hit(model_path)
             command = [
                 str(python), str(script), "--model", str(model_path),
                 "--cache-dir", str(cache),
                 "--overlap", str(overlap), "--warmup", "1",
             ]
+            if tail_manifest is not None:
+                command += ["--tail", str(tail_manifest)]
             seam_template = seam_template_path(model_key, overlap)
             if seam_template is not None:
                 command += ["--seam-template", str(seam_template)]
