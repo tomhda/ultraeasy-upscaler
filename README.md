@@ -3,6 +3,11 @@
 Windows ローカル専用の、画像・動画のアップスケールとフレーム補間ツール。
 超解像モデルを DirectML GPU・AMD Ryzen AI NPU・NVIDIA CUDA・Vulkan のいずれかで実行する。
 
+> **English summary.** Local image/video upscaler for Windows. Runs Real-ESRGAN, SPAN, SwinIR and AdcSR (one-step diffusion SR)
+> on DirectML GPU, AMD Ryzen AI NPU (VitisAI EP, XDNA2), NVIDIA CUDA or Vulkan. Notes in English:
+> [SwinIR on AMD Ryzen AI NPU](docs/swinir-npu.md) (VAIML compiler assertion on negative Slice bounds, and the workaround),
+> [AdcSR on AMD Ryzen AI NPU](docs/adcsr-npu.md) (all-NaN output on repeated runs, and the two-process workaround).
+
 - 入力: 画像 1 枚、フォルダ、動画（音声保持・H.264 出力）
 - 拡大: 4 倍固定の超解像モデル（下表）と、従来の realesrgan-ncnn-vulkan（2x/4x）
 - フレーム補間: RIFE v4.6（NCNN/Vulkan）
