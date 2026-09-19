@@ -19,7 +19,13 @@ import onnxruntime as ort
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from npu_tail import TAIL_QUEUE_DEPTH, load_tail_manifest, tail_postprocess
+from npu_tail import (
+    TAIL_QUEUE_DEPTH,
+    load_tail_manifest,
+    quantize_chw_into,
+    tail_postprocess,
+    tail_quantize_into,
+)
 
 MAGIC_READY = b"UEUH"
 MAGIC_FRAME = b"UEUF"
@@ -91,6 +97,27 @@ def _merge_tiles(
     return np.ascontiguousarray(img_pad[:, :height, :width])
 
 
+def _tile_boxes(orig_hw: tuple[int, int], patch_hw: tuple[int, int], overlap: int):
+    """_split_tiles と同じ順で、各タイルの有効コア（タイル座標）と画像上の位置を返す。
+
+    戻り値は ``((ty0, ty1, tx0, tx1), (iy0, iy1, ix0, ix1))`` の列。パディングで
+    足した領域（_merge_tiles が最後に切り落とす部分）は含めない。
+    """
+    height, width = orig_hw
+    core_h = patch_hw[0] - 2 * overlap
+    core_w = patch_hw[1] - 2 * overlap
+    boxes = []
+    for iy in range(math.ceil(height / core_h)):
+        for ix in range(math.ceil(width / core_w)):
+            y0, x0 = iy * core_h, ix * core_w
+            y1, x1 = min(y0 + core_h, height), min(x0 + core_w, width)
+            boxes.append((
+                (overlap, overlap + (y1 - y0), overlap, overlap + (x1 - x0)),
+                (y0, y1, x0, x1),
+            ))
+    return boxes
+
+
 def _read_exact(stream, size: int) -> bytes:
     buf = bytearray()
     while len(buf) < size:
@@ -107,12 +134,14 @@ def _write_error(stream, exc: BaseException) -> None:
     stream.flush()
 
 
-def run_tail_tiles(run_tile, input_batches, manifest) -> tuple[list, float]:
+def run_tail_tiles(run_tile, input_batches, manifest, post=None) -> tuple[list, float]:
     """各タイルの body 実行と numpy 後処理を重ね、順序を保って返す。
 
     ``run_tile(index, input_batch)`` は NPU body を実行して ``[1, C, H, W]``
     を返す callable。``input_batches`` はモデル論理入力（NCHW）のバッチ列。
     戻り値は（後処理済み CHW タイル列, 後処理合計 ms）。
+    ``post(index, body_out, model_in)`` を渡すと既定の後処理の代わりに呼び、
+    その戻り値を結果列に入れる（出力バッファへ直接書く用途）。
 
     後処理は別スレッド（キュー深さ :data:`TAIL_QUEUE_DEPTH`）で行い、
     次タイルの NPU 実行と重ねる。実行側・後処理側どちらの例外も呼び出し側へ
@@ -133,9 +162,12 @@ def run_tail_tiles(run_tile, input_batches, manifest) -> tuple[list, float]:
             index, body_out, model_in = item
             try:
                 started = time.perf_counter()
-                output = tail_postprocess(body_out, model_in, manifest)
+                if post is not None:
+                    output = post(index, body_out, model_in)
+                else:
+                    output = tail_postprocess(body_out, model_in, manifest)[0]
                 post_ms[0] += (time.perf_counter() - started) * 1000.0
-                results[index] = output[0]
+                results[index] = output
             except Exception as exc:  # noqa: BLE001 - 記録して排出し、呼び出し側で送出
                 if not errors:
                     errors.append(exc)
@@ -261,43 +293,50 @@ class NpuSession:
 
     def upscale(self, rgb: np.ndarray) -> tuple[np.ndarray, int]:
         img_chw = np.ascontiguousarray(np.transpose(rgb, (2, 0, 1)), dtype=np.float32) / 255.0
-        tiles, orig_hw, padded_hw = _split_tiles(
+        tiles, orig_hw, _padded_hw = _split_tiles(
             img_chw, (self.tile_h, self.tile_w), self.overlap
         )
-        sr_tiles: list[np.ndarray] = []
+        # 量子化までをタイル単位で行い、有効コアだけを最終バッファへ直接書く。
+        # 結合してから clip(x * 255).astype(uint8) する手順と要素ごとに同じ演算。
+        scale = self.scale
+        boxes = _tile_boxes(orig_hw, (self.tile_h, self.tile_w), self.overlap)
+        out = np.empty((orig_hw[0] * scale, orig_hw[1] * scale, 3), dtype=np.uint8)
+
+        def _dst(index: int) -> np.ndarray:
+            y0, y1, x0, x1 = boxes[index][1]
+            return out[y0 * scale:y1 * scale, x0 * scale:x1 * scale]
+
         if self.tail is not None:
-            sr_tiles, post_ms = run_tail_tiles(
+            tail = self.tail
+
+            def _post(index: int, body_out: np.ndarray, model_in: np.ndarray) -> None:
+                tail_quantize_into(_dst(index), body_out, model_in, tail, boxes[index][0])
+
+            _results, post_ms = run_tail_tiles(
                 lambda _index, tile_batch: self._run_body_tile(tile_batch),
                 [np.ascontiguousarray(tile[None, ...]) for tile in tiles],
-                self.tail,
+                tail,
+                post=_post,
             )
             print(
                 f"[timing] tail-post total={post_ms:.0f} ms",
                 file=sys.stderr,
                 flush=True,
             )
-            # 後処理済みタイルは従来の 1 タイル出力と同じ形・同じ値域なので、
-            # 以降の _merge_tiles と量子化は共通である。
         else:
-            for tile in tiles:
+            for index, tile in enumerate(tiles):
                 input_3d = np.transpose(tile, (1, 2, 0)) if self.input_format == "nhwc" else tile
                 output = self.session.run(
                     [self.output_name], {self.input_name: input_3d[None, ...]}
                 )[0][0]
                 if self.input_format == "nhwc":
                     output = np.transpose(output, (2, 0, 1))
-                sr_tiles.append(output)
-
-        sr_chw = _merge_tiles(
-            sr_tiles,
-            (orig_hw[0] * self.scale, orig_hw[1] * self.scale),
-            (padded_hw[0] * self.scale, padded_hw[1] * self.scale),
-            self.overlap * self.scale,
-        )
-        sr_rgb = np.transpose(
-            np.clip(sr_chw * 255.0, 0.0, 255.0).astype(np.uint8), (1, 2, 0)
-        )
-        return np.ascontiguousarray(sr_rgb), len(tiles)
+                ty0, ty1, tx0, tx1 = boxes[index][0]
+                quantize_chw_into(
+                    _dst(index),
+                    output[:, ty0 * scale:ty1 * scale, tx0 * scale:tx1 * scale],
+                )
+        return out, len(tiles)
 
 
 def serve(args: argparse.Namespace) -> int:
@@ -355,7 +394,7 @@ def serve(args: argparse.Namespace) -> int:
             output, tile_count = session.upscale(rgb)
             out_h, out_w = output.shape[:2]
             stdout.write(MAGIC_DATA + struct.pack("<ii", out_w, out_h))
-            stdout.write(output.tobytes())
+            stdout.write(memoryview(output).cast("B"))
             stdout.flush()
             print(
                 f"frame {frame_no}: {(time.perf_counter() - started) * 1000:.0f} ms ({tile_count} tiles)",

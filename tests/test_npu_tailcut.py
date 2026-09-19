@@ -315,6 +315,86 @@ def test_upscale_tail_path_uses_merge_and_quantize() -> None:
     np.testing.assert_array_equal(output, np.ascontiguousarray(expected))
 
 
+def _legacy_upscale(rgb, tile_outputs_chw, patch, overlap, scale):
+    """変更前の手順: タイル出力を _merge_tiles で結合してから量子化する。"""
+    img_chw = np.ascontiguousarray(np.transpose(rgb, (2, 0, 1)), dtype=np.float32) / 255.0
+    _tiles, orig_hw, padded_hw = npu_serve._split_tiles(img_chw, (patch, patch), overlap)
+    sr = npu_serve._merge_tiles(
+        tile_outputs_chw,
+        (orig_hw[0] * scale, orig_hw[1] * scale),
+        (padded_hw[0] * scale, padded_hw[1] * scale),
+        overlap * scale,
+    )
+    return np.ascontiguousarray(
+        np.transpose(np.clip(sr * 255.0, 0.0, 255.0).astype(np.uint8), (1, 2, 0)))
+
+
+@pytest.mark.parametrize("mode", ["CRD", "DCR"])
+@pytest.mark.parametrize("add_input", [False, True])
+def test_upscale_tail_matches_legacy_merge_quantize(mode: str, add_input: bool) -> None:
+    """複数タイル・端の切り落とし込みで、タイル単位の量子化が従来手順と一致する。"""
+    patch, overlap, r = 16, 2, 2
+    manifest = {"version": 1, "kind": "depth_to_space", "blocksize": r, "mode": mode,
+                "add_nearest_input": add_input, "scale": r, "body_output": "cut",
+                "source_sha256": "0" * 64}
+    rng = np.random.RandomState(11)
+    rgb = rng.randint(0, 256, size=(29, 41, 3)).astype(np.uint8)  # コア 12 → 3x4 タイル、端は半端
+    bodies: list[np.ndarray] = []
+
+    def _body(batch: np.ndarray) -> np.ndarray:
+        # 値域外（負・1 超）も含めて clip を通す。
+        out = rng.uniform(-0.3, 1.3, size=(1, 3 * r * r, patch, patch)).astype(np.float32)
+        bodies.append((out, batch.copy()))
+        return out
+
+    session = npu_serve.NpuSession.__new__(npu_serve.NpuSession)
+    session.tile_h = session.tile_w = patch
+    session.overlap = overlap
+    session.scale = r
+    session.input_format = "nchw"
+    session.tail = manifest
+    session._run_body_tile = _body
+
+    before = _tail_threads()
+    output, tile_count = session.upscale(rgb)
+    assert _tail_threads() == before
+    assert tile_count == 12 and len(bodies) == 12
+    assert output.flags["C_CONTIGUOUS"] and output.shape == (29 * r, 41 * r, 3)
+    legacy_tiles = [tail_postprocess(b, x, manifest)[0] for b, x in bodies]
+    np.testing.assert_array_equal(
+        output, _legacy_upscale(rgb, legacy_tiles, patch, overlap, r))
+
+
+@pytest.mark.parametrize("input_format", ["nchw", "nhwc"])
+def test_upscale_full_model_matches_legacy_merge_quantize(input_format: str) -> None:
+    patch, overlap, scale = 16, 2, 4
+    rng = np.random.RandomState(12)
+    rgb = rng.randint(0, 256, size=(29, 41, 3)).astype(np.uint8)
+    outputs: list[np.ndarray] = []
+
+    class _FakeOrt:
+        def run(self, _names, feed):
+            out = rng.uniform(-0.3, 1.3, size=(3, patch * scale, patch * scale)).astype(np.float32)
+            outputs.append(out)
+            (x,) = feed.values()
+            assert x.shape == ((1, 3, patch, patch) if input_format == "nchw" else (1, patch, patch, 3))
+            return [(out if input_format == "nchw" else np.transpose(out, (1, 2, 0)))[None, ...]]
+
+    session = npu_serve.NpuSession.__new__(npu_serve.NpuSession)
+    session.tile_h = session.tile_w = patch
+    session.overlap = overlap
+    session.scale = scale
+    session.input_format = input_format
+    session.tail = None
+    session.session = _FakeOrt()
+    session.input_name, session.output_name = "in", "out"
+
+    output, tile_count = session.upscale(rgb)
+    assert tile_count == 12
+    np.testing.assert_array_equal(
+        output, _legacy_upscale(rgb, outputs, patch, overlap, scale))
+
+
 def test_run_tail_tiles_empty() -> None:
     manifest = {"blocksize": 2, "mode": "CRD", "add_nearest_input": False, "scale": 2}
     results, post_ms = npu_serve.run_tail_tiles(

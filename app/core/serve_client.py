@@ -244,8 +244,9 @@ class ServeClient:
             out_w, out_h = struct.unpack("<ii", self._read_exact(8))
             if out_w <= 0 or out_h <= 0 or out_w > 65536 or out_h > 65536:
                 raise ServeClientError(f"invalid response size: {out_w}x{out_h}")
-            data = self._read_exact(out_w * out_h * 3)
-            return np.frombuffer(data, dtype=np.uint8).reshape(out_h, out_w, 3).copy()
+            image = np.empty((out_h, out_w, 3), dtype=np.uint8)
+            self._read_into(memoryview(image).cast("B"))
+            return image
         except ValueError:
             raise
         except ServeClientError:
@@ -289,6 +290,19 @@ class ServeClient:
         if self.proc is None:
             raise ServeClientError("connect() first")
         return self.proc
+
+    def _read_into(self, view: memoryview) -> None:
+        """フレーム本体を受信先の配列へ直接読む（中間コピーを作らない）。"""
+        proc = self._require_connected()
+        assert proc.stdout is not None
+        got = 0
+        while got < len(view):
+            count = proc.stdout.readinto(view[got:])
+            if not count:
+                raise EOFError(
+                    f"AI helperがstdoutを閉じました (need={len(view)}, got={got}, exit={proc.poll()})"
+                )
+            got += count
 
     def _read_exact(self, size: int) -> bytes:
         proc = self._require_connected()
