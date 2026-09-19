@@ -449,6 +449,27 @@ Default 電源モードに戻して同じ条件で測り直した値（README �
 Anime Video v3 1.46 → 1.95 fps（36.91 秒）。出力の sha256 は Turbo・変更前と同一。
 
 
+## Real-ESRGAN（AMD縮小版 RRDB）への tail-cut の検討（2026-09-19、不採用）
+
+RRDB の末尾は DepthToSpace ではなく、最近傍 Resize×2 と 32ch の Conv 4 本
+（うち 3 本は 1024x1024）。numpy では置き換えられないので、最初の Resize の直前
+（`/Add_output_0`、`[1,32,256,256]`）で切った body を fp32 直接入力でコンパイルして内訳を測った
+（Default 電源モード、コンパイル 1033 秒、context.json は metaDef 1 個・443 ノード）。
+
+| 区間（256 タイル 1 回） | 時間 |
+|---|---|
+| 全体モデル（NPU、現行） | 約 170 ms（853x480 の 12 タイルで 1 枚 2.07 秒） |
+| body のみ（NPU） | 中央値 158.7 ms（最小 142.1 ms） |
+| 高解像度の末尾のみ（CPU EP、fp32、全コア） | 約 120 ms |
+
+NPU 上の時間の 9 割以上は body（RRDB 10 ブロック、Conv 156 本・Concat 120 本）で、
+末尾が占めるのは 10〜15 ms 程度。末尾を CPU へ出して重ねても 1 タイル約 159 ms で
+約 7% しか縮まず、CPU を全コア使う代償に見合わないため不採用。
+SPAN / SRVGGNetCompact と違い、RRDB は末尾ではなく全層が律速
+（1 層あたり約 1 ms。dense 接続で 32〜160ch の 256x256 活性を層ごとに出し入れする。
+spill が支配的かどうかは AI Analyzer では未確認）。
+
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
