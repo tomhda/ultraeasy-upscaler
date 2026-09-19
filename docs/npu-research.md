@@ -470,6 +470,36 @@ SPAN / SRVGGNetCompact と違い、RRDB は末尾ではなく全層が律速
 spill が支配的かどうかは AI Analyzer では未確認）。
 
 
+## SwinIR-M の NPU 時間の内訳と、GPU 併用の検証（2026-09-19）
+
+AI Analyzer のレイヤタイマ（`ai_analyzer_profiling`、Default 電源モード、コンパイル 3820 秒、
+1 run 6.4〜7.4 秒、AIE レイヤ時間の合計 約 5.6 秒）を `layer_name_map.json` で演算名に対応づけた。
+36 ブロック合計、2 run 平均:
+
+| レイヤ（融合後の名前） | 個数 | 合計 | 割合 |
+|---|---|---|---|
+| `MatMul+MatMul_post_reshape+Gather+Mul`（attn/qkv。q/k/v の取り出し） | 108 | 2114 ms | 37.6% |
+| `Transpose+MatMul+Add`（k の転置 → q·kᵀ → 相対位置バイアス加算） | 36 | 1270 ms | 22.6% |
+| LayerNormalization | 128 | 247 ms | 4.4% |
+| attn/proj（`MatMul+…+Transpose`） | 72 | 227 ms | 4.0% |
+| `Softmax+MatMul` / attn の `MatMul` | 54 / 54 | 190 / 182 ms | 3.4% / 3.2% |
+| MLP fc1（`MatMul+Div+Erf+Add+Mul`）/ fc2（`MatMul+Add`） | 36 / 42 | 165 / 181 ms | 2.9% / 3.2% |
+| Conv 全部（浅い特徴抽出・各 RSTB 末尾・高解像度の末尾） | 21 | 約 130 ms | 2.4% |
+
+- 時間の 6 割は 1 ブロックあたり 2 か所（qkv の 1 サブレイヤ 48〜65 ms、`Transpose+MatMul+Add` 約 35 ms）。
+  行列積そのもの（MLP、proj、Softmax）は 1 層 3〜5 ms。
+- 高解像度の末尾（Resize×2 と Conv 4 本）は約 67 ms（1%）で、tail-cut の対象にならない。
+- レイヤ名に `L3_OFM_Buffer_spill` を含む区間は 451 個・計 2812 ms（50%）。
+- 推測: qkv の 5 次元 reshape → permute → Gather による q/k/v の取り出しと、k の転置・
+  バイアス定数の展開が、演算ではなく並べ替え・DDR 転送として時間を使っている。
+  1 ブロックのテストモデルで書き換え候補を比較中（結果は後日追記）。
+
+NPU と GPU（DirectML）で同時に別の画像を処理する検証（448x448・4 タイル、ヘルパー起動込み）:
+単独は NPU 約 35 秒 / GPU 約 35 秒、同時実行はどちらも 60〜74 秒。合計スループットは
+逐次実行と変わらないため、タイルを NPU と GPU に分担させる構成は不採用。
+原因は未特定（NPU と iGPU が同じ LPDDR5 を共有するため、メモリ帯域の競合と推測）。
+
+
 ## 旧構成の比較画像（2026-08 上旬・旧5列マトリクス）
 
 列は左から: オリジナル(bicubic) / GPU+AnimeVideoV3 / NPU+AnimeVideoV3 / NPU+Real-ESRGAN / GPU+Real-ESRGAN。
