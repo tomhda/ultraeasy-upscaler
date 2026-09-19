@@ -4,14 +4,14 @@ Windows ローカル専用の、画像・動画のアップスケールとフレ
 超解像モデルを DirectML GPU・AMD Ryzen AI NPU・NVIDIA CUDA・Vulkan のいずれかで実行する。
 
 > **English summary.** Local image/video upscaler for Windows. Runs Real-ESRGAN, SPAN, SwinIR and AdcSR (one-step diffusion SR)
-> on DirectML GPU, AMD Ryzen AI NPU (VitisAI EP, XDNA2), NVIDIA CUDA or Vulkan. Notes in English:
-> [SwinIR on AMD Ryzen AI NPU](docs/swinir-npu.md) (VAIML compiler assertion on negative Slice bounds, and the workaround),
-> [AdcSR on AMD Ryzen AI NPU](docs/adcsr-npu.md) (all-NaN output on repeated runs, and the two-process workaround).
+> on DirectML GPU, AMD Ryzen AI NPU (VitisAI EP, XDNA2), NVIDIA CUDA or Vulkan.
+> Technical notes on the NPU side (SwinIR / AdcSR workarounds, DepthToSpace tail-cut, measurements) are in
+> [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes).
 
 - 入力: 画像 1 枚、フォルダ、動画（音声保持・H.264 出力）
 - 拡大: 4 倍固定の超解像モデル（下表）と、従来の realesrgan-ncnn-vulkan（2x/4x）
 - フレーム補間: RIFE v4.6（NCNN/Vulkan）
-- SwinIR と AdcSR を AMD Ryzen AI NPU で動かした記録は [docs/swinir-npu.md](docs/swinir-npu.md)・[docs/adcsr-npu.md](docs/adcsr-npu.md)（英語）と [docs/npu-research.md](docs/npu-research.md)（日本語）
+- NPU で動かすための技術的な記録（コンパイラの回避策、高速化、測定）は別リポジトリ [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes)
 
 ## 起動と必要物
 
@@ -101,11 +101,10 @@ GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の 
 \* 同一モデルの fp32 出力との PSNR。40 dB 前後は目視でほぼ判別不能の水準。
 \*\* Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
 \*\*\* 1280x534 の写真 1 枚（180 タイル）を GPU 版と比較した値。AdcSR は 1280x534 で GPU 約 4.5 分、NPU 約 6.5 分。
-NPU は末尾の DepthToSpace 以降を CPU で実行する（tail-cut）。4xNomosUni SPAN の body は fp32 で、bf16cast 版より 2.4 dB 高い。
 NPU の値は NPU 電源モード Default での測定。`xrt-smi configure --pmode turbo`（AC 電源時）では同じキャッシュのまま
 Anime Video v3 0.35 秒、4xNomosUni SPAN 0.18 秒、SwinIR-M と AdcSR は約 2 倍速（AdcSR 約 1.05 秒 / 128 タイル、1280x534 で約 3.1 分）、
 動画は 4xNomosUni SPAN 4.89 fps、Anime Video v3 2.77 fps。出力は Default と同一。
-詳細は [docs/npu-research.md](docs/npu-research.md) の 3.5「NPU の電源モード」と 5.3「npu_serve の CPU 側の削減」。
+測定条件と高速化の内容は [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes) を参照。
 
 動画（rawvideo パイプライン・音声保持・3 秒クリップの E2E）:
 
@@ -145,52 +144,8 @@ SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 �
 
 ## モデルの取得と変換
 
-機械固有の絶対パスはソースへ埋め込まない。重み・ONNX・NPU キャッシュは git へ追加しない。
-
-### Anime Video v3 / 4xNomosUni SPAN / Real-ESRGAN（AMD縮小版）
-
-```powershell
-.venv\Scripts\python.exe scripts\get_ai_models.py --list
-.venv\Scripts\python.exe scripts\get_ai_models.py --download purephoto
-.venv\Scripts\python.exe scripts\get_ai_models.py --pipeline purephoto --tile 512
-```
-
-`get_ai_models.py` は重み URL と SHA-256 を検証し、`scripts/npu/export_spandrel.py` による固定形状 fp32 ONNX 化と、
-Ryzen AI 環境での bf16cast 変換コマンドを表示する。
-
-```text
-python -m quark.onnx.tools.convert_fp32_to_bf16 --input <fp32.onnx> --output <bf16cast.onnx> --format with_cast
-```
-
-### SwinIR-M
-
-`scripts/get_ai_models.py --download swinir` で重みを取得し、`scripts/npu/export_spandrel.py --tile 256` で ONNX を生成する。
-エクスポート時に、VAIML コンパイラが負の Slice 境界でクラッシュする問題（[amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)）の回避書き換えを自動適用する。
-NPU 用は上の bf16cast 変換を行う。CUDA 経路は `scripts\setup_swinir.ps1` で PyTorch CUDA 環境と重みを `tmp/` に導入する（[docs/swinir-experimental.md](docs/swinir-experimental.md)）。
-
-### AdcSR
-
-AdcSR リポジトリを clone し、Hugging Face の Guaishou74851/AdcSR から `net_params_200.pkl` と `halfDecoder.ckpt` を取得し、
-Stable Diffusion 2.1-base の diffusers 形式ローカルディレクトリを用意する（公式リポジトリは gated のため、公開ミラー `sd2-community/stable-diffusion-2-1-base` などを使う）。
-
-```powershell
-git clone https://github.com/Guaishou74851/AdcSR.git <AdcSR clone>
-.venv\Scripts\python.exe scripts/adcsr/export_adcsr.py --repo <AdcSR clone> --sd <SD2.1-base ディレクトリ> --weights <net_params_200.pkl> --half-decoder <halfDecoder.ckpt> --size 128 --out <models>/adcsr_nchw_128x128_fp32.onnx
-```
-
-これで GPU（DirectML）経路が使える。NPU 経路は前半（UNet）と後半（VAE デコーダ）の 2 プロセス構成で動かすため、
-fp32 の export 後に、正規化の 4D 化 → bf16cast → 前半/後半への切断、の順で用意する。
-
-```powershell
-.venv\Scripts\python.exe scripts/adcsr/rewrite_in_to_n5.py --input <fp32 onnx> --output <N5 fp32 onnx>
-<Ryzen AI環境のpython> -m quark.onnx.tools.convert_fp32_to_bf16 --input <N5 fp32 onnx> --output <N5 bf16 onnx> --format with_cast
-.venv\Scripts\python.exe scripts/adcsr/split_adcsr_npu.py --input <N5 bf16 onnx> --out-dir <models> --cache-key-front <前半cache_key> --cache-key-back <後半cache_key> --fp32 <N5 fp32 onnx> --ref-image <参照png>
-```
-
-切断後は前半・後半の ONNX と `adcsr_npu_manifest.json` を models ディレクトリに置く。
-初回起動時に前半・後半を順に VAIML コンパイルする（この検証機で前半約 93 分 + 後半約 30 分。次回はキャッシュを利用）。
-2 プロセス構成は VitisAI EP の不具合（同一プロセスで後半を実行すると前半の以後の出力が NaN になる。[amd/RyzenAI-SW#402](https://github.com/amd/RyzenAI-SW/issues/402)）の回避で、
-SDK 更新後は起動時のセルフテストで検知する。`UEU_ADCSR_NPU2=0` で GPU 実行に戻る。
+`setup.ps1` を使う場合、変換済みのモデルは Release から取得されるので、この作業は不要。
+重みの取得から ONNX 化・NPU 用の変換までを自分で行う手順は [docs/model-conversion.md](docs/model-conversion.md)。
 
 ## パス設定（環境変数で上書き可能）
 
@@ -233,13 +188,11 @@ SDK 更新後は起動時のセルフテストで検知する。`UEU_ADCSR_NPU2=
 - 4xNomosUni SPAN: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
 - Real-ESRGAN（AMD縮小版）: 輪郭や毛の 1 本 1 本を立てる知覚系。加工感は強め
 
-SwinIR-M と AdcSR の目視評価と用途別の推奨は [docs/npu-research.md](docs/npu-research.md) を参照。
-
 ## NPU に関する技術メモ
 
-- [docs/swinir-npu.md](docs/swinir-npu.md): SwinIR を NPU で動かす手順と VAIML コンパイラの回避策（英語）
-- [docs/adcsr-npu.md](docs/adcsr-npu.md): AdcSR を NPU で動かす手順、正規化の 4D 化、2 回目以降 NaN の回避策（英語）
-- [docs/npu-research.md](docs/npu-research.md): int8/bf16 の検証、TDR ライブダンプの解析、占有率測定など日本語の研究ノート
+NPU で動かすための回避策、高速化、測定の記録は別リポジトリにまとめている:
+[ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes)（英語のページと、日本語の研究ノート全文）。
+
 - 報告済みの不具合: [amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)（負の Slice 境界での assertion）、[#398](https://github.com/amd/RyzenAI-SW/issues/398)（長い NPU カーネルでの TDR ライブダンプ）、[#402](https://github.com/amd/RyzenAI-SW/issues/402)（同一プロセスのセッション間で出力が NaN になる）
 
 ## ポータブル版
