@@ -717,13 +717,17 @@ def _load_script_module(name: str):
 
 
 def test_split_script_help_works_without_onnx() -> None:
+    import os
     import subprocess
 
     repo = Path(__file__).resolve().parents[1]
+    # 子の出力エンコーディングを固定する（親のロケール cp932 と食い違うと読取りスレッドが落ちる）。
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     for script in ("scripts/adcsr/split_adcsr_npu.py", "scripts/adcsr/rewrite_in_to_n5.py"):
         proc = subprocess.run(
             [sys.executable, str(repo / script), "--help"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=60, env=env,
         )
         assert proc.returncode == 0, proc.stderr
         assert "--help" in proc.stdout or "usage" in proc.stdout.lower()

@@ -97,6 +97,9 @@ GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の 
 \*\* Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
 \*\*\* 1280x534 の写真 1 枚（180 タイル）を GPU 版と比較した値。AdcSR は 1280x534 で GPU 約 4.5 分、NPU 約 6.5 分。
 NPU は末尾の DepthToSpace 以降を CPU で実行する（tail-cut）。4xNomosUni SPAN の body は fp32 で、bf16cast 版より 2.4 dB 高い。
+NPU の値は NPU 電源モード Default での測定。`xrt-smi configure --pmode turbo`（AC 電源時）では同じキャッシュのまま
+Anime Video v3 0.45 秒、4xNomosUni SPAN 0.28 秒、SwinIR-M と AdcSR は約 2 倍速（AdcSR 約 1.05 秒 / 128 タイル、1280x534 で約 3.1 分）。
+出力は Default と同一。詳細は [docs/npu-research.md](docs/npu-research.md) の「NPU の電源モード」。
 
 動画（rawvideo パイプライン・音声保持・3 秒クリップの E2E）:
 
