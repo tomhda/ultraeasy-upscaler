@@ -74,7 +74,7 @@ DirectML / NPU では具体的なモデル名で選ぶ。GPU と NPU で対応�
 
 - 迷ったら「自動（GPU優先）」。アニメ・CG は Anime Video v3、実写は 4xNomosUni SPAN から。
 - 静止画を時間をかけて最高画質にするなら SwinIR-M か AdcSR。AdcSR は生成型なので実写向きで、テクスチャを作り足す。
-- GPU を他の作業に使いたいときは NPU。GPU を使わずに回せる（4xNomosUni SPAN は NPU が GPU より速い。Anime Video v3 は GPU が速い）。
+- GPU を他の作業に使いたいときは NPU。GPU を使わずに回せる（4xNomosUni SPAN は NPU が GPU の約 2 倍速い。Anime Video v3 は静止画で同等、動画は GPU が速い）。
 - AdcSR はタイルの継ぎ目に低周波の暗い格子が出るため、マージン 32 とクロスフェード合成に加え、平坦領域限定の固定テンプレート補正を合成時に適用する（[docs/adcsr-tile-diagnosis.md](docs/adcsr-tile-diagnosis.md)）。
 
 ## 実測
@@ -87,8 +87,8 @@ GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の 
 
 | モデル | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | NPU bf16 忠実度* | NPU 初回コンパイル |
 |---|---|---|---|---|
-| Anime Video v3 | **0.46 秒** | 0.62 秒 | 49.4 dB | 9.4 分 |
-| 4xNomosUni SPAN | 0.51 秒 | **0.36 秒** | 46.9 dB | 9.0 分 |
+| Anime Video v3 | **0.46 秒** | 0.47 秒 | 49.4 dB | 9.4 分 |
+| 4xNomosUni SPAN | 0.51 秒 | **0.25 秒** | 46.9 dB | 9.0 分 |
 | Real-ESRGAN（AMD縮小版） | 2.78 秒 | 2.15 秒 | 37.9 dB** | 18.7 分 |
 | SwinIR-M | 約 53 秒 | 約 79 秒 | 38.5 dB | 約 51 分 |
 | AdcSR | 約 1.3〜1.6 秒 / 128 タイル | 約 2.05 秒 / 128 タイル（前半 0.7 + 後半 1.3） | 45.4 dB*** | 前半約 93 分 + 後半約 30 分 |
@@ -100,7 +100,6 @@ NPU は末尾の DepthToSpace 以降を CPU で実行する（tail-cut）。4xNo
 NPU の値は NPU 電源モード Default での測定。`xrt-smi configure --pmode turbo`（AC 電源時）では同じキャッシュのまま
 Anime Video v3 0.35 秒、4xNomosUni SPAN 0.18 秒、SwinIR-M と AdcSR は約 2 倍速（AdcSR 約 1.05 秒 / 128 タイル、1280x534 で約 3.1 分）、
 動画は 4xNomosUni SPAN 4.89 fps、Anime Video v3 2.77 fps。出力は Default と同一。
-表と動画の Default 値はタイル単位の量子化（npu_serve の CPU 側削減）を入れる前の測定で、Turbo の値は導入後の測定。
 詳細は [docs/npu-research.md](docs/npu-research.md) の「NPU の電源モード」「npu_serve の CPU 側の削減」。
 
 動画（rawvideo パイプライン・音声保持・3 秒クリップの E2E）:
@@ -108,7 +107,8 @@ Anime Video v3 0.35 秒、4xNomosUni SPAN 0.18 秒、SwinIR-M と AdcSR は約 2
 | 経路 | 実効 fps | 1 フレームあたり |
 |---|---|---|
 | GPU (DirectML) × Anime Video v3 | **2.48 fps** | 0.40 秒 |
-| NPU (VitisAI) × Anime Video v3 | 1.46 fps | 0.68 秒 |
+| NPU (VitisAI) × Anime Video v3 | 1.95 fps | 0.51 秒 |
+| NPU (VitisAI) × 4xNomosUni SPAN | **3.61 fps** | 0.28 秒 |
 
 動画の 1 フレーム値が静止画より速いのは、デコード・変換と推論を重ねて隠すため。
 Vulkan 経路（realesrgan-ncnn-vulkan）の animevideov3 は実効約 0.7 秒 / 枚。
