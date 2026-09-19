@@ -102,7 +102,7 @@ GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の 
 \*\* Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
 \*\*\* 1280x534 の写真 1 枚（180 タイル）を GPU 版と比較した値。AdcSR は 1280x534 で GPU 約 4.5 分、NPU 約 6.5 分。
 NPU の値は NPU 電源モード Default での測定。`xrt-smi configure --pmode turbo`（AC 電源時）では同じキャッシュのまま
-Anime Video v3 0.35 秒、4xNomosUni SPAN 0.18 秒、SwinIR-M と AdcSR は約 2 倍速（AdcSR 約 1.05 秒 / 128 タイル、1280x534 で約 3.1 分）、
+Anime Video v3 0.35 秒、4xNomosUni SPAN 0.18 秒、Real-ESRGAN（AMD縮小版）1.23 秒、SwinIR-M と AdcSR は約 2 倍速（AdcSR 約 1.05 秒 / 128 タイル、1280x534 で約 3.1 分）、
 動画は 4xNomosUni SPAN 4.89 fps、Anime Video v3 2.77 fps。出力は Default と同一。
 測定条件と高速化の内容は [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes) を参照。
 
