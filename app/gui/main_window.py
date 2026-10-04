@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QGridLayout,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -94,13 +95,31 @@ _SWINIR_CUDA_MODEL_OPTIONS = [
     ("SwinIR-M（real-world x4）", HELPER_MODEL_SWINIR),
 ]
 
-# バックエンド自体の説明（選択に連動して説明行の先頭に出す）
-_BACKEND_DESC = {
-    UpscaleBackend.WINML_GPU: "GPU：DirectMLで実行。起動できない場合はVulkanへ切替",
-    UpscaleBackend.NPU_NATIVE: "NPU：GPUを温存。Ryzen AIの常駐サーバーで実行",
-    UpscaleBackend.SWINIR_CUDA: "CUDA：実写の質感重視。動画は1秒あたり数十秒かかる超低速処理",
-    UpscaleBackend.VULKAN: "GPU：最速クラス。処理中は他の作業と競合し発熱大",
-    UpscaleBackend.NPU: "NPU：GPUを使わないので静かで、他の作業と並走できる",
+# 説明行に出す文。モデルの向き不向き → 速さ → 実行先ごとの注意、の順に並べる。
+_MODEL_DESC = {
+    HELPER_MODEL_ANIME: "アニメ向け。線をくっきり仕上げます。実写には向きません。",
+    "realesr-animevideov3": "アニメ向け。線をくっきり仕上げます。実写には向きません。",
+    HELPER_MODEL_SPAN: "実写向け。元の質感を残して自然に仕上げます。",
+    HELPER_MODEL_AMD_RRDB: "実写向け。輪郭をくっきり仕上げます。",
+    HELPER_MODEL_SWINIR: "実写向け。細部まで丁寧に仕上げます。",
+    HELPER_MODEL_ADCSR: "実写の静止画向け。いちばん高画質です。動画には使えません。",
+    "realesrgan-x4plus": "実写向け。高画質です。",
+    "realesrgan-x4plus-anime": "アニメ向け。高画質です。",
+    "realesr-general-x4v3": "実写・アニメ兼用。ノイズを強めに消します。",
+    "realesr-general-wdn-x4v3": "実写向け。ノイズ消しは控えめです。",
+}
+_SPEED_TEXT = {
+    "◎": "処理は速いです。",
+    "○": "速さはふつうです。",
+    "△": "少し時間がかかります。",
+    "✕": "かなり時間がかかります。",
+    "極遅": "動画は1秒ぶんに数十秒かかる超低速です。",
+}
+_BACKEND_NOTE = {
+    UpscaleBackend.NPU_NATIVE: "NPUで処理するので、GPUを空けたまま他の作業ができます。",
+    UpscaleBackend.NPU: "NPUで処理するので、GPUを空けたまま他の作業ができます。",
+    UpscaleBackend.SWINIR_CUDA: "NVIDIAのGPUが必要です。",
+    UpscaleBackend.VULKAN: "処理中はPCが熱くなり、他の作業が重くなります。",
 }
 
 # (backend, model) → (速度, 画質, アニメ適性, 実写適性, 推奨タグ or None)
@@ -192,7 +211,7 @@ class MainWindow(QWidget):
 
         page = QWidget()
         root = QVBoxLayout(page)
-        root.setContentsMargins(20, 16, 20, 16)
+        root.setContentsMargins(20, 16, 20, 12)
         root.setSpacing(12)
 
         root.addWidget(self._build_header())
@@ -208,8 +227,6 @@ class MainWindow(QWidget):
         self.drawer.setVisible(False)
         root.addWidget(self.drawer)
 
-        root.addWidget(self._build_footer())
-
         # メインバーと詳細設定ドロワーの重複項目は常に同期する。
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
         self.drawer.backend.currentIndexChanged.connect(
@@ -223,7 +240,10 @@ class MainWindow(QWidget):
         page_scroll.setWidgetResizable(True)
         page_scroll.setFrameShape(QFrame.Shape.NoFrame)
         page_scroll.setWidget(page)
-        outer.addWidget(page_scroll)
+        outer.setSpacing(0)
+        outer.addWidget(page_scroll, 1)
+        # 開始ボタンは常に見える位置に置く（スクロール領域の外）
+        outer.addWidget(self._build_footer())
 
     def _build_header(self) -> QFrame:
         header = QFrame()
@@ -285,10 +305,14 @@ class MainWindow(QWidget):
         panel.setObjectName("controlPanel")
         outer = QVBoxLayout(panel)
         outer.setContentsMargins(18, 12, 18, 12)
-        outer.setSpacing(6)
-        row = QHBoxLayout()
-        row.setSpacing(20)
-        outer.addLayout(row)
+        outer.setSpacing(10)
+        # 2 列 × 2 段。左右の列幅を揃え、上下の欄の端が一致するようにする。
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(10)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        outer.addLayout(grid)
 
         self.backend_combo = QComboBox()
         for label, value in _BACKEND_OPTIONS:
@@ -298,10 +322,19 @@ class MainWindow(QWidget):
             "SwinIR CUDAは別途セットアップが必要で、動画は非常に時間がかかります。\n"
             "新AIモデルは4x固定、Vulkanを選ぶと従来モデルを表示します。"
         )
-        row.addLayout(self._field("AI実行先", self._compact(self.backend_combo)), 1)
+        grid.addLayout(self._field("AI実行先", self._compact(self.backend_combo)), 0, 0)
+
+        # アップスケーラーモデルと倍率（倍率はモデルで決まるので隣に置く）
+        self.model_combo = QComboBox()
+        self._compact(self.model_combo)
+        self.model_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
 
         # 倍率トグル（2x / 4x）
         scale_box = QHBoxLayout()
+        scale_box.setContentsMargins(0, 0, 0, 0)
         scale_box.setSpacing(6)
         self._scale_btns: dict[int, QPushButton] = {}
         for s in _SCALE_CHOICES:
@@ -314,24 +347,14 @@ class MainWindow(QWidget):
             self._scale_btns[s] = btn
             scale_box.addWidget(btn)
         scale_wrap = QWidget()
+        scale_wrap.setObjectName("scaleWrap")
         scale_wrap.setLayout(scale_box)
-        row.addLayout(self._field("倍率", scale_wrap))
 
-        # アップスケーラーモデル（このアプリの主役なので1段目の残り幅を全部使う）
-        self.model_combo = QComboBox()
-        self.model_combo.setSizeAdjustPolicy(
-            QComboBox.SizeAdjustPolicy.AdjustToContents
-        )
-        self.model_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-        row.addLayout(self._field("モデル", self.model_combo), 1)
-
-        # 2段目: フレーム補間モデル / 出力先
-        row2 = QHBoxLayout()
-        row2.setSpacing(20)
-        outer.addLayout(row2)
+        model_row = QHBoxLayout()
+        model_row.setSpacing(20)
+        model_row.addLayout(self._field("モデル", self.model_combo), 1)
+        model_row.addLayout(self._field("倍率", scale_wrap))
+        grid.addLayout(model_row, 0, 1)
 
         # フレーム補間モデル（アップスケールとは独立）
         self.interpolation_combo = QComboBox()
@@ -345,18 +368,20 @@ class MainWindow(QWidget):
         self.interpolation_combo.currentIndexChanged.connect(
             lambda _i: self._on_interpolation_changed()
         )
-        row2.addLayout(self._field("フレーム補間モデル", self._compact(self.interpolation_combo)), 1)
+        grid.addLayout(
+            self._field("フレーム補間モデル", self._compact(self.interpolation_combo)), 1, 0
+        )
 
         # 出力先
         self.output_combo = QComboBox()
         self.output_combo.addItems(["元の場所", "フォルダ選択…"])
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
-        row2.addLayout(self._field("出力先", self._compact(self.output_combo)), 1)
+        grid.addLayout(self._field("出力先", self._compact(self.output_combo)), 1, 1)
 
         # 選択中の 処理×モデル の速度/画質サマリ（実測値ベース）
         self.model_hint = QLabel("")
-        self.model_hint.setObjectName("fieldLabel")
+        self.model_hint.setObjectName("hint")
         self.model_hint.setWordWrap(True)
         outer.addWidget(self.model_hint)
 
@@ -394,7 +419,7 @@ class MainWindow(QWidget):
 
         # ページ全体を QScrollArea に入れた場合、stretch だけでは sizeHint の
         # 高さまで潰れるため、キュー一覧の実用最小高を確保する
-        card.setMinimumHeight(260)
+        card.setMinimumHeight(180)
 
         return card
 
@@ -402,10 +427,12 @@ class MainWindow(QWidget):
         footer = QFrame()
         footer.setObjectName("footer")
         row = QHBoxLayout(footer)
-        row.setContentsMargins(0, 12, 0, 0)
+        row.setContentsMargins(20, 12, 20, 16)
         row.setSpacing(16)
 
-        row.addStretch(1)
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("hint")
+        row.addWidget(self.status_label, 1)
 
         self.pause_btn = QPushButton("一時停止")
         self.pause_btn.setIcon(make_icon(Icon.PAUSE, 20, "#c8d0da"))
@@ -621,6 +648,12 @@ class MainWindow(QWidget):
             parts.append(f"★{star}に推奨")
         return "／".join(parts)
 
+    @staticmethod
+    def _compose_hint_line(backend: UpscaleBackend, data: str) -> str:
+        info = _MODEL_INFO.get((backend, data))
+        speed = _SPEED_TEXT.get(info[0], "") if info else ""
+        return _MODEL_DESC.get(data, "") + speed + _BACKEND_NOTE.get(backend, "")
+
     def _update_model_info(self) -> None:
         """モデルコンボのバッジ（速度/画質/★推奨）と、選択中構成の説明行を更新する。"""
         if not hasattr(self, "model_hint"):
@@ -654,13 +687,9 @@ class MainWindow(QWidget):
 
         cur = self.model_combo.currentData()
         if cur in (None, "__missing__"):
-            self.model_hint.setText("アップスケールなし（フレーム補間のみ実行できます）")
+            self.model_hint.setText("拡大はしません。フレーム補間だけ実行できます。")
             return
-        hint = self._compose_model_hint(backend, cur)
-        if not hint:
-            self.model_hint.setText(f"【{_BACKEND_DESC.get(backend, backend.value)}】")
-            return
-        self.model_hint.setText(f"【{_BACKEND_DESC.get(backend, backend.value)}】{hint}")
+        self.model_hint.setText(self._compose_hint_line(backend, cur))
 
     def _selected_backend(self) -> UpscaleBackend:
         value = self.backend_combo.currentData() if hasattr(self, "backend_combo") else None
@@ -922,6 +951,7 @@ class MainWindow(QWidget):
     def _flash_hint(self, text: str) -> None:
         """フッタ近くに一時的な状況メッセージを出す（簡易: ウィンドウタイトル併記）。"""
         self.setWindowTitle(f"ultraeasy-upscaler — {text}")
+        self.status_label.setText(text)
 
     def _open_output_folder(self) -> None:
         target = self._output_dir or str(Path.home())

@@ -204,7 +204,7 @@ class QueueView(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(8)
-        self._empty = QLabel("キューは空です。ファイルをドロップするか「追加」してください。")
+        self._empty = QLabel("まだ何もありません。上の枠にドロップするか、枠をクリックして選んでください。")
         self._empty.setObjectName("hint")
         self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(self._empty)

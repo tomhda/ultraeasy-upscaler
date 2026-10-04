@@ -112,7 +112,7 @@ QLabel#fieldLabel {{
     font-size: 15px;
     font-weight: 700;
 }}
-QWidget#fieldLabelWrap, QWidget#checkRow {{
+QWidget#fieldLabelWrap, QWidget#checkRow, QWidget#scaleWrap {{
     background-color: transparent;
 }}
 QLabel#helpIcon {{
@@ -186,7 +186,7 @@ QPushButton#scaleBtn {{
     border: 1px solid {BORDER};
     border-radius: 6px;
     min-width: 76px;
-    min-height: 34px;
+    min-height: 42px;
     padding: 0 16px;
     font-size: 17px;
 }}

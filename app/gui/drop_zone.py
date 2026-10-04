@@ -23,13 +23,13 @@ class DropZone(QFrame):
         self.setObjectName("dropZone")
         self.setAcceptDrops(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(250)
+        self.setMinimumHeight(200)
         self._pressed_inside = False
         self._build()
 
     def _build(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(28, 26, 28, 26)
+        root.setContentsMargins(28, 16, 28, 16)
         root.setSpacing(12)
         root.addStretch(1)
 

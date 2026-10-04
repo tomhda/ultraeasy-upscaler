@@ -500,20 +500,20 @@ def test_model_picker_shows_speed_quality_info(app):
     ]
     assert win.model_combo.itemText(1).startswith("Anime Video v3")
     assert "速度◎" in win.model_combo.itemText(1)
-    assert win.model_hint.text().startswith("【GPU：DirectML")
-    assert "速度◎" in win.model_hint.text()
-    assert "アニメ◎・実写△" in win.model_hint.text()
+    assert win.model_hint.text().startswith("アニメ向け")
+    assert "処理は速いです" in win.model_hint.text()
+    assert "実写には向きません" in win.model_hint.text()
 
     # SPAN/AMD縮小版も同じ実モデル名＋特性説明の仕組みで選べる。
     win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_SPAN))
     app.processEvents()
     assert win.model_combo.currentText().startswith("4xNomosUni SPAN")
-    assert "アニメ○・実写◎" in win.model_hint.text()
+    assert win.model_hint.text().startswith("実写向け")
     win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_AMD_RRDB))
     app.processEvents()
     assert win.model_combo.currentText().startswith("Real-ESRGAN（AMD縮小版）")
-    assert "速度◎" not in win.model_hint.text()
-    assert "速度△" in win.model_hint.text()
+    assert "処理は速いです" not in win.model_hint.text()
+    assert "少し時間がかかります" in win.model_hint.text()
 
     # Vulkanでは旧モデルのバッジと説明を表示する。
     vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
@@ -523,17 +523,17 @@ def test_model_picker_shows_speed_quality_info(app):
     assert idx >= 0
     assert "速" in win.model_combo.itemText(idx)
     gpu_hint = win.model_hint.text()
-    assert gpu_hint.startswith("【GPU")
-    assert "速度" in gpu_hint and "画質" in gpu_hint
+    assert gpu_hint.startswith("実写向け")
+    assert "他の作業が重くなります" in gpu_hint
 
     # NPU_NATIVEに切替 → 同じ実モデル名でNPU実測の説明へ更新する。
     npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
     win.backend_combo.setCurrentIndex(npu)
     app.processEvents()
     assert win.model_hint.text() != gpu_hint
-    assert "GPUを温存" in win.model_hint.text()
+    assert "GPUを空けたまま" in win.model_hint.text()
     assert win.model_combo.currentText().startswith("Anime Video v3")
-    assert "速度○" in win.model_hint.text()
+    assert "速さはふつうです" in win.model_hint.text()
 
     # モデル「なし」では補間のみの案内
     win.backend_combo.setCurrentIndex(
@@ -541,7 +541,7 @@ def test_model_picker_shows_speed_quality_info(app):
     app.processEvents()
     win.model_combo.setCurrentIndex(0)
     app.processEvents()
-    assert "フレーム補間のみ" in win.model_hint.text()
+    assert "フレーム補間だけ" in win.model_hint.text()
 
     win.close()
     app.processEvents()
