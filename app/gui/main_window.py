@@ -54,6 +54,7 @@ from .icons import Icon, apply_icon_font, make_icon
 from .preview_pane import PreviewPane
 from .queue_view import QueueView
 from .settings_drawer import SettingsDrawer
+from . import theme
 from .theme import apply_theme
 from .worker import QueueWorker
 
@@ -262,6 +263,18 @@ class MainWindow(QWidget):
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
         self._refresh_model_options()
 
+        self._apply_icons()
+        theme.notifier.changed.connect(self._apply_icons)
+
+    def _apply_icons(self) -> None:
+        """アイコンを現在の配色で描き直す（QSS では色を変えられないため）。"""
+        p = theme.current()
+        self.output_open_btn.setIcon(make_icon(Icon.FOLDER, 22, p.text_soft))
+        self.settings_btn.setIcon(make_icon(Icon.SETTINGS, 24, p.text_soft))
+        self.pause_btn.setIcon(make_icon(Icon.PAUSE, 20, p.text_soft))
+        self.start_btn.setIcon(make_icon(Icon.PLAY, 26, p.on_accent))
+        self.clear_btn.setIcon(make_icon(Icon.DELETE, 18, p.text_dim))
+
     def _build_header(self) -> QFrame:
         header = QFrame()
         header.setObjectName("header")
@@ -282,7 +295,6 @@ class MainWindow(QWidget):
 
         self.output_open_btn = QPushButton("出力先を開く")
         self.output_open_btn.setObjectName("toolbarButton")
-        self.output_open_btn.setIcon(make_icon(Icon.FOLDER, 22, "#c8d0da"))
         self.output_open_btn.setIconSize(QSize(22, 22))
         self.output_open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.output_open_btn.clicked.connect(self._open_output_folder)
@@ -290,7 +302,6 @@ class MainWindow(QWidget):
 
         self.settings_btn = QPushButton("")
         self.settings_btn.setObjectName("iconButton")
-        self.settings_btn.setIcon(make_icon(Icon.SETTINGS, 24, "#c8d0da"))
         self.settings_btn.setIconSize(QSize(24, 24))
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_btn.setToolTip("詳細設定")
@@ -402,7 +413,6 @@ class MainWindow(QWidget):
         outer.addWidget(self.status_label)
 
         self.pause_btn = QPushButton("一時停止")
-        self.pause_btn.setIcon(make_icon(Icon.PAUSE, 20, "#c8d0da"))
         self.pause_btn.setIconSize(QSize(20, 20))
         self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pause_btn.setEnabled(False)
@@ -412,7 +422,6 @@ class MainWindow(QWidget):
 
         self.start_btn = QPushButton("開始")
         self.start_btn.setObjectName("primary")
-        self.start_btn.setIcon(make_icon(Icon.PLAY, 26, "#061016"))
         self.start_btn.setIconSize(QSize(26, 26))
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.start_btn.clicked.connect(self._on_start)
@@ -436,7 +445,6 @@ class MainWindow(QWidget):
         head.addStretch(1)
         self.clear_btn = QPushButton("すべて削除")
         self.clear_btn.setObjectName("link")
-        self.clear_btn.setIcon(make_icon(Icon.DELETE, 18, "#a7adb7"))
         self.clear_btn.setIconSize(QSize(18, 18))
         self.clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clear_btn.clicked.connect(self._clear_queue)

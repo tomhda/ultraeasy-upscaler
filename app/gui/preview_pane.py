@@ -67,7 +67,7 @@ class PreviewPane(QFrame):
         self._caption.setObjectName("previewCaption")
         lay.addWidget(self._caption, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._message = QLabel("")
-        self._message.setObjectName("hint")
+        self._message.setObjectName("previewMessage")
         self._message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._message, 1)
 

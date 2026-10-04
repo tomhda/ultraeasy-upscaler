@@ -22,6 +22,8 @@ from app.core.settings import (
     UpscaleSettings,
 )
 
+from . import theme
+
 _IMAGE_FORMATS = ["png", "jpg", "webp"]
 # mp4/mkv/mov は H.264(+AAC) を収容できる。webm は VP9/Opus が必要で
 # 現状のエンコーダ選択(H.264系)とは噛み合わないため除外（フェーズ2で対応検討）。
@@ -103,18 +105,19 @@ class ClearCheckBox(QCheckBox):
         box_size = 22
         box = QRectF(2, (rect.height() - box_size) / 2, box_size, box_size)
 
-        border = QColor("#21c7d9" if checked else "#4a5664")
-        fill = QColor("#21c7d9" if checked else ("#20262e" if hovered else "#151a20"))
+        p = theme.current()
+        border = QColor(p.accent if checked else p.scrollbar)
+        fill = QColor(p.accent if checked else (p.button_hover if hovered else p.input))
         if not enabled:
-            border = QColor("#2a323b")
-            fill = QColor("#171d24")
+            border = QColor(p.border)
+            fill = QColor(p.button_disabled)
 
         painter.setPen(QPen(border, 2))
         painter.setBrush(fill)
         painter.drawRoundedRect(box, 5, 5)
 
         if checked:
-            pen = QPen(QColor("#041015"), 3)
+            pen = QPen(QColor(p.on_accent), 3)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             painter.setPen(pen)
@@ -127,7 +130,7 @@ class ClearCheckBox(QCheckBox):
                 QPointF(box.left() + 16.5, box.top() + 7.0),
             )
 
-        painter.setPen(QColor("#f3f5f7" if enabled else "#67717e"))
+        painter.setPen(QColor(p.text if enabled else p.text_mute))
         text_rect = QRectF(34, 0, max(0, rect.width() - 34), rect.height())
         painter.drawText(
             text_rect,
