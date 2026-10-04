@@ -102,6 +102,32 @@ QLabel#dropHint {{
     font-weight: 500;
 }}
 
+QFrame#dropZone[compact="true"] {{
+    background-color: transparent;
+    border: 1px dashed {BORDER_LIGHT};
+    border-radius: 7px;
+}}
+QFrame#dropZone[compact="true"][dragActive="true"] {{
+    background-color: #1b2630;
+    border-color: {ACCENT_HI};
+}}
+QLabel#dropHintSmall {{
+    color: {TEXT_DIM};
+    font-size: 13px;
+}}
+QFrame#previewPane {{
+    background-color: #0b0f13;
+    border: 1px solid {BORDER};
+    border-radius: 8px;
+}}
+QLabel#previewCaption {{
+    color: {TEXT};
+    background-color: rgba(15, 19, 24, 200);
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-size: 13px;
+}}
+
 QFrame#controlPanel {{
     background-color: {BG_PANEL};
     border: 1px solid {BORDER};
@@ -168,7 +194,6 @@ QPushButton#primary {{
     color: #041015;
     border: none;
     border-radius: 8px;
-    min-width: 278px;
     min-height: 58px;
     font-size: 21px;
     font-weight: 800;
@@ -252,20 +277,17 @@ QFrame#queueRow {{
     border: 1px solid {BORDER};
     border-radius: 7px;
 }}
-QWidget#rowText {{
-    background-color: transparent;
+QFrame#queueRow[selected="true"] {{
+    border: 1px solid {ACCENT};
+    background-color: #1c2a33;
 }}
 QLabel#rowName {{
     color: {TEXT};
-    font-size: 17px;
-    font-weight: 800;
+    font-size: 15px;
+    font-weight: 700;
 }}
 QLabel#rowMeta {{
-    color: #a9c7df;
-    background-color: #172436;
-    border: 1px solid #274058;
-    border-radius: 5px;
-    padding: 2px 7px;
+    color: {TEXT_DIM};
     font-size: 12px;
 }}
 QLabel#rowStatus {{

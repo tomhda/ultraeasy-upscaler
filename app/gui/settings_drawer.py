@@ -317,6 +317,7 @@ class SettingsDrawer(QFrame):
         toggle_wrap.setObjectName("toggleWrap")
         toggle_wrap.setLayout(toggles)
         root.addWidget(toggle_wrap)
+        root.addStretch(1)  # 広い領域に置かれても項目を上に詰める
 
         # 出力フォルダ名はチェック時のみ有効
         self.create_subfolder.toggled.connect(self.subfolder_name.setEnabled)

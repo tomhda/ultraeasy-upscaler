@@ -18,14 +18,29 @@ class DropZone(QFrame):
     pathsDropped = Signal(list)  # list[str] のローカルパス
     browseRequested = Signal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, compact: bool = False) -> None:
         super().__init__(parent)
         self.setObjectName("dropZone")
         self.setAcceptDrops(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(200)
         self._pressed_inside = False
-        self._build()
+        if compact:
+            # 一覧の下に置く小さい追加枠
+            self.setProperty("compact", True)
+            self.setMinimumHeight(64)
+            self._build_compact()
+        else:
+            self.setMinimumHeight(200)
+            self._build()
+
+    def _build_compact(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 8, 10, 8)
+        hint = QLabel("ここにドロップ、またはクリックで追加")
+        hint.setObjectName("dropHintSmall")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        root.addWidget(hint)
 
     def _build(self) -> None:
         root = QVBoxLayout(self)

@@ -1,8 +1,10 @@
 """メインウィンドウと GUI エントリポイント。
 
-レイアウト（v2 準拠・ダーク・単一画面）:
-  ヘッダ → ドロップゾーン → コントロール行（倍率/モデル/出力先/動画）
-  → 処理キュー → 詳細設定ドロワー → フッタ（ヒント + 開始/一時停止）。
+レイアウト（ダーク・単一画面・3 列）:
+  ヘッダ
+  → 左: メディア一覧（ドロップ先を兼ねる） / 中央: プレビュー / 右: 設定と開始。
+  メディアが 1 件も無いときは、左と中央を合わせた全面をドロップ先にする。
+  歯車を押すと、左と中央の領域が詳細設定に切り替わる。
 
 スレッド方針: GPU 競合回避のため、保留ジョブは QThread 上の QueueWorker が
 **逐次** 処理する。ウィジェット更新は GUI スレッドのスロットのみで行う。
@@ -14,7 +16,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QThread, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent
+from PySide6.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -23,9 +26,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QGridLayout,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -48,6 +51,7 @@ from app.core.settings import (
 
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
+from .preview_pane import PreviewPane
 from .queue_view import QueueView
 from .settings_drawer import SettingsDrawer
 from .theme import apply_theme
@@ -55,13 +59,9 @@ from .worker import QueueWorker
 
 # 倍率トグルに出す候補（モデルがサポートする倍率のみ有効化）
 _SCALE_CHOICES = (2, 4)
-_BACKEND_OPTIONS = [
-    ("自動（GPU優先）", "auto"),
-    ("GPU（DirectML）", UpscaleBackend.WINML_GPU.value),
-    ("NPU（GPU温存）", UpscaleBackend.NPU_NATIVE.value),
-    ("SwinIR-M（CUDA・超低速）", UpscaleBackend.SWINIR_CUDA.value),
-    ("Vulkan", UpscaleBackend.VULKAN.value),
-]
+# 左右の列の幅（中央のプレビューが残りを使う）
+_MEDIA_COL_WIDTH = 330
+_SETTINGS_COL_WIDTH = 330
 _HELPER_BACKENDS = {
     UpscaleBackend.WINML_GPU,
     UpscaleBackend.NPU_NATIVE,
@@ -166,6 +166,18 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str],
 }
 
 
+class ModelCombo(QComboBox):
+    """閉じた状態ではモデル名だけを見せるコンボ（特性の印は開いた一覧に出す）。"""
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QStylePainter(self)
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        opt.currentText = opt.currentText.split("｜")[0]
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
+        painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
+
+
 class MainWindow(QWidget):
     """ultraeasy-upscaler のメイン画面。"""
 
@@ -202,48 +214,53 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------------ UI
     def _build(self) -> None:
-        # ドロワー展開などで中身がウィンドウより高くなっても操作不能に
-        # ならないよう、ページ全体を QScrollArea で包む。
-        # QScrollArea は中身の最小サイズをウィンドウへ伝播しないため、
-        # 小さい画面でも溢れた分にスクロールで到達できる。
+        self.setAcceptDrops(True)  # ウィンドウのどこに落としても追加できる
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(20, 16, 20, 16)
+        outer.setSpacing(12)
 
-        page = QWidget()
-        root = QVBoxLayout(page)
-        root.setContentsMargins(20, 16, 20, 12)
-        root.setSpacing(12)
+        # AI実行先は詳細設定ドロワーにあるコンボをそのまま使う
+        self.drawer = SettingsDrawer()
+        self._drawer_open = False
+        self.backend_combo = self.drawer.backend
 
-        root.addWidget(self._build_header())
+        outer.addWidget(self._build_header())
+
+        body = QHBoxLayout()
+        body.setSpacing(12)
+        outer.addLayout(body, 1)
+
+        # 左＋中央。メディアが無い間は全面ドロップ枠、入ったら一覧＋プレビュー。
         self.drop_zone = DropZone()
         self.drop_zone.pathsDropped.connect(self._on_paths_dropped)
         self.drop_zone.browseRequested.connect(self._pick_files)
-        root.addWidget(self.drop_zone)
 
-        root.addWidget(self._build_controls())
-        root.addWidget(self._build_queue_section(), 1)
+        workspace = QWidget()
+        work_row = QHBoxLayout(workspace)
+        work_row.setContentsMargins(0, 0, 0, 0)
+        work_row.setSpacing(12)
+        work_row.addWidget(self._build_media_panel())
+        self.preview = PreviewPane()
+        work_row.addWidget(self.preview, 1)
 
-        self.drawer = SettingsDrawer()
-        self.drawer.setVisible(False)
-        root.addWidget(self.drawer)
+        # 詳細設定は歯車で左＋中央の領域に開く（右列の設定と開始は残す）
+        drawer_scroll = QScrollArea()
+        drawer_scroll.setWidgetResizable(True)
+        drawer_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        drawer_scroll.setWidget(self.drawer)
 
-        # メインバーと詳細設定ドロワーの重複項目は常に同期する。
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.drop_zone)
+        self.stack.addWidget(workspace)
+        self.stack.addWidget(drawer_scroll)
+        body.addWidget(self.stack, 1)
+
+        body.addWidget(self._build_settings_panel())
+
+        self.queue.selectionChanged.connect(self._on_selection_changed)
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
-        self.drawer.backend.currentIndexChanged.connect(
-            self._on_drawer_backend_changed
-        )
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
-        self._set_combo_data(self.backend_combo, self.drawer.backend.currentData())
         self._refresh_model_options()
-
-        page_scroll = QScrollArea()
-        page_scroll.setWidgetResizable(True)
-        page_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        page_scroll.setWidget(page)
-        outer.setSpacing(0)
-        outer.addWidget(page_scroll, 1)
-        # 開始ボタンは常に見える位置に置く（スクロール領域の外）
-        outer.addWidget(self._build_footer())
 
     def _build_header(self) -> QFrame:
         header = QFrame()
@@ -284,7 +301,7 @@ class MainWindow(QWidget):
 
     def _field(self, label: str, widget: QWidget) -> QVBoxLayout:
         box = QVBoxLayout()
-        box.setSpacing(3)
+        box.setSpacing(4)
         lab = QLabel(label)
         lab.setObjectName("fieldLabel")
         box.addWidget(lab)
@@ -293,44 +310,48 @@ class MainWindow(QWidget):
 
     @staticmethod
     def _compact(combo: QComboBox) -> QComboBox:
-        """最長項目でなく一定幅を最小とし、5フィールド横並びでも収まるようにする。"""
+        """最長項目でなく一定幅を最小とし、細い列でも収まるようにする。"""
         combo.setMinimumContentsLength(8)
         combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         return combo
 
-    def _build_controls(self) -> QFrame:
+    def _build_settings_panel(self) -> QFrame:
+        """右列: モデルなどの設定と、開始/一時停止。"""
         panel = QFrame()
         panel.setObjectName("controlPanel")
+        panel.setFixedWidth(_SETTINGS_COL_WIDTH)
         outer = QVBoxLayout(panel)
-        outer.setContentsMargins(18, 12, 18, 12)
-        outer.setSpacing(10)
-        # 2 列 × 2 段。左右の列幅を揃え、上下の欄の端が一致するようにする。
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(10)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        outer.addLayout(grid)
+        outer.setContentsMargins(16, 14, 16, 16)
+        outer.setSpacing(12)
 
-        self.backend_combo = QComboBox()
-        for label, value in _BACKEND_OPTIONS:
-            self.backend_combo.addItem(label, value)
-        self.backend_combo.setToolTip(
-            "自動はDirectML GPUを優先します。GPU/NPUのヘルパーが起動できない場合はVulkanへ切り替えます。\n"
-            "SwinIR CUDAは別途セットアップが必要で、動画は非常に時間がかかります。\n"
-            "新AIモデルは4x固定、Vulkanを選ぶと従来モデルを表示します。"
-        )
-        grid.addLayout(self._field("AI実行先", self._compact(self.backend_combo)), 0, 0)
+        title = QLabel("設定")
+        title.setObjectName("sectionTitle")
+        outer.addWidget(title)
 
-        # アップスケーラーモデルと倍率（倍率はモデルで決まるので隣に置く）
-        self.model_combo = QComboBox()
+        # 設定欄は画面が低いときだけスクロールし、開始ボタンは常に見える位置に残す
+        fields = QWidget()
+        fields.setObjectName("scaleWrap")
+        col = QVBoxLayout(fields)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(12)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(fields)
+        outer.addWidget(scroll, 1)
+
+        self.model_combo = ModelCombo()
         self._compact(self.model_combo)
-        self.model_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
+        col.addLayout(self._field("モデル", self.model_combo))
+
+        # 選択中の 処理×モデル の説明
+        self.model_hint = QLabel("")
+        self.model_hint.setObjectName("hint")
+        self.model_hint.setWordWrap(True)
+        col.addWidget(self.model_hint)
 
         # 倍率トグル（2x / 4x）
         scale_box = QHBoxLayout()
@@ -345,16 +366,11 @@ class MainWindow(QWidget):
             btn.setChecked(s == self._scale)
             btn.clicked.connect(lambda _=False, v=s: self._set_scale(v))
             self._scale_btns[s] = btn
-            scale_box.addWidget(btn)
+            scale_box.addWidget(btn, 1)
         scale_wrap = QWidget()
         scale_wrap.setObjectName("scaleWrap")
         scale_wrap.setLayout(scale_box)
-
-        model_row = QHBoxLayout()
-        model_row.setSpacing(20)
-        model_row.addLayout(self._field("モデル", self.model_combo), 1)
-        model_row.addLayout(self._field("倍率", scale_wrap))
-        grid.addLayout(model_row, 0, 1)
+        col.addLayout(self._field("倍率", scale_wrap))
 
         # フレーム補間モデル（アップスケールとは独立）
         self.interpolation_combo = QComboBox()
@@ -368,8 +384,8 @@ class MainWindow(QWidget):
         self.interpolation_combo.currentIndexChanged.connect(
             lambda _i: self._on_interpolation_changed()
         )
-        grid.addLayout(
-            self._field("フレーム補間モデル", self._compact(self.interpolation_combo)), 1, 0
+        col.addLayout(
+            self._field("フレーム補間モデル", self._compact(self.interpolation_combo))
         )
 
         # 出力先
@@ -377,25 +393,44 @@ class MainWindow(QWidget):
         self.output_combo.addItems(["元の場所", "フォルダ選択…"])
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
-        grid.addLayout(self._field("出力先", self._compact(self.output_combo)), 1, 1)
+        col.addLayout(self._field("出力先", self._compact(self.output_combo)))
+        col.addStretch(1)
 
-        # 選択中の 処理×モデル の速度/画質サマリ（実測値ベース）
-        self.model_hint = QLabel("")
-        self.model_hint.setObjectName("hint")
-        self.model_hint.setWordWrap(True)
-        outer.addWidget(self.model_hint)
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("hint")
+        self.status_label.setWordWrap(True)
+        outer.addWidget(self.status_label)
+
+        self.pause_btn = QPushButton("一時停止")
+        self.pause_btn.setIcon(make_icon(Icon.PAUSE, 20, "#c8d0da"))
+        self.pause_btn.setIconSize(QSize(20, 20))
+        self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.pause_btn.setEnabled(False)
+        self.pause_btn.setToolTip("現在のジョブ完了後に停止します")
+        self.pause_btn.clicked.connect(self._on_pause)
+        outer.addWidget(self.pause_btn)
+
+        self.start_btn = QPushButton("開始")
+        self.start_btn.setObjectName("primary")
+        self.start_btn.setIcon(make_icon(Icon.PLAY, 26, "#061016"))
+        self.start_btn.setIconSize(QSize(26, 26))
+        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.start_btn.clicked.connect(self._on_start)
+        outer.addWidget(self.start_btn)
 
         return panel
 
-    def _build_queue_section(self) -> QWidget:
+    def _build_media_panel(self) -> QFrame:
+        """左列: メディア一覧。下端の枠とウィンドウ全体がドロップ先になる。"""
         card = QFrame()
         card.setObjectName("card")
+        card.setFixedWidth(_MEDIA_COL_WIDTH)
         lay = QVBoxLayout(card)
-        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(8)
 
         head = QHBoxLayout()
-        title = QLabel("キュー")
+        title = QLabel("メディア")
         title.setObjectName("sectionTitle")
         head.addWidget(title)
         head.addStretch(1)
@@ -408,7 +443,6 @@ class MainWindow(QWidget):
         head.addWidget(self.clear_btn)
         lay.addLayout(head)
 
-        # スクロール可能なキュー
         self.queue = QueueView()
         self.queue.removeRequested.connect(self._on_remove_requested)
         scroll = QScrollArea()
@@ -417,41 +451,38 @@ class MainWindow(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         lay.addWidget(scroll, 1)
 
-        # ページ全体を QScrollArea に入れた場合、stretch だけでは sizeHint の
-        # 高さまで潰れるため、キュー一覧の実用最小高を確保する
-        card.setMinimumHeight(180)
+        self.add_zone = DropZone(compact=True)
+        self.add_zone.pathsDropped.connect(self._on_paths_dropped)
+        self.add_zone.browseRequested.connect(self._pick_files)
+        lay.addWidget(self.add_zone)
 
         return card
 
-    def _build_footer(self) -> QFrame:
-        footer = QFrame()
-        footer.setObjectName("footer")
-        row = QHBoxLayout(footer)
-        row.setContentsMargins(20, 12, 20, 16)
-        row.setSpacing(16)
+    # ------------------------------------------------------ 一覧と表示の同期
+    def _sync_workspace(self) -> None:
+        """詳細設定の開閉とメディアの有無に合わせて、左＋中央の表示を切り替える。"""
+        if self._drawer_open:
+            self.stack.setCurrentIndex(2)
+        else:
+            self.stack.setCurrentIndex(1 if self._order else 0)
 
-        self.status_label = QLabel("")
-        self.status_label.setObjectName("hint")
-        row.addWidget(self.status_label, 1)
+    def _on_selection_changed(self, job_id: object) -> None:
+        self.preview.show_job(self._jobs.get(job_id) if job_id is not None else None)
 
-        self.pause_btn = QPushButton("一時停止")
-        self.pause_btn.setIcon(make_icon(Icon.PAUSE, 20, "#c8d0da"))
-        self.pause_btn.setIconSize(QSize(20, 20))
-        self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.setToolTip("現在のジョブ完了後に停止します")
-        self.pause_btn.clicked.connect(self._on_pause)
-        row.addWidget(self.pause_btn)
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if event.mimeData().hasUrls() and not self._running:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
-        self.start_btn = QPushButton("開始")
-        self.start_btn.setObjectName("primary")
-        self.start_btn.setIcon(make_icon(Icon.PLAY, 26, "#061016"))
-        self.start_btn.setIconSize(QSize(26, 26))
-        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.start_btn.clicked.connect(self._on_start)
-        row.addWidget(self.start_btn)
-
-        return footer
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
+        paths = [p for p in paths if p]
+        if paths:
+            event.acceptProposedAction()
+            self.add_paths(paths)
+        else:
+            event.ignore()
 
     # --------------------------------------------------------- ジョブ追加
     def add_path(self, path: str) -> tuple[bool, str]:
@@ -477,6 +508,7 @@ class MainWindow(QWidget):
         self._order.append(job.id)
         self._cancel_events[job.id] = threading.Event()
         self.queue.add_job(job)
+        self._sync_workspace()
         return True, job.name
 
     def add_paths(self, paths: list[str]) -> None:
@@ -701,12 +733,6 @@ class MainWindow(QWidget):
             return UpscaleBackend.WINML_GPU
 
     def _on_backend_changed(self, *_args) -> None:
-        self._set_combo_data(self.drawer.backend, self.backend_combo.currentData())
-        self._refresh_model_options()
-        self._refresh_scale_enabled()
-
-    def _on_drawer_backend_changed(self, *_args) -> None:
-        self._set_combo_data(self.backend_combo, self.drawer.backend.currentData())
         self._refresh_model_options()
         self._refresh_scale_enabled()
 
@@ -733,8 +759,9 @@ class MainWindow(QWidget):
         # index 0 = 「元の場所」: 何もしない
 
     def _toggle_drawer(self) -> None:
-        show = not self.drawer.isVisible()
-        self.drawer.setVisible(show)
+        show = not self._drawer_open
+        self._drawer_open = show
+        self._sync_workspace()
         self.settings_btn.setProperty("active", show)
         self.settings_btn.style().unpolish(self.settings_btn)
         self.settings_btn.style().polish(self.settings_btn)
@@ -848,7 +875,8 @@ class MainWindow(QWidget):
         self.pause_btn.setText("一時停止")
         # 実行中は入力系をロック（モデル/倍率/出力先/追加）
         for w in (self.backend_combo, self.model_combo, self.interpolation_combo, self.output_combo,
-                  self.clear_btn, self.output_open_btn, self.settings_btn):
+                  self.clear_btn, self.output_open_btn, self.settings_btn,
+                  self.drop_zone, self.add_zone):
             w.setEnabled(not running)
         self.drawer.setEnabled(not running)
         for btn in self._scale_btns.values():
@@ -932,24 +960,28 @@ class MainWindow(QWidget):
         ev = self._cancel_events.get(job_id)
         if ev is not None:
             ev.set()  # 念のため（開始前キャンセル扱い）
-        self.queue.remove_job(job_id)
+        # 選択の移動先を一覧が正しく引けるよう、台帳から先に外す
         self._jobs.pop(job_id, None)
         self._cancel_events.pop(job_id, None)
         if job_id in self._order:
             self._order.remove(job_id)
+        self.queue.remove_job(job_id)
+        self._sync_workspace()
 
     def _clear_queue(self) -> None:
         if self._running:
             return
-        for jid in list(self._order):
-            self.queue.remove_job(jid)
+        ids = list(self._order)
         self._jobs.clear()
         self._order.clear()
         self._cancel_events.clear()
+        for jid in ids:
+            self.queue.remove_job(jid)
+        self._sync_workspace()
 
     # -------------------------------------------------------------- 補助
     def _flash_hint(self, text: str) -> None:
-        """フッタ近くに一時的な状況メッセージを出す（簡易: ウィンドウタイトル併記）。"""
+        """開始ボタンの上に状況メッセージを出す（ウィンドウタイトルにも併記）。"""
         self.setWindowTitle(f"ultraeasy-upscaler — {text}")
         self.status_label.setText(text)
 

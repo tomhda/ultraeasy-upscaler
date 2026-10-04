@@ -545,3 +545,61 @@ def test_model_picker_shows_speed_quality_info(app):
 
     win.close()
     app.processEvents()
+
+
+def test_workspace_switches_between_drop_zone_media_and_details(app):
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+
+    # 空のときは左＋中央の全面がドロップ枠。開始ボタンは常に見えている。
+    assert win.stack.currentIndex() == 0
+    assert win.start_btn.isVisible()
+
+    win.add_paths([str(SAMPLE_IMAGE)])
+    app.processEvents()
+    assert win.stack.currentIndex() == 1
+    first = win._order[0]
+    assert win.queue.selected_id() == first
+
+    # 歯車で詳細設定に切り替わり、もう一度押すと一覧＋プレビューへ戻る。
+    win._toggle_drawer()
+    assert win.stack.currentIndex() == 2
+    assert win.start_btn.isVisible()
+    win._toggle_drawer()
+    assert win.stack.currentIndex() == 1
+
+    # 最後の 1 件を消すとドロップ枠へ戻り、選択も外れる。
+    win._on_remove_requested(first)
+    app.processEvents()
+    assert win.stack.currentIndex() == 0
+    assert win.queue.selected_id() is None
+
+    win.close()
+    app.processEvents()
+
+
+def test_removing_selected_row_moves_selection_to_remaining_row(app, tmp_path):
+    from app.gui.main_window import MainWindow
+
+    sources = [tmp_path / "a.jpg", tmp_path / "b.jpg"]
+    for src in sources:
+        shutil.copy(SAMPLE_IMAGE, src)
+
+    win = MainWindow()
+    win.show()
+    win.add_paths([str(src) for src in sources])
+    app.processEvents()
+    first, second = win._order
+
+    win.queue.select(second)
+    assert win.queue.selected_id() == second
+    win._on_remove_requested(second)
+    app.processEvents()
+    assert win.queue.selected_id() == first
+    assert win.queue.row_count() == 1
+
+    win.close()
+    app.processEvents()
