@@ -49,9 +49,9 @@ from app.core.settings import (
     helper_model_family,
 )
 
+from .compare_view import TrialPanel
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
-from .preview_pane import PreviewPane
 from .queue_view import QueueView
 from .settings_drawer import SettingsDrawer
 from . import theme
@@ -241,7 +241,11 @@ class MainWindow(QWidget):
         work_row.setContentsMargins(0, 0, 0, 0)
         work_row.setSpacing(12)
         work_row.addWidget(self._build_media_panel())
-        self.preview = PreviewPane()
+        self.preview = TrialPanel(
+            build_settings=self.build_settings,
+            model_label=lambda key: _MODEL_LABELS.get(key, key),
+        )
+        self.preview.trial_running_changed.connect(self._on_trial_running_changed)
         work_row.addWidget(self.preview, 1)
 
         # 詳細設定は歯車で左＋中央の領域に開く（右列の設定と開始は残す）
@@ -743,9 +747,13 @@ class MainWindow(QWidget):
     def _on_backend_changed(self, *_args) -> None:
         self._refresh_model_options()
         self._refresh_scale_enabled()
+        if hasattr(self, "preview"):
+            self.preview.refresh()
 
     def _on_model_changed(self, *_args) -> None:
         self._refresh_scale_enabled()
+        if hasattr(self, "preview"):
+            self.preview.refresh()
 
     def _on_interpolation_changed(self) -> None:
         model = self.interpolation_combo.currentData()
@@ -863,6 +871,16 @@ class MainWindow(QWidget):
         self._thread.start()
 
         self._set_running(True)
+        if hasattr(self, "preview"):
+            self.preview.set_main_running(True)
+
+    def _on_trial_running_changed(self, running: bool) -> None:
+        """試し中は開始を無効にする。終了待ちなら試し完了後に閉じる。"""
+        if not self._running:
+            self.start_btn.setEnabled(not running)
+        if not running and self._closing and not self._running:
+            self.preview.shutdown()
+            self.close()
 
     def _on_pause(self) -> None:
         """一時停止: 現在ジョブ完了後にワーカーを抜けさせる。"""
@@ -889,6 +907,8 @@ class MainWindow(QWidget):
         self.drawer.setEnabled(not running)
         for btn in self._scale_btns.values():
             btn.setEnabled(not running)
+        if hasattr(self, "preview"):
+            self.preview.set_main_running(running)
         if not running:
             self._refresh_scale_enabled()
 
@@ -944,6 +964,10 @@ class MainWindow(QWidget):
         self._thread = None
         self._current_job_id = None
         self._set_running(False)
+        if self._closing and not self.preview.is_trial_running():
+            self.preview.shutdown()
+            self.close()
+            return
         if self._pause.is_set():
             self._flash_hint("一時停止しました。「開始」で再開できます。")
             self._pause.clear()
@@ -974,6 +998,7 @@ class MainWindow(QWidget):
         if job_id in self._order:
             self._order.remove(job_id)
         self.queue.remove_job(job_id)
+        self.preview.discard_file(str(job.input_path))
         self._sync_workspace()
 
     def _clear_queue(self) -> None:
@@ -985,6 +1010,7 @@ class MainWindow(QWidget):
         self._cancel_events.clear()
         for jid in ids:
             self.queue.remove_job(jid)
+        self.preview.discard_all()
         self._sync_workspace()
 
     # -------------------------------------------------------------- 補助
@@ -1000,14 +1026,21 @@ class MainWindow(QWidget):
     def closeEvent(self, event) -> None:  # noqa: N802
         # 実行中は QThread 走行中の破棄（クラッシュ要因）を避けるため、即閉じない。
         # キャンセル要求 + 一時停止だけ行い、ワーカー完了(queue_finished)後に閉じる。
-        if self._running:
+        trial_running = (
+            self.preview.is_trial_running() if hasattr(self, "preview") else False
+        )
+        if self._running or trial_running:
             self._closing = True
             self._pause.set()
             for ev in self._cancel_events.values():
                 ev.set()
+            if hasattr(self, "preview") and self.preview.is_trial_running():
+                self.preview.cancel_trial()
             self._flash_hint("終了処理中… 現在の処理を停止しています")
             event.ignore()
             return
+        if hasattr(self, "preview"):
+            self.preview.shutdown()
         super().closeEvent(event)
 
 

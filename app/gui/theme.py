@@ -309,6 +309,24 @@ QPushButton#primary:disabled {{
     color: {p.text_mute};
 }}
 
+QPushButton#accent {{
+    background-color: {p.accent};
+    color: {p.on_accent};
+    border: none;
+    border-radius: 7px;
+    min-height: 26px;
+    padding: 7px 18px;
+    font-size: 15px;
+    font-weight: 700;
+}}
+QPushButton#accent:hover {{
+    background-color: {p.accent_hi};
+}}
+QPushButton#accent:disabled {{
+    background-color: {p.accent_disabled};
+    color: {p.text_mute};
+}}
+
 QPushButton#scaleBtn {{
     background-color: {p.input};
     border: 1px solid {p.border};
