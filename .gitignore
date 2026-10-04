@@ -27,3 +27,6 @@ Thumbs.db
 # エージェント向けローカル規約（公開しない・各マシンに手動配置）
 AGENTS.md
 /vendor/winml-sr/
+
+# NPU キットの配布物（scripts/build_npu_kit.ps1 が作る）
+ultraeasy-upscaler-npu-kit*.zip
