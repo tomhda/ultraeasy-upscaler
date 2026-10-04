@@ -448,7 +448,8 @@ def test_npu_section_texts(app, monkeypatch) -> None:
         type(drawer.npu_status))]
     assert "NPU の準備" in texts
     assert ("NPU で使うモデルは、最初に一度だけ変換が必要です。"
-            "変換中は PC が重くなります。使うモデルだけ変換してください。") in texts
+            "使うモデルだけ変換してください。"
+            "変換中も PC は使えますが、SwinIR-M と AdcSR はメモリを多く使います。") in texts
 
     anime = drawer.npu_rows[HELPER_MODEL_ANIME]
     assert anime["status"].text() == "未変換"

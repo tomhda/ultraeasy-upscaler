@@ -405,7 +405,8 @@ class SettingsDrawer(QFrame):
         section.addWidget(heading)
         desc = QLabel(
             "NPU で使うモデルは、最初に一度だけ変換が必要です。"
-            "変換中は PC が重くなります。使うモデルだけ変換してください。"
+            "使うモデルだけ変換してください。"
+            "変換中も PC は使えますが、SwinIR-M と AdcSR はメモリを多く使います。"
         )
         desc.setObjectName("hint")
         desc.setWordWrap(True)

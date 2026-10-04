@@ -27,12 +27,15 @@ from .settings import (
 # 本処理（open_session の既定）は 0 のまま変えない。
 CONVERT_PRIORITY = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0)
 
-# モデルごとの初回変換の目安（分）。実測値に差し替える前提の定数表。
+# モデルごとの初回変換の目安（分）。Ryzen AI 7 PRO 350・Ryzen AI Software 1.8.0・
+# 低い優先度での実測（2026-10-05）: Anime 903 秒、SPAN 850 秒、Real-ESRGAN 1529 秒、
+# SwinIR-M 3918 秒。どれも CPU は 1 コアぶん。メモリの最大は SwinIR-M だけ約 25GB、
+# ほかは 2GB 未満。AdcSR は 9 月の実測（前半 5201 秒＋後半 1811 秒）で、メモリは未計測。
 NPU_CONVERT_MINUTES = {
     HELPER_MODEL_ANIME: 15,
     HELPER_MODEL_SPAN: 14,
-    HELPER_MODEL_AMD_RRDB: 19,
-    HELPER_MODEL_SWINIR: 51,
+    HELPER_MODEL_AMD_RRDB: 25,
+    HELPER_MODEL_SWINIR: 65,
     HELPER_MODEL_ADCSR: 120,
 }
 
