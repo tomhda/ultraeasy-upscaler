@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import binaries
+from app.core import binaries, helper_backend, npu_prepare
 from app.core.jobs import Job, JobKind, JobStatus
 from app.core.settings import (
     DEFAULT_MODEL,
@@ -171,6 +171,11 @@ _MODEL_INFO: dict[tuple[UpscaleBackend, str],
 }
 
 
+def _combo_closed_text(text: str) -> str:
+    """閉じた表示はモデル名だけ（一覧の印｜…・（未変換）は出さない）。"""
+    return str(text).split("｜")[0].removesuffix("（未変換）")
+
+
 class ModelCombo(QComboBox):
     """閉じた状態ではモデル名だけを見せるコンボ（特性の印は開いた一覧に出す）。"""
 
@@ -178,7 +183,7 @@ class ModelCombo(QComboBox):
         painter = QStylePainter(self)
         opt = QStyleOptionComboBox()
         self.initStyleOption(opt)
-        opt.currentText = opt.currentText.split("｜")[0]
+        opt.currentText = _combo_closed_text(opt.currentText)
         painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, opt)
         painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, opt)
 
@@ -211,6 +216,7 @@ class MainWindow(QWidget):
         self._running = False
         self._closing = False
         self._current_job_id: int | None = None
+        self._npu_converting = False
 
         # 画像用・動画用の既定設定（モデル・倍率。動画は補間モデルも持つ）。
         # 個別設定は _overrides[job_id] にだけ置き、ここには既定だけを持つ。
@@ -235,7 +241,12 @@ class MainWindow(QWidget):
         outer.setSpacing(12)
 
         # AI実行先は詳細設定ドロワーにあるコンボをそのまま使う
-        self.drawer = SettingsDrawer()
+        # モデルの表示名は右列の表とそろえる（NPU 変換画面へ渡す）。
+        self.drawer = SettingsDrawer(
+            model_label=lambda key: _MODEL_LABELS.get(key, key)
+        )
+        self.drawer.npu_converting_changed.connect(
+            self._on_npu_converting_changed)
         self._drawer_open = False
         self.backend_combo = self.drawer.backend
 
@@ -978,22 +989,27 @@ class MainWindow(QWidget):
         if not hasattr(self, "model_hint"):
             return
         backend = self._selected_backend()
+        # NPU のとき未変換のモデルは開いた一覧に印を付ける（閉じた表示は名だけ）。
+        show_unconverted = backend == UpscaleBackend.NPU_NATIVE
         item_model = self.model_combo.model()
         for i in range(self.model_combo.count()):
             data = self.model_combo.itemData(i)
             if data in (None, "__missing__"):
                 continue
             base = _MODEL_LABELS.get(data, data)
+            suffix = ""
+            if show_unconverted and not npu_prepare.is_converted(str(data)):
+                suffix = "（未変換）"
             info = _MODEL_INFO.get((backend, data))
             item = item_model.item(i)
             if info is None:
-                self.model_combo.setItemText(i, base)
+                self.model_combo.setItemText(i, f"{base}{suffix}")
                 if item is not None:
                     item.setToolTip("")
                 continue
             speed, quality, _anime, _live, star = info
             badge = f"速度{speed} 画質{quality}" + (f" ★{star}" if star else "")
-            self.model_combo.setItemText(i, f"{base}｜{badge}")
+            self.model_combo.setItemText(i, f"{base}{suffix}｜{badge}")
             if item is not None:
                 item.setToolTip(self._compose_model_hint(backend, data))
         # 閉じた状態はコンパクト幅のままでよいが、開いたリストは全文が
@@ -1127,6 +1143,8 @@ class MainWindow(QWidget):
     def _toggle_drawer(self) -> None:
         show = not self._drawer_open
         self._drawer_open = show
+        if show:
+            self.drawer.refresh_npu_rows()
         self._sync_workspace()
         self.settings_btn.setProperty("active", show)
         self.settings_btn.style().unpolish(self.settings_btn)
@@ -1221,6 +1239,9 @@ class MainWindow(QWidget):
     def _on_start(self) -> None:
         if self._running:
             return
+        if self._npu_converting:
+            self._flash_hint("NPU の変換中は処理を始められません")
+            return
         pending = self._pending_jobs()
         if not pending:
             self._flash_hint("処理するファイルがありません。")
@@ -1242,6 +1263,28 @@ class MainWindow(QWidget):
                 self._flash_hint("動画のモデルかフレーム補間を選んでください。")
             else:
                 self._flash_hint("画像のモデルを選んでください。")
+            return
+
+        # NPU 未変換の確認（ファイルごとの設定で判定。
+        # 短辺不足で GPU に自動切替する入力は止めない）。
+        for job in pending:
+            job_settings = self.build_settings(job)
+            if job_settings.backend != UpscaleBackend.NPU_NATIVE:
+                continue
+            if job_settings.model is None:
+                continue
+            if (
+                job.width and job.height
+                and helper_backend.effective_backend(
+                    job_settings.backend, job.width, job.height
+                ) != UpscaleBackend.NPU_NATIVE
+            ):
+                continue
+            if npu_prepare.is_converted(str(job_settings.model)):
+                continue
+            label = _MODEL_LABELS.get(
+                str(job_settings.model), str(job_settings.model))
+            self._flash_hint(npu_prepare.not_converted_message(label))
             return
 
         settings = self._apply_current_settings(pending)
@@ -1268,8 +1311,33 @@ class MainWindow(QWidget):
     def _on_trial_running_changed(self, running: bool) -> None:
         """試し中は開始を無効にする。終了待ちなら試し完了後に閉じる。"""
         if not self._running:
-            self.start_btn.setEnabled(not running)
-        if not running and self._closing and not self._running:
+            self.start_btn.setEnabled(
+                not running and not self._npu_converting)
+        self._update_npu_busy()
+        if (not running and self._closing and not self._running
+                and not self._npu_converting):
+            self.preview.shutdown()
+            self.close()
+
+    def _update_npu_busy(self) -> None:
+        """変換ボタンの案内用に本処理・試しの実行状態をドロワーへ伝える。"""
+        if hasattr(self, "drawer") and hasattr(self, "preview"):
+            self.drawer.set_external_busy(
+                self._running or self.preview.is_trial_running())
+
+    def _on_npu_converting_changed(self, converting: bool) -> None:
+        """変換中は開始・試しを止め、終わったら未変換表示を更新する。"""
+        self._npu_converting = bool(converting)
+        if hasattr(self, "preview"):
+            self.preview.set_npu_converting(self._npu_converting)
+        if not converting:
+            self._update_model_info()
+        if not self._running:
+            self.start_btn.setEnabled(
+                not self._npu_converting
+                and not self.preview.is_trial_running())
+        if (not converting and self._closing and not self._running
+                and not self.preview.is_trial_running()):
             self.preview.shutdown()
             self.close()
 
@@ -1286,7 +1354,8 @@ class MainWindow(QWidget):
 
     def _set_running(self, running: bool) -> None:
         self._running = running
-        self.start_btn.setEnabled(not running)
+        self.start_btn.setEnabled(
+            not running and not getattr(self, "_npu_converting", False))
         self.start_btn.setText("処理中…" if running else "開始")
         self.pause_btn.setEnabled(running)
         self.pause_btn.setText("一時停止")
@@ -1302,6 +1371,7 @@ class MainWindow(QWidget):
         self.queue.set_retry_locked(running)
         if hasattr(self, "preview"):
             self.preview.set_main_running(running)
+        self._update_npu_busy()
         if not running:
             self._sync_settings_widgets()
         self._update_retry_all()
@@ -1440,7 +1510,8 @@ class MainWindow(QWidget):
         self._thread = None
         self._current_job_id = None
         self._set_running(False)
-        if self._closing and not self.preview.is_trial_running():
+        if (self._closing and not self.preview.is_trial_running()
+                and not self._npu_converting):
             self.preview.shutdown()
             self.close()
             return
@@ -1506,16 +1577,22 @@ class MainWindow(QWidget):
     def closeEvent(self, event) -> None:  # noqa: N802
         # 実行中は QThread 走行中の破棄（クラッシュ要因）を避けるため、即閉じない。
         # キャンセル要求 + 一時停止だけ行い、ワーカー完了(queue_finished)後に閉じる。
+        # 変換中も同じ扱い（中止してから閉じる）。
         trial_running = (
             self.preview.is_trial_running() if hasattr(self, "preview") else False
         )
-        if self._running or trial_running:
+        converting = (
+            self.drawer.is_converting() if hasattr(self, "drawer") else False
+        )
+        if self._running or trial_running or converting:
             self._closing = True
             self._pause.set()
             for ev in self._cancel_events.values():
                 ev.set()
             if hasattr(self, "preview") and self.preview.is_trial_running():
                 self.preview.cancel_trial()
+            if converting and hasattr(self, "drawer"):
+                self.drawer.cancel_conversion()
             self._flash_hint("終了処理中… 現在の処理を停止しています")
             event.ignore()
             return

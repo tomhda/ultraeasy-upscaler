@@ -514,6 +514,10 @@ QCheckBox::indicator:checked {{
     background-color: {p.accent};
     border-color: {p.accent};
 }}
+QFrame#separator {{
+    background-color: {p.border};
+    border: none;
+}}
 QWidget#toggleWrap {{
     background-color: transparent;
 }}

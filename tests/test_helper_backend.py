@@ -197,9 +197,11 @@ def test_overlap_for_model_gives_adcsr_32_and_default_16() -> None:
 class _CapturingServeClient:
     last_command: list = []
     last_connect_kwargs: dict = {}
+    last_creationflags: int = 0
 
-    def __init__(self, command, workdir, env=None, log=None) -> None:
+    def __init__(self, command, workdir, env=None, log=None, creationflags=0) -> None:
         type(self).last_command = list(command)
+        type(self).last_creationflags = creationflags
 
     def connect(self, **kwargs) -> None:
         type(self).last_connect_kwargs = dict(kwargs)

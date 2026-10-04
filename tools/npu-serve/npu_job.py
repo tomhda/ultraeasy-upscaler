@@ -282,6 +282,7 @@ def spawn_in_job(
     *,
     cwd: str | None = None,
     env: dict[str, str] | None = None,
+    creationflags: int = 0,
 ) -> JobChildProcess | subprocess.Popen:
     """子を Job に所属させて起動する。
 
@@ -289,6 +290,8 @@ def spawn_in_job(
     (登録前に子が実行開始しない)。stdin/stdout/stderr は全てパイプ
     (bufsize=0 相当の無バッファ) で返す。Job ハンドルは子へ継承させない。
     非 Windows では ``subprocess.Popen`` に代替する。
+    creationflags は Windows の CreateProcessW へそのまま足す
+    (NPU 変換の BELOW_NORMAL など。子プロセスへ継承される)。
     """
     args = [os.fspath(arg) for arg in argv]
     if not _WIN:
@@ -301,11 +304,12 @@ def spawn_in_job(
             bufsize=0,
             env=env,
         )
-    return _spawn_suspended(args, cwd=cwd, env=env)  # pragma: no cover - Windows 専用
+    return _spawn_suspended(args, cwd=cwd, env=env, creationflags=creationflags)  # pragma: no cover - Windows 専用
 
 
 def _spawn_suspended(  # pragma: no cover - Windows 専用
-    args: list[str], *, cwd: str | None, env: dict[str, str] | None
+    args: list[str], *, cwd: str | None, env: dict[str, str] | None,
+    creationflags: int = 0,
 ) -> JobChildProcess:
     import ctypes
     import msvcrt
@@ -412,7 +416,7 @@ def _spawn_suspended(  # pragma: no cover - Windows 専用
             None,
             None,
             True,
-            _CREATE_SUSPENDED | _CREATE_NO_WINDOW | _CREATE_UNICODE_ENVIRONMENT,
+            _CREATE_SUSPENDED | _CREATE_NO_WINDOW | _CREATE_UNICODE_ENVIRONMENT | int(creationflags or 0),
             env_block,
             cwd,
             ctypes.byref(si),

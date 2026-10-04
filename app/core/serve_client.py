@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import binaries
 from .jobs import Cancelled
 
 MAGIC_READY = b"UEUH"
@@ -41,14 +42,15 @@ def _spawn_helper(command, **kwargs):
     """
     if sys.platform == "win32":
         try:
-            tools_serve = Path(__file__).resolve().parents[2] / "tools" / "npu-serve"
+            tools_serve = binaries.repo_root() / "tools" / "npu-serve"
             if str(tools_serve) not in sys.path:
                 sys.path.insert(0, str(tools_serve))
             import npu_job
 
             if npu_job.job_supported():
                 return npu_job.spawn_in_job(
-                    command, cwd=kwargs.get("cwd"), env=kwargs.get("env"))
+                    command, cwd=kwargs.get("cwd"), env=kwargs.get("env"),
+                    creationflags=kwargs.get("creationflags", 0))
         except Exception:
             pass
     return subprocess.Popen(command, **kwargs)
@@ -64,12 +66,15 @@ class ServeClient:
         *,
         env: dict[str, str] | None = None,
         log: Callable[[str], None] | None = None,
+        creationflags: int = 0,
     ) -> None:
         if not command:
             raise ValueError("helper command must not be empty")
         self.command = [os.fspath(arg) for arg in command]
         self.workdir = os.fspath(workdir) if workdir is not None else None
         self.env = env
+        # NPU 変換だけ BELOW_NORMAL で起動するための起動フラグ（既定は 0 で従来どおり）。
+        self._creationflags = int(creationflags or 0)
         self.log = log
         self.proc: subprocess.Popen | None = None
         self.scale = 0
@@ -99,7 +104,7 @@ class ServeClient:
                 stderr=subprocess.PIPE,
                 bufsize=0,
                 env=self.env,
-                creationflags=_CREATE_NO_WINDOW,
+                creationflags=(self._creationflags | _CREATE_NO_WINDOW),
             )
         except OSError as exc:
             raise ServeClientError(f"AI helperを起動できません: {self.command[0]}") from exc

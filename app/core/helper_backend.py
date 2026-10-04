@@ -415,6 +415,34 @@ def _two_stage_cache_hit(manifest_path: Path, front_path: Path, back_path: Path)
     return True
 
 
+def npu_compiled(model: str | ModelFamily | None) -> bool | None:
+    """NPU の変換済みかを返す。必要ファイルが揃わなければ None。
+
+    open_session の NPU 分岐と同一の判定（tail-cut があれば body の
+    キャッシュ、AdcSR は 2 段のキャッシュ）を使う。NPU 変換画面も
+    この関数を使うため、二重に実装しない。
+    """
+    model_key = canonical_helper_model(model)
+    if model_key == HELPER_MODEL_ADCSR:
+        if not adcsr_npu2_enabled():
+            return None
+        two_stage = adcsr_two_stage_files()
+        if two_stage is None:
+            return None
+        front_path, back_path, manifest_path = two_stage
+        return _two_stage_cache_hit(manifest_path, front_path, back_path)
+    tile = 256 if model_key in (HELPER_MODEL_AMD_RRDB, HELPER_MODEL_SWINIR) else 512
+    try:
+        model_path = _resolve_model(UpscaleBackend.NPU_NATIVE, model_key, tile)
+    except HelperBackendUnavailable:
+        return None
+    if npu_tailcut_enabled():
+        tail_found = npu_tail_files(model_key, tile)
+        if tail_found is not None:
+            model_path, _tail_manifest = tail_found
+    return _cache_hit(model_path)
+
+
 def _session_spec(
     settings: UpscaleSettings, width: int, height: int
 ) -> tuple[UpscaleBackend, int, Path]:
@@ -447,8 +475,14 @@ def open_session(
     height: int,
     progress: Optional[ProgressCb] = None,
     cancel=None,
+    *,
+    creationflags: int = 0,
 ) -> HelperSession:
-    """入力寸法に合うモデルとヘルパーを解決してUEUHまで接続する。"""
+    """入力寸法に合うモデルとヘルパーを解決してUEUHまで接続する。
+
+    creationflags は子プロセスの起動フラグ（NPU 変換だけ低い優先度）。
+    本処理は既定の 0 のまま。
+    """
     progress = progress or _noop
     try:
         backend, tile, model_path = _session_spec(settings, width, height)
@@ -512,15 +546,18 @@ def open_session(
             manifest_path: Path | None = None
             if model_key == HELPER_MODEL_ADCSR and adcsr_npu2_enabled():
                 two_stage = adcsr_two_stage_files()
+            # 変換済み判定は npu_compiled に一本化（NPU 変換画面と同一の判定。
+            # tail-cut があれば body、AdcSR は 2 段のキャッシュを見る）。
+            compiled = npu_compiled(model_key)
             if two_stage is not None:
                 front_path, back_path, manifest_path = two_stage
                 model_path = front_path
-                cache_hit = _two_stage_cache_hit(manifest_path, front_path, back_path)
+                cache_hit = bool(compiled)
             elif model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
                 raise HelperBackendUnavailable(
                     "AdcSR の NPU 2段モード用ファイル (front/back/manifest) が見つかりません")
             else:
-                cache_hit = _cache_hit(model_path)
+                cache_hit = bool(compiled)
             tail_manifest: Path | None = None
             if (
                 two_stage is None
@@ -530,10 +567,9 @@ def open_session(
             ):
                 tail_found = npu_tail_files(model_key, tile)
                 if tail_found is not None:
-                    # body とマニフェストが両方あれば tail-cut。cache_hit は
-                    # body の stem で判定する。無ければ従来の全体モデルのまま。
+                    # body とマニフェストが両方あれば tail-cut。
+                    # 無ければ従来の全体モデルのまま。
                     model_path, tail_manifest = tail_found
-                    cache_hit = _cache_hit(model_path)
             command = [
                 str(python), str(script), "--model", str(model_path),
                 "--cache-dir", str(cache),
@@ -588,7 +624,8 @@ def open_session(
                     progress(0.0, _format_stage(tag, time.monotonic() - boot_start))
                     break
 
-        client = ServeClient(command, workdir, env=env, log=_log_line)
+        client = ServeClient(command, workdir, env=env, log=_log_line,
+                             creationflags=creationflags)
 
         last_second = -1
 

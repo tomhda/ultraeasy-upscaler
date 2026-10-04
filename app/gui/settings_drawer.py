@@ -1,7 +1,10 @@
 """詳細設定ドロワー（折りたたみ）。"""
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+import threading
+import time
+
+from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,10 +15,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core import helper_backend, npu_prepare
+from app.core.jobs import Cancelled
 from app.core.settings import (
     ProcessingOrder,
     UpscaleBackend,
@@ -23,6 +29,7 @@ from app.core.settings import (
 )
 
 from . import theme
+from .compare_view import sanitize_error_message
 
 _IMAGE_FORMATS = ["png", "jpg", "webp"]
 # mp4/mkv/mov は H.264(+AAC) を収容できる。webm は VP9/Opus が必要で
@@ -76,6 +83,47 @@ _HELP = {
     "target_fps": "フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。",
     "processing_order": "アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。",
 }
+
+
+def format_convert_elapsed(seconds: float) -> str:
+    """変換中の状態表示（1 時間以上は H:MM:SS、それ未満は M:SS）。"""
+    total = max(0, int(seconds))
+    if total >= 3600:
+        body = f"{total // 3600}:{(total % 3600) // 60:02d}:{total % 60:02d}"
+    else:
+        body = f"{total // 60}:{total % 60:02d}"
+    return f"変換中（経過 {body}）"
+
+
+def format_convert_estimate(minutes: int) -> str:
+    """未変換の行に出す目安（60 分以上は「約○時間」「約○時間○分」の形）。"""
+    if minutes >= 60:
+        hours, rest = divmod(int(minutes), 60)
+        return f"初回変換の目安: 約{hours}時間" + (f"{rest}分" if rest else "")
+    return f"初回変換の目安: 約{int(minutes)}分"
+
+
+class _NpuConvertWorker(QObject):
+    """NPU 変換を別スレッドで 1 本だけ行う（進捗文言は出さず経過時間で示す）。"""
+
+    finished = Signal()
+    failed = Signal(str)
+    canceled = Signal()
+
+    def __init__(self, model_key: str, cancel: threading.Event) -> None:
+        super().__init__()
+        self._model_key = model_key
+        self._cancel = cancel
+
+    def run(self) -> None:
+        try:
+            npu_prepare.convert(self._model_key, cancel=self._cancel)
+        except Cancelled:
+            self.canceled.emit()
+        except Exception as exc:  # 失敗は文言にして状況行へ出す
+            self.failed.emit(str(exc))
+        else:
+            self.finished.emit()
 
 
 class ClearCheckBox(QCheckBox):
@@ -199,9 +247,25 @@ class HelpIcon(QLabel):
 class SettingsDrawer(QFrame):
     """折りたたみ可能な詳細設定パネル。"""
 
-    def __init__(self, parent=None) -> None:
+    # 変換の開始・終了を MainWindow へ知らせる（開始/試すの無効化と連動用）。
+    npu_converting_changed = Signal(bool)
+
+    def __init__(self, parent=None, model_label=None) -> None:
         super().__init__(parent)
         self.setObjectName("card")
+        # モデルの表示名は右列の表とそろえる（既定はキーのまま）。
+        self._model_label = model_label or (lambda key: str(key))
+        self.npu_rows: dict[str, dict[str, QWidget]] = {}
+        self._npu_thread: QThread | None = None
+        self._npu_worker: _NpuConvertWorker | None = None
+        self._npu_cancel: threading.Event | None = None
+        self._npu_convert_key: str | None = None
+        self._npu_convert_start = 0.0
+        self._npu_minutes: dict[str, int] = {}
+        self._external_busy = False  # 本処理・試しの実行中
+        self._npu_timer = QTimer(self)
+        self._npu_timer.setInterval(1000)
+        self._npu_timer.timeout.connect(self._on_npu_tick)
         self._build()
 
     def _label(self, text: str, help_text: str | None = None) -> QWidget:
@@ -255,7 +319,12 @@ class SettingsDrawer(QFrame):
         grid.setColumnStretch(3, 1)
 
         # --- AI実行先 / 画像の保存形式 ---
-        self.backend = self._combo_with_data(_BACKEND_OPTIONS)
+        # NPU キットが無い PC では NPU の選択肢を出さない。
+        backend_options = [
+            (label, value) for label, value in _BACKEND_OPTIONS
+            if value != UpscaleBackend.NPU_NATIVE.value or npu_prepare.npu_available()
+        ]
+        self.backend = self._combo_with_data(backend_options)
         grid.addWidget(self._label("AI実行先", _HELP["backend"]), 0, 0)
         grid.addWidget(self.backend, 0, 1)
 
@@ -320,6 +389,40 @@ class SettingsDrawer(QFrame):
         toggle_wrap.setObjectName("toggleWrap")
         toggle_wrap.setLayout(toggles)
         root.addWidget(toggle_wrap)
+
+        # --- NPU の準備（キットが無い PC では欄ごと出さない） ---
+        self.npu_section = QWidget()
+        self.npu_section.setObjectName("toggleWrap")
+        section = QVBoxLayout(self.npu_section)
+        section.setContentsMargins(0, 8, 0, 0)
+        section.setSpacing(8)
+        line = QFrame()
+        line.setObjectName("separator")
+        line.setFixedHeight(1)
+        section.addWidget(line)
+        heading = QLabel("NPU の準備")
+        heading.setObjectName("sectionTitle")
+        section.addWidget(heading)
+        desc = QLabel(
+            "NPU で使うモデルは、最初に一度だけ変換が必要です。"
+            "変換中は PC が重くなります。使うモデルだけ変換してください。"
+        )
+        desc.setObjectName("hint")
+        desc.setWordWrap(True)
+        section.addWidget(desc)
+        self.npu_grid = QGridLayout()
+        self.npu_grid.setHorizontalSpacing(12)
+        self.npu_grid.setVerticalSpacing(6)
+        self.npu_grid.setColumnStretch(2, 1)
+        section.addLayout(self.npu_grid)
+        self.npu_status = QLabel("")
+        self.npu_status.setObjectName("hint")
+        self.npu_status.setWordWrap(True)
+        section.addWidget(self.npu_status)
+        root.addWidget(self.npu_section)
+        self._rebuild_npu_rows()
+        self.npu_section.setVisible(npu_prepare.npu_available())
+
         root.addStretch(1)  # 広い領域に置かれても項目を上に詰める
 
         # 出力フォルダ名はチェック時のみ有効
@@ -375,3 +478,205 @@ class SettingsDrawer(QFrame):
         self.target_fps.setEnabled(enabled)
         # 順番は補間とアプコンの併用時のみ意味を持つ
         self.processing_order.setEnabled(enabled)
+
+    # ------------------------------------------------------- NPU の準備
+    def _rebuild_npu_rows(self) -> None:
+        """モデルごとの行を作り直す（ファイルが揃わないものは出さない）。"""
+        while self.npu_grid.count():
+            item = self.npu_grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.npu_rows.clear()
+        self._npu_minutes.clear()
+        for row, model in enumerate(npu_prepare.npu_models()):
+            try:
+                name = self._model_label(model.label_key)
+            except Exception:
+                name = model.label_key
+            name_label = QLabel(str(name))
+            name_label.setObjectName("fieldLabel")
+            status_label = QLabel("変換済み" if model.converted else "未変換")
+            status_label.setObjectName("hint")
+            estimate_label = QLabel(
+                "" if model.converted else format_convert_estimate(model.minutes)
+            )
+            estimate_label.setObjectName("hint")
+            button = QPushButton("変換する")
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(
+                lambda _=False, key=model.key: self._on_npu_button(key)
+            )
+            if model.converted:
+                button.setVisible(False)
+            self.npu_grid.addWidget(name_label, row, 0)
+            self.npu_grid.addWidget(status_label, row, 1)
+            self.npu_grid.addWidget(estimate_label, row, 2)
+            self.npu_grid.addWidget(button, row, 3)
+            self.npu_rows[model.key] = {
+                "status": status_label,
+                "estimate": estimate_label,
+                "button": button,
+            }
+            self._npu_minutes[model.key] = model.minutes
+
+    def refresh_npu_rows(self) -> None:
+        """変換画面を開いたとき等に行を載せ替える（変換中は触らない）。"""
+        if self.is_converting():
+            return
+        self._rebuild_npu_rows()
+
+    def set_external_busy(self, busy: bool) -> None:
+        """本処理・試しの実行状態を覚える（押されたら案内を出すため）。"""
+        self._external_busy = bool(busy)
+
+    def is_converting(self) -> bool:
+        """変換が実行中か（テスト・終了処理用）。"""
+        return self._npu_thread is not None
+
+    def cancel_conversion(self) -> None:
+        """実行中の変換に中止を要求する（子プロセスを残さない）。"""
+        if self._npu_cancel is not None:
+            self._npu_cancel.set()
+
+    def _on_npu_button(self, model_key: str) -> None:
+        if self.is_converting():
+            if model_key == self._npu_convert_key:
+                self.cancel_conversion()
+            return
+        if self._external_busy:
+            self.npu_status.setText("処理中は変換できません")
+            return
+        if model_key not in self.npu_rows:
+            return
+        self.npu_status.setText("")
+        self._start_conversion(model_key)
+
+    def _start_conversion(self, model_key: str) -> None:
+        cancel = threading.Event()
+        worker = _NpuConvertWorker(model_key, cancel)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_convert_finished)
+        worker.failed.connect(self._on_convert_failed)
+        worker.canceled.connect(self._on_convert_canceled)
+        self._npu_thread = thread
+        self._npu_worker = worker
+        self._npu_cancel = cancel
+        self._npu_convert_key = model_key
+        self._npu_convert_start = time.monotonic()
+        for key, widgets in self.npu_rows.items():
+            button = widgets["button"]
+            if key == model_key:
+                widgets["status"].setText(
+                    format_convert_elapsed(0.0))
+                widgets["estimate"].setText("")
+                button.setText("中止")
+                button.setVisible(True)
+                button.setEnabled(True)
+            else:
+                button.setEnabled(False)
+        self._npu_timer.start()
+        try:
+            self.npu_converting_changed.emit(True)
+        except RuntimeError:
+            pass
+        thread.start()
+
+    def _on_npu_tick(self) -> None:
+        """経過時間の表示を 1 秒ごとに更新する。"""
+        if not self.is_converting() or self._npu_convert_key is None:
+            return
+        widgets = self.npu_rows.get(self._npu_convert_key)
+        if widgets is None:
+            return
+        widgets["status"].setText(format_convert_elapsed(
+            time.monotonic() - self._npu_convert_start))
+
+    def _stop_convert_thread(self) -> None:
+        self._npu_timer.stop()
+        thread, worker = self._npu_thread, self._npu_worker
+        self._npu_thread = None
+        self._npu_worker = None
+        self._npu_cancel = None
+        self._npu_convert_key = None
+        if thread is not None:
+            try:
+                thread.quit()
+                thread.wait(5000)
+            except RuntimeError:
+                pass
+            try:
+                thread.deleteLater()
+            except RuntimeError:
+                pass
+        if worker is not None:
+            try:
+                worker.deleteLater()
+            except RuntimeError:
+                pass
+
+    def _finish_conversion(self) -> None:
+        """共通後始末（行の再有効化と終了通知）。"""
+        self._stop_convert_thread()
+        for widgets in self.npu_rows.values():
+            widgets["button"].setEnabled(True)
+        try:
+            self.npu_converting_changed.emit(False)
+        except RuntimeError:
+            pass
+
+    def _on_convert_finished(self) -> None:
+        key = self._npu_convert_key
+        self._finish_conversion()
+        if key is not None and key in self.npu_rows:
+            widgets = self.npu_rows[key]
+            widgets["status"].setText("変換済み")
+            widgets["estimate"].setText("")
+            widgets["button"].setVisible(False)
+        self.npu_status.setText("変換が終わりました。")
+
+    def _on_convert_failed(self, message: str) -> None:
+        key = self._npu_convert_key
+        minutes = self._npu_minutes.get(key or "", 0) if key else 0
+        self._finish_conversion()
+        if key is not None and key in self.npu_rows:
+            widgets = self.npu_rows[key]
+            widgets["status"].setText("失敗")
+            widgets["estimate"].setText(
+                format_convert_estimate(minutes) if minutes else "")
+            button = widgets["button"]
+            button.setText("変換する")
+            button.setVisible(True)
+        self.npu_status.setText(
+            f"変換できませんでした: {sanitize_error_message(message, self._npu_redactions(key))}")
+
+    def _on_convert_canceled(self) -> None:
+        key = self._npu_convert_key
+        minutes = self._npu_minutes.get(key or "", 0) if key else 0
+        self._finish_conversion()
+        if key is not None and key in self.npu_rows:
+            widgets = self.npu_rows[key]
+            widgets["status"].setText("未変換")
+            widgets["estimate"].setText(
+                format_convert_estimate(minutes) if minutes else "")
+            button = widgets["button"]
+            button.setText("変換する")
+            button.setVisible(True)
+        self.npu_status.setText("中止しました")
+
+    @staticmethod
+    def _npu_redactions(model_key: str | None) -> list[str]:
+        """失敗文から取り除く内部識別子（試しの整形と同じ流儀）。"""
+        return [
+            str(model_key or ""),
+            UpscaleBackend.NPU_NATIVE.value,
+            UpscaleBackend.WINML_GPU.value,
+            UpscaleBackend.SWINIR_CUDA.value,
+            UpscaleBackend.VULKAN.value,
+            "VAIML",
+            "vaiml",
+            str(helper_backend.npu_cache_dir()),
+            str(helper_backend.models_dir()),
+        ]

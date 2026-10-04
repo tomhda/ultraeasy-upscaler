@@ -1,6 +1,7 @@
 """アップスケール設定モデル（GUI / エンジン共通）。"""
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
@@ -205,7 +206,15 @@ ADCSR_NPU2_ENV = "UEU_ADCSR_NPU2"
 NPU_TAILCUT_ENV = "UEU_NPU_TAILCUT"
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+def _app_root() -> Path:
+    # PyInstaller 版では models/ や vendor/ を exe と同じ階層に置く
+    # （__file__ 基準だと _internal/ の中を指してしまい、同梱モデルが見つからない）。
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+_REPO_ROOT = _app_root()
 # マシン固有の絶対パスは使わず、リポジトリ相対の既定値にする。
 # 実運用ではUEU_MODELS_DIR / UEU_NPU_CACHEで上書きできる。
 # 配布版の ONNX は setup.ps1 が models/ai/ へ展開する（開発時の tmp/npu-anime

@@ -18,6 +18,9 @@ from PySide6.QtWidgets import QApplication
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_IMAGE = REPO_ROOT / "vendor" / "realesrgan" / "input.jpg"
 
+# NPU キットの無い PC でも通るよう NPU ありに固定する（なしの表示は別に確かめる）。
+pytestmark = pytest.mark.usefixtures("force_npu_available")
+
 
 @pytest.fixture(scope="module")
 def app():

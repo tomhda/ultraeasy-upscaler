@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import math
 import os
 import queue
@@ -339,6 +340,46 @@ class NpuSession:
         return out, len(tiles)
 
 
+@contextlib.contextmanager
+def _guard_stdout_during_build():
+    """セッション生成中だけ fd1 (stdout) を stderr へ向ける。
+
+    stdout は UEU プロトコル専用だが、初回の VAIML コンパイル中に AIE コンパイラが
+    "Old buffers:" などを fd1 へ直接書く。親はそれを応答ヘッダとして読んで
+    切断し、コンパイルが完走しないままキャッシュも残らない。ネイティブ側の
+    書き込みは Python の print 規律では防げないので、fd レベルで退避する
+    （2 段モードの npu_worker と同じ対処）。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    saved = None
+    try:
+        saved = os.dup(1)
+        os.dup2(2, 1)
+    except OSError as exc:
+        print(f"[serve] stdout guard unavailable ({exc})", file=sys.stderr, flush=True)
+        saved = None
+    try:
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+        if saved is not None:
+            try:
+                os.dup2(saved, 1)
+            finally:
+                os.close(saved)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.setmode(1, os.O_BINARY)
+
+
 def serve(args: argparse.Namespace) -> int:
     if getattr(args, "model_back", None):
         import npu_twostage
@@ -352,13 +393,14 @@ def serve(args: argparse.Namespace) -> int:
         if getattr(args, "model_back", None):
             raise ValueError("--tail は 1 モデル経路専用（2 段モードとは併用不可）")
         tail = load_tail_manifest(args.tail)
-    session = NpuSession(
-        model_path=model_path,
-        cache_dir=Path(args.cache_dir).resolve(),
-        overlap=args.overlap,
-        warmup=args.warmup,
-        tail=tail,
-    )
+    with _guard_stdout_during_build():
+        session = NpuSession(
+            model_path=model_path,
+            cache_dir=Path(args.cache_dir).resolve(),
+            overlap=args.overlap,
+            warmup=args.warmup,
+            tail=tail,
+        )
 
     stdin = sys.stdin.buffer
     stdout = sys.stdout.buffer

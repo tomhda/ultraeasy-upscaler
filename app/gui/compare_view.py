@@ -25,9 +25,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import helper_backend, npu_prepare
 from app.core import trial as trial_core
 from app.core.jobs import Job, JobKind
-from app.core.settings import UpscaleSettings
+from app.core.settings import UpscaleBackend, UpscaleSettings
 
 # 境界線の掴み判定の片側幅（ピクセル）。細すぎると掴めないため余裕を持つ。
 _DIVIDER_GRAB = 7
@@ -604,6 +605,7 @@ class TrialPanel(QWidget):
         self._temp_by_file: dict[str, set[str]] = {}
         self._frame_token = 0
         self._main_running = False
+        self._npu_converting = False
         self._trial_thread: QThread | None = None
         self._trial_worker: _TrialWorker | None = None
         self._trial_cancel: threading.Event | None = None
@@ -1062,7 +1064,8 @@ class TrialPanel(QWidget):
             and self._source_image is not None
         )
         self.trial_btn.setEnabled(
-            running or (can_pick and not self._main_running and not model_missing)
+            running or (can_pick and not self._main_running
+                        and not model_missing and not self._npu_converting)
         )
         editable = not running and not self._main_running
         self.range_btn.setEnabled(editable and can_pick)
@@ -1077,6 +1080,8 @@ class TrialPanel(QWidget):
             return
         if self._status_hold:
             self.status_label.setText(self._status_hold)
+        elif self._npu_converting:
+            self.status_label.setText("NPU の変換中は試せません")
         elif self._main_running:
             self.status_label.setText("処理中は試せません")
         elif job is not None and job.kind == JobKind.FOLDER:
@@ -1103,6 +1108,11 @@ class TrialPanel(QWidget):
         self._main_running = bool(running)
         self.refresh()
 
+    def set_npu_converting(self, converting: bool) -> None:
+        """NPU 変換の実行状態を反映する（試すボタンの無効化と状況行のため）。"""
+        self._npu_converting = bool(converting)
+        self.refresh()
+
     def is_trial_running(self) -> bool:
         """試しが実行中か（テスト用）。"""
         return self._trial_thread is not None
@@ -1116,12 +1126,31 @@ class TrialPanel(QWidget):
         job = self._job
         if job is None or job.kind == JobKind.FOLDER or self._main_running:
             return
+        if self._npu_converting:
+            return
         settings = self._current_settings_or_none()
         if settings is None or settings.model is None:
             self.refresh()
             return
         if self._source_image is None or self._source_png is None:
             return
+        if (settings.backend == UpscaleBackend.NPU_NATIVE
+                and not npu_prepare.is_converted(str(settings.model))):
+            # 短辺不足で GPU に自動切替する入力は止めない。
+            width, height = self._source_image.width(), self._source_image.height()
+            if (
+                width <= 0 or height <= 0
+                or helper_backend.effective_backend(
+                    settings.backend, width, height
+                ) == UpscaleBackend.NPU_NATIVE
+            ):
+                try:
+                    label = self._model_label(str(settings.model))
+                except Exception:
+                    label = str(settings.model)
+                self._status_hold = npu_prepare.not_converted_message(label)
+                self.refresh()
+                return
         key = self._make_key(settings)
         hit = self._results.get(key)
         if hit is not None and Path(str(hit["path"])).exists():

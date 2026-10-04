@@ -78,12 +78,17 @@ if ($WithHelper) {
     New-Item -ItemType Directory -Path $helperOut -Force | Out-Null
     Copy-Item -Path (Join-Path $helperSource "*") -Destination $helperOut -Recurse -Force
 
-    # AdcSR（1.8GB 級）は同梱しない。それ以外の models/ai/*.onnx を同梱する。
+    # GPU 用だけを同梱する。NPU 専用（bf16cast / tail-cut body / AdcSR）は
+    # 別配布の NPU キットに入れるため除く。
     $modelsSource = Join-Path $repo "models\ai"
     $modelsOut = Join-Path $app "models\ai"
     New-Item -ItemType Directory -Path $modelsOut -Force | Out-Null
     $onnxFiles = Get-ChildItem -LiteralPath $modelsSource -Filter "*.onnx" -File `
-        -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike "adcsr*" }
+        -ErrorAction SilentlyContinue | Where-Object {
+            ($_.Name -notlike "*bf16cast*") -and
+            ($_.Name -notlike "*_body_*") -and
+            ($_.Name -notlike "adcsr*")
+        }
     if (-not $onnxFiles) {
         throw "Helper models are missing in models/ai (run setup.ps1 first)"
     }
@@ -97,13 +102,16 @@ Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination (Join-Path $ap
 ultraeasy-upscaler ポータブル版
 
 1. ultraeasy-upscaler.exe をダブルクリックします。
-2. 動画または画像をドロップします。
-3. アップスケーラーモデルとフレーム補間モデルを選びます。
+2. 画像や動画を、ウィンドウにドラッグ＆ドロップします。
+3. 右側でモデルを選びます。「試す」を押すと、1 コマだけ先に結果を確認できます。
 4. 「開始」を押します。
 
-フォルダ内のファイルは移動・削除しないでください。
-AMD Radeon / NVIDIA GeForce RTX は GPU (Vulkan) を選択します。
-動画はWindows標準プレーヤー対応のH.264で出力します。
+フォルダの中のファイルは、移動や削除をしないでください。
+
+NPU について
+NPU は標準では使いません。AMD Ryzen AI 搭載の PC で NPU を使うには、次の 2 つが必要です。
+- AMD の Ryzen AI Software 1.8.0（AMD のサイトから入手して導入）
+- 別配布の NPU キット（このフォルダに上書きで展開）
 "@ | Set-Content -LiteralPath (Join-Path $app "はじめに.txt") -Encoding UTF8
 
 & (Join-Path $app "ultraeasy-upscaler.exe") --portable-self-test
