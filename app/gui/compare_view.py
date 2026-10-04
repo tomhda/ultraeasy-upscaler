@@ -578,7 +578,7 @@ class TrialPanel(QWidget):
     """中央列: 比較ビューとその下の操作部。
 
     MainWindow は `show_job`・`set_main_running`・`discard_file` だけ呼ぶ。
-    試し設定は押した時点の `build_settings` 値を使う。
+    試し設定は押した時点の、そのファイル用の `build_settings` 値を使う。
     """
 
     trial_running_changed = Signal(bool)
@@ -1083,8 +1083,12 @@ class TrialPanel(QWidget):
             self.status_label.setText("")
 
     def _current_settings_or_none(self) -> UpscaleSettings | None:
+        """選択中のファイル用の設定（個別があればそれ、無ければ種類の既定）。"""
         try:
-            return self._build_settings()
+            try:
+                return self._build_settings(self._job)
+            except TypeError:
+                return self._build_settings()
         except Exception:
             return None
 

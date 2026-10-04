@@ -53,10 +53,14 @@ from .compare_view import TrialPanel
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
 from .queue_view import QueueView
-from .settings_drawer import SettingsDrawer
+from .settings_drawer import ClearCheckBox, SettingsDrawer
 from . import theme
 from .theme import apply_theme
 from .worker import QueueWorker
+
+# 右列の設定切り替え（画像用・動画用）。フォルダは画像用を使う。
+_IMAGE_TAB = "image"
+_VIDEO_TAB = "video"
 
 # 倍率トグルに出す候補（モデルがサポートする倍率のみ有効化）
 _SCALE_CHOICES = (2, 4)
@@ -208,9 +212,19 @@ class MainWindow(QWidget):
         self._closing = False
         self._current_job_id: int | None = None
 
-        self._scale = 4  # 現在の倍率（既定 4x）
+        # 画像用・動画用の既定設定（モデル・倍率。動画は補間モデルも持つ）。
+        # 個別設定は _overrides[job_id] にだけ置き、ここには既定だけを持つ。
+        self._settings_tab = _IMAGE_TAB  # 右列に表示している側
+        self._image_model: str | None = DEFAULT_HELPER_MODEL
+        self._image_scale = 4
+        self._video_model: str | None = DEFAULT_HELPER_MODEL
+        self._video_scale = 4
+        self._video_interpolation: str | None = None
+        self._overrides: dict[int, dict[str, object]] = {}
+        self._syncing_settings = False  # 右列の載せ替え中は保存しない
+        self._scale = 4  # 今表示している側の倍率の写し（実体は種類ごとの既定・個別）
         self._build()
-        self._refresh_scale_enabled()
+        self._sync_settings_widgets()
         self._on_interpolation_changed()
 
     # ------------------------------------------------------------------ UI
@@ -263,6 +277,7 @@ class MainWindow(QWidget):
         body.addWidget(self._build_settings_panel())
 
         self.queue.selectionChanged.connect(self._on_selection_changed)
+        self.queue.retryRequested.connect(self._on_retry_requested)
         self.backend_combo.currentIndexChanged.connect(self._on_backend_changed)
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
         self._refresh_model_options()
@@ -358,6 +373,29 @@ class MainWindow(QWidget):
         scroll.setWidget(fields)
         outer.addWidget(scroll, 1)
 
+        # 画像用・動画用の切り替え。値の選択（倍率）と見分けがつくよう、控えめな見た目にする
+        kind_box = QHBoxLayout()
+        kind_box.setContentsMargins(0, 0, 0, 0)
+        kind_box.setSpacing(6)
+        self._kind_btns: dict[str, QPushButton] = {}
+        for key, label in ((_IMAGE_TAB, "画像"), (_VIDEO_TAB, "動画")):
+            btn = QPushButton(label)
+            btn.setObjectName("kindBtn")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setChecked(key == self._settings_tab)
+            btn.clicked.connect(lambda _=False, v=key: self._set_settings_tab(v))
+            self._kind_btns[key] = btn
+            kind_box.addWidget(btn, 1)
+        kind_wrap = QWidget()
+        kind_wrap.setObjectName("scaleWrap")
+        kind_wrap.setLayout(kind_box)
+        col.addWidget(kind_wrap)
+
+        self._per_file_check = ClearCheckBox("このファイルだけ別の設定にする")
+        self._per_file_check.toggled.connect(self._on_per_file_toggled)
+        col.addWidget(self._per_file_check)
+
         self.model_combo = ModelCombo()
         self._compact(self.model_combo)
         col.addLayout(self._field("モデル", self.model_combo))
@@ -387,7 +425,7 @@ class MainWindow(QWidget):
         scale_wrap.setLayout(scale_box)
         col.addLayout(self._field("倍率", scale_wrap))
 
-        # フレーム補間モデル（アップスケールとは独立）
+        # フレーム補間モデル（アップスケールとは独立。動画用の設定）
         self.interpolation_combo = QComboBox()
         self.interpolation_combo.addItem("なし（補間しない）", None)
         for model in binaries.available_interpolation_models():
@@ -399,9 +437,15 @@ class MainWindow(QWidget):
         self.interpolation_combo.currentIndexChanged.connect(
             lambda _i: self._on_interpolation_changed()
         )
-        col.addLayout(
-            self._field("フレーム補間モデル", self._compact(self.interpolation_combo))
+        # 「動画」側のときだけ表示するため、ラベルごと枠で包む
+        self._interp_wrap = QWidget()
+        self._interp_wrap.setObjectName("scaleWrap")
+        interp_layout = self._field(
+            "フレーム補間モデル", self._compact(self.interpolation_combo)
         )
+        interp_layout.setContentsMargins(0, 0, 0, 0)
+        self._interp_wrap.setLayout(interp_layout)
+        col.addWidget(self._interp_wrap)
 
         # 出力先
         self.output_combo = QComboBox()
@@ -447,6 +491,12 @@ class MainWindow(QWidget):
         title.setObjectName("sectionTitle")
         head.addWidget(title)
         head.addStretch(1)
+        self.retry_all_btn = QPushButton("すべてやり直す")
+        self.retry_all_btn.setObjectName("link")
+        self.retry_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.retry_all_btn.setEnabled(False)
+        self.retry_all_btn.clicked.connect(self._on_retry_all)
+        head.addWidget(self.retry_all_btn)
         self.clear_btn = QPushButton("すべて削除")
         self.clear_btn.setObjectName("link")
         self.clear_btn.setIconSize(QSize(18, 18))
@@ -479,7 +529,16 @@ class MainWindow(QWidget):
             self.stack.setCurrentIndex(1 if self._order else 0)
 
     def _on_selection_changed(self, job_id: object) -> None:
-        self.preview.show_job(self._jobs.get(job_id) if job_id is not None else None)
+        job = self._jobs.get(job_id) if job_id is not None else None
+        self.preview.show_job(job)
+        # 選んだファイルの種類の側へ自動で切り替える（手でも切り替えられる）
+        if job is not None:
+            tab = _VIDEO_TAB if job.kind == JobKind.VIDEO else _IMAGE_TAB
+            if tab != self._settings_tab:
+                self._settings_tab = tab
+                for key, btn in self._kind_btns.items():
+                    btn.setChecked(key == tab)
+        self._sync_settings_widgets()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if event.mimeData().hasUrls() and not self._running:
@@ -514,12 +573,15 @@ class MainWindow(QWidget):
                 job.has_audio = info.has_audio
             except Exception:
                 pass
-        # 設定はここでは固定しない。「開始」時点のUI設定が全保留ジョブに
-        # 一括適用される（追加後にモデルを変えても反映されるように）。
+        # 設定はここでは固定しない。「開始」時点でファイルごとの設定
+        # （個別があればそれ、無ければ種類の既定）が入る。
         self._jobs[job.id] = job
         self._order.append(job.id)
         self._cancel_events[job.id] = threading.Event()
+        job.message = self._waiting_text(job)
         self.queue.add_job(job)
+        self.queue.refresh(job.id)
+        self._update_retry_all()
         self._sync_workspace()
         return True, job.name
 
@@ -558,10 +620,180 @@ class MainWindow(QWidget):
             self.add_paths([d])
 
     # ------------------------------------------------------- 倍率/モデル
-    def _set_scale(self, value: int) -> None:
+    @staticmethod
+    def _job_kind_tab(job: Job) -> str:
+        """ファイルの種類に対応する設定の側（フォルダは画像用）。"""
+        return _VIDEO_TAB if job.kind == JobKind.VIDEO else _IMAGE_TAB
+
+    def _selected_job(self) -> Job | None:
+        jid = self.queue.selected_id()
+        return self._jobs.get(jid) if jid is not None else None
+
+    def _per_file_match(self) -> Job | None:
+        """個別設定の対象になり得る選択中ファイル（種類と表示側が一致）。"""
+        job = self._selected_job()
+        if job is None or self._job_kind_tab(job) != self._settings_tab:
+            return None
+        return job
+
+    def _editing_override_job(self) -> Job | None:
+        """いま個別設定を編集中のファイル（チェックONかつ対象あり）。"""
+        if not self._per_file_check.isChecked():
+            return None
+        job = self._per_file_match()
+        if job is None or job.id not in self._overrides:
+            return None
+        return job
+
+    def _target_model(self) -> object:
+        """今表示している側の編集中のモデル（個別編集中はその値）。"""
+        job = self._editing_override_job()
+        if job is not None:
+            return self._overrides[job.id].get("model")
+        if self._settings_tab == _VIDEO_TAB:
+            return self._video_model
+        return self._image_model
+
+    def _target_scale(self) -> int:
+        job = self._editing_override_job()
+        if job is not None:
+            return int(self._overrides[job.id].get("scale", 4))
+        if self._settings_tab == _VIDEO_TAB:
+            return self._video_scale
+        return self._image_scale
+
+    def _target_interpolation(self) -> object:
+        """動画側の編集中の補間モデル（画像側に補間設定は無い）。"""
+        job = self._editing_override_job()
+        if job is not None and self._settings_tab == _VIDEO_TAB:
+            return self._overrides[job.id].get("interpolation")
+        return self._video_interpolation
+
+    def _save_model_to_target(self, value: object) -> None:
+        job = self._editing_override_job()
+        if job is not None:
+            self._overrides[job.id]["model"] = value
+        elif self._settings_tab == _VIDEO_TAB:
+            self._video_model = value  # type: ignore[assignment]
+        else:
+            self._image_model = value  # type: ignore[assignment]
+
+    def _save_scale_to_target(self, value: int) -> None:
+        job = self._editing_override_job()
+        if job is not None:
+            self._overrides[job.id]["scale"] = value
+        elif self._settings_tab == _VIDEO_TAB:
+            self._video_scale = value
+        else:
+            self._image_scale = value
         self._scale = value
+
+    def _save_interpolation_to_target(self, value: object) -> None:
+        job = self._editing_override_job()
+        if job is not None and self._settings_tab == _VIDEO_TAB:
+            self._overrides[job.id]["interpolation"] = value
+        else:
+            self._video_interpolation = value
+
+    def _set_settings_tab(self, kind: str) -> None:
+        """右列の「画像」「動画」切り替え。下の欄はその側の編集状態になる。"""
+        if kind not in (_IMAGE_TAB, _VIDEO_TAB):
+            return
+        self._settings_tab = kind
+        for key, btn in self._kind_btns.items():
+            btn.setChecked(key == kind)
+        self._sync_settings_widgets()
+
+    def _sync_settings_widgets(self) -> None:
+        """切り替え・選択に合わせて右列の欄を載せ替える。"""
+        self._syncing_settings = True
+        try:
+            match = self._per_file_match()
+            self._per_file_check.setEnabled(
+                match is not None and not self._running
+            )
+            self._per_file_check.setChecked(
+                match is not None and match.id in self._overrides
+            )
+            for key, btn in self._kind_btns.items():
+                btn.setChecked(key == self._settings_tab)
+                btn.setEnabled(not self._running)
+            self._interp_wrap.setVisible(self._settings_tab == _VIDEO_TAB)
+            self._set_combo_data(self.model_combo, self._target_model())
+            for s, btn in self._scale_btns.items():
+                btn.setChecked(s == self._target_scale())
+            self._scale = self._target_scale()
+            self._set_combo_data(
+                self.interpolation_combo, self._target_interpolation()
+            )
+        finally:
+            self._syncing_settings = False
+        self._refresh_model_options()
+        self._refresh_scale_enabled()
+        if hasattr(self, "preview"):
+            self.preview.refresh()
+
+    def _on_per_file_toggled(self, checked: bool) -> None:
+        """「このファイルだけ別の設定にする」の入/切。"""
+        if self._syncing_settings:
+            return
+        job = self._per_file_match()
+        if job is None:
+            return
+        if checked:
+            # 初期値はその時点の既定の値
+            if self._settings_tab == _VIDEO_TAB:
+                self._overrides[job.id] = {
+                    "model": self._video_model,
+                    "scale": self._video_scale,
+                    "interpolation": self._video_interpolation,
+                }
+            else:
+                self._overrides[job.id] = {
+                    "model": self._image_model,
+                    "scale": self._image_scale,
+                }
+        else:
+            self._overrides.pop(job.id, None)
+        self._sync_settings_widgets()
+        self._refresh_all_waiting()
+
+    def _resolve_effective(
+        self, job: Job
+    ) -> tuple[str | None, int, str | None, bool]:
+        """そのファイルが開始時に使われる (モデル, 倍率, 補間, 個別か)。"""
+        is_video = job.kind == JobKind.VIDEO
+        override = self._overrides.get(job.id)
+        if override is not None:
+            model = override.get("model")
+            scale = int(override.get("scale", 4))
+            interp = override.get("interpolation") if is_video else None
+            individual = True
+        elif is_video:
+            model = self._video_model
+            scale = self._video_scale
+            interp = self._video_interpolation
+            individual = False
+        else:
+            model = self._image_model
+            scale = self._image_scale
+            interp = None
+            individual = False
+        # 新AIヘルパーは 4x 固定（古い個別値が残っていても開始時は 4x）
+        if self._selected_backend() in _HELPER_BACKENDS and model is not None:
+            scale = 4
+        return (
+            None if model in (None, "__missing__") else str(model),
+            scale,
+            None if interp in (None, "__missing__") else str(interp),
+            individual,
+        )
+
+    def _set_scale(self, value: int) -> None:
+        self._save_scale_to_target(value)
         for s, btn in self._scale_btns.items():
             btn.setChecked(s == value)
+        self._refresh_all_waiting()
 
     def _refresh_scale_enabled(self) -> None:
         """バックエンドごとにモデルと倍率の選択可能範囲を更新する。"""
@@ -574,7 +806,9 @@ class MainWindow(QWidget):
             # 「なし」はアップスケールを無効にするだけで、コンボ自体は
             # 有効のままにして別のモデルへ戻せるようにする。
             self.model_combo.setEnabled(not self._running)
-            self._set_scale(4)
+            self._save_scale_to_target(4)
+            for s, btn in self._scale_btns.items():
+                btn.setChecked(s == 4)
             for scale, button in self._scale_btns.items():
                 button.setEnabled(
                     model in _HELPER_MODEL_VALUES
@@ -600,25 +834,42 @@ class MainWindow(QWidget):
             button.setEnabled(supported and not self._running)
             if supported and first_enabled is None:
                 first_enabled = scale
-        current = self._scale_btns.get(self._scale)
+        current = self._scale_btns.get(self._target_scale())
         if current is not None and not current.isEnabled() and first_enabled is not None:
-            self._set_scale(first_enabled)
+            self._save_scale_to_target(first_enabled)
+            for s, btn in self._scale_btns.items():
+                btn.setChecked(s == first_enabled)
+            self._refresh_all_waiting()
         self._update_model_info()
 
-    def _refresh_model_options(self) -> None:
+    def _video_options(
+        self, options: list[tuple[str, object]]
+    ) -> list[tuple[str, object]]:
+        """動画側のモデル一覧（AdcSR は動画に使えないため出さない）。"""
+        if self._settings_tab != _VIDEO_TAB:
+            return options
+        return [
+            (label, value)
+            for label, value in options
+            if value != HELPER_MODEL_ADCSR
+        ]
+
+    def _refresh_model_options(self, models: list[str] | None = None) -> None:
         """バックエンドに応じてモデル欄を再構成する。
 
-        新AIバックエンドでは旧Vulkan資産を列挙せず、具体的な3モデルを表示する。
+        新AIバックエンドでは旧Vulkan資産を列挙せず、具体的な実モデルを表示する。
         Vulkanを選んだときだけ vendor/realesrgan の従来モデルを表示する。
+        動画側の一覧には AdcSR を出さない。
+        models を渡せば従来モデル一覧の再取得を省く（呼出回数の互換のため）。
         """
         backend = self._selected_backend()
         if backend in _HELPER_BACKENDS:
-            selected = self.model_combo.currentData()
-            options = (
+            base_options = (
                 _SWINIR_CUDA_MODEL_OPTIONS
                 if backend == UpscaleBackend.SWINIR_CUDA
                 else _HELPER_MODEL_OPTIONS
             )
+            options = self._video_options(list(base_options))
             allowed = {value for _label, value in options}
             # 初回（項目未構築）だけ具体的な既定モデルを使う。
             # 既に「なし」が選択されている場合は、バックエンド切替時にも
@@ -628,28 +879,38 @@ class MainWindow(QWidget):
                 if backend == UpscaleBackend.SWINIR_CUDA
                 else DEFAULT_HELPER_MODEL
             )
+            selected = self._target_model()
             if self.model_combo.count() == 0:
                 selected = default_model
             elif selected is not None and selected not in allowed:
                 selected = default_model
+            self._save_model_to_target(selected)
             self._replace_model_items(options, selected)
             self._refresh_scale_enabled()
+            self._refresh_all_waiting()
+            if hasattr(self, "preview"):
+                self.preview.refresh()
             return
 
-        selected = self.model_combo.currentData()
-        models = binaries.available_models()
+        selected = self._target_model()
+        if models is None:
+            models = binaries.available_models()
         options: list[tuple[str, object]] = [("なし（拡大しない）", None)]
         options.extend((_MODEL_LABELS.get(model, model), model) for model in models)
         if not models:
             options.append(("モデル未検出", "__missing__"))
         elif selected is not None and selected not in models:
             selected = DEFAULT_MODEL if DEFAULT_MODEL in models else None
+        self._save_model_to_target(selected)
         self._replace_model_items(options, selected)
         if not models:
             item = self.model_combo.model().item(self.model_combo.count() - 1)
             if item is not None:
                 item.setEnabled(False)
         self._refresh_scale_enabled()
+        self._refresh_all_waiting()
+        if hasattr(self, "preview"):
+            self.preview.refresh()
 
     def _replace_model_items(
         self, options: list[tuple[str, object]], selected: object | None
@@ -744,21 +1005,96 @@ class MainWindow(QWidget):
         except ValueError:
             return UpscaleBackend.WINML_GPU
 
+    def _allowed_models(
+        self, backend: UpscaleBackend, tab: str, models: list[str] | None = None
+    ) -> set:
+        """その側で選べるモデル値（「なし」含む）。"""
+        if backend in _HELPER_BACKENDS:
+            if backend == UpscaleBackend.SWINIR_CUDA:
+                return {value for _label, value in _SWINIR_CUDA_MODEL_OPTIONS}
+            allowed = {value for _label, value in _HELPER_MODEL_OPTIONS}
+            if tab == _VIDEO_TAB:
+                allowed.discard(HELPER_MODEL_ADCSR)
+            return allowed
+        if models is None:
+            try:
+                models = binaries.available_models()
+            except Exception:
+                models = []
+        return set(models) | {None}
+
+    def _default_model_for(
+        self, backend: UpscaleBackend, models: list[str] | None = None
+    ) -> str | None:
+        if backend == UpscaleBackend.SWINIR_CUDA:
+            return HELPER_MODEL_SWINIR
+        if backend in _HELPER_BACKENDS:
+            return DEFAULT_HELPER_MODEL
+        if models is None:
+            try:
+                models = binaries.available_models()
+            except Exception:
+                models = []
+        if DEFAULT_MODEL in models:
+            return DEFAULT_MODEL
+        return None
+
+    def _coerce_stored_models(
+        self, backend: UpscaleBackend, models: list[str] | None = None
+    ) -> None:
+        """表示していない側の既定・個別も、新しい実行先で選べる値に直す。"""
+        for tab in (_IMAGE_TAB, _VIDEO_TAB):
+            allowed = self._allowed_models(backend, tab, models)
+            default = self._default_model_for(backend, models)
+            if tab == _IMAGE_TAB:
+                if self._image_model not in allowed:
+                    self._image_model = default
+                if backend in _HELPER_BACKENDS:
+                    self._image_scale = 4
+            else:
+                if self._video_model not in allowed:
+                    self._video_model = default
+                if backend in _HELPER_BACKENDS:
+                    self._video_scale = 4
+        for jid, override in self._overrides.items():
+            job = self._jobs.get(jid)
+            tab = self._job_kind_tab(job) if job is not None else _IMAGE_TAB
+            allowed = self._allowed_models(backend, tab, models)
+            if override.get("model") not in allowed:
+                override["model"] = self._default_model_for(backend, models)
+            if backend in _HELPER_BACKENDS:
+                override["scale"] = 4
+
     def _on_backend_changed(self, *_args) -> None:
-        self._refresh_model_options()
+        backend = self._selected_backend()
+        # 従来モデル一覧の取得はここで1回だけ行い、下へ渡す
+        models = None
+        if backend not in _HELPER_BACKENDS:
+            try:
+                models = binaries.available_models()
+            except Exception:
+                models = []
+        self._coerce_stored_models(backend, models)
+        self._refresh_model_options(models)
         self._refresh_scale_enabled()
         if hasattr(self, "preview"):
             self.preview.refresh()
 
     def _on_model_changed(self, *_args) -> None:
+        if not self._syncing_settings:
+            self._save_model_to_target(self.model_combo.currentData())
         self._refresh_scale_enabled()
+        self._refresh_all_waiting()
         if hasattr(self, "preview"):
             self.preview.refresh()
 
     def _on_interpolation_changed(self) -> None:
-        model = self.interpolation_combo.currentData()
-        enabled = model not in (None, "__missing__")
+        value = self.interpolation_combo.currentData()
+        if not self._syncing_settings:
+            self._save_interpolation_to_target(value)
+        enabled = value not in (None, "__missing__")
         self.drawer.set_interpolation_enabled(enabled)
+        self._refresh_all_waiting()
 
     def _on_output_changed(self, index: int) -> None:
         # index 1 = 「フォルダ選択…」
@@ -783,22 +1119,46 @@ class MainWindow(QWidget):
         self.settings_btn.style().polish(self.settings_btn)
 
     # ----------------------------------------------------- 設定の組み立て
-    def build_settings(self) -> UpscaleSettings:
-        """現在のウィジェット値から UpscaleSettings を構築する。"""
+    def build_settings(self, job: Job | None = None) -> UpscaleSettings:
+        """UpscaleSettings を構築する。
+
+        引数なしなら今表示している側の設定、ジョブを渡せばそのファイル用の
+        設定（個別設定があればそれ、無ければ種類の既定）を返す。
+        """
         s = UpscaleSettings()
         s.backend = self._selected_backend()
-        s.scale = self._scale
-        model = self.model_combo.currentData()
-        if s.backend in _HELPER_BACKENDS:
-            # helperも表示ラベルではなく、選択肢の具体的なモデルキーを保存する。
-            # 「なし」はアップスケール無効として扱い、前回のモデルキーを残さない。
-            s.model = None if model in (None, "__missing__") else str(model)
-            if s.model is not None:
-                # 旧API利用者向けに系統値も併記するが、解決の主キーは s.model。
-                s.model_family = helper_model_family(s.model)
+        if job is None:
+            # 今表示している側（個別編集中はそのファイルの個別値）
+            target = self._editing_override_job()
+            if target is not None:
+                override = self._overrides[target.id]
+                model = override.get("model")
+                scale = int(override.get("scale", 4))
+            elif self._settings_tab == _VIDEO_TAB:
+                model = self._video_model
+                scale = self._video_scale
+            else:
+                model = self._image_model
+                scale = self._image_scale
+            # 引数なしの互換のため、補間は欄の値をそのまま使う
+            interpolation = self.interpolation_combo.currentData()
         else:
-            s.model = None if model in (None, "__missing__") else str(model)
-        interpolation = self.interpolation_combo.currentData()
+            model, scale, _interp, _individual = self._resolve_effective(job)
+            if job.kind == JobKind.VIDEO:
+                interpolation = _interp
+            else:
+                # 画像・フォルダに補間設定は無いが、欄の値（動画側の値）は
+                # 設定に載せたままにする。従来の単一設定との互換のため。
+                interpolation = self._video_interpolation
+        if s.backend in _HELPER_BACKENDS and model is not None:
+            scale = 4
+        s.scale = scale
+        # helperも表示ラベルではなく、選択肢の具体的なモデルキーを保存する。
+        # 「なし」はアップスケール無効として扱い、前回のモデルキーを残さない。
+        s.model = None if model in (None, "__missing__") else str(model)
+        if s.backend in _HELPER_BACKENDS and s.model is not None:
+            # 旧API利用者向けに系統値も併記するが、解決の主キーは s.model。
+            s.model_family = helper_model_family(s.model)
         s.interpolation_model = (
             None if interpolation in (None, "__missing__") else str(interpolation)
         )
@@ -828,32 +1188,49 @@ class MainWindow(QWidget):
         return out
 
     def _apply_current_settings(self, pending: list[Job]) -> UpscaleSettings:
-        """開始時点のUI設定を保留ジョブすべてに適用して返す。"""
-        settings = self.build_settings()
+        """開始時点の設定を保留ジョブごとに適用して返す。
+
+        各ジョブには「個別設定があればそれ、無ければ種類の既定」が入る。
+        戻り値はワーカーの予備設定（全ジョブに設定が入るため実質使わない）。
+        """
+        fallback: UpscaleSettings | None = None
         for job in pending:
+            settings = self.build_settings(job)
             job.settings = replace(settings)
+            if fallback is None:
+                fallback = settings
             self.queue.refresh(job.id)
-        return settings
+        if fallback is None:
+            fallback = self.build_settings()
+        return fallback
 
     def _on_start(self) -> None:
         if self._running:
             return
         pending = self._pending_jobs()
         if not pending:
-            self._flash_hint("処理するジョブがありません。")
+            self._flash_hint("処理するファイルがありません。")
+            return
+
+        # 開始前にファイルごとの設定を確認する（個別はそのファイル名で案内）
+        for job in pending:
+            model, _scale, interpolation, individual = self._resolve_effective(job)
+            is_video = job.kind == JobKind.VIDEO
+            if is_video:
+                missing = model is None and interpolation is None
+            else:
+                missing = model is None
+            if not missing:
+                continue
+            if individual:
+                self._flash_hint(f"{job.name}のモデルを選んでください。")
+            elif is_video:
+                self._flash_hint("動画のモデルかフレーム補間を選んでください。")
+            else:
+                self._flash_hint("画像のモデルを選んでください。")
             return
 
         settings = self._apply_current_settings(pending)
-        kinds = {job.kind for job in pending}
-        if kinds & {JobKind.IMAGE, JobKind.FOLDER} and not settings.upscale_enabled:
-            self._flash_hint("画像にはアップスケーラーモデルを選択してください。")
-            return
-        if (JobKind.VIDEO in kinds and not settings.upscale_enabled
-                and not settings.interpolation_enabled):
-            self._flash_hint(
-                "動画にはアップスケーラーかフレーム補間モデルを選択してください。"
-            )
-            return
         self._pause.clear()
 
         # ワーカーを別スレッドへ
@@ -902,15 +1279,97 @@ class MainWindow(QWidget):
         # 実行中は入力系をロック（モデル/倍率/出力先/追加）
         for w in (self.backend_combo, self.model_combo, self.interpolation_combo, self.output_combo,
                   self.clear_btn, self.output_open_btn, self.settings_btn,
-                  self.drop_zone, self.add_zone):
+                  self.drop_zone, self.add_zone, self.retry_all_btn,
+                  self._per_file_check, *self._kind_btns.values()):
             w.setEnabled(not running)
         self.drawer.setEnabled(not running)
         for btn in self._scale_btns.values():
             btn.setEnabled(not running)
+        self.queue.set_retry_locked(running)
         if hasattr(self, "preview"):
             self.preview.set_main_running(running)
         if not running:
-            self._refresh_scale_enabled()
+            self._sync_settings_widgets()
+        self._update_retry_all()
+
+    # ------------------------------------------------- 行の表示とやり直し
+    def _waiting_text(self, job: Job) -> str:
+        """待機中の行に出す「何で処理されるか」の表示。"""
+        model, scale, interpolation, individual = self._resolve_effective(job)
+        suffix = "（個別）" if individual else ""
+        if model is not None:
+            base = f"{_MODEL_LABELS.get(model, model)}・{scale}x"
+            if interpolation is not None:
+                base += "・補間あり"
+            return base + suffix
+        if interpolation is not None:
+            return f"補間のみ{suffix}"
+        return f"モデル未選択{suffix}"
+
+    def _done_text(self, job: Job) -> str:
+        """完了した行に出す表示（使った設定で決まる）。"""
+        settings = job.settings
+        if settings is not None and settings.model is not None:
+            return f"完了・{_MODEL_LABELS.get(settings.model, settings.model)}"
+        if settings is not None and settings.interpolation_model is not None:
+            return "完了・補間のみ"
+        return "完了"
+
+    def _refresh_all_waiting(self) -> None:
+        """待機中の行の表示を、いまの既定・個別・実行先に合わせる。"""
+        if not hasattr(self, "queue"):
+            return
+        for jid in self._order:
+            job = self._jobs.get(jid)
+            if job is None or job.status != JobStatus.QUEUED:
+                continue
+            job.message = self._waiting_text(job)
+            self.queue.refresh(jid)
+
+    def _reset_job_to_queued(self, job: Job) -> None:
+        """完了・エラー・キャンセルの行を待機中に戻す。"""
+        job.status = JobStatus.QUEUED
+        job.progress = 0.0
+        job.output_path = None
+        job.error = ""
+        job.settings = None
+        job.message = self._waiting_text(job)
+        self._cancel_events[job.id] = threading.Event()
+        self.queue.refresh(job.id)
+
+    def _on_retry_requested(self, job_id: int) -> None:
+        if self._running:
+            return
+        job = self._jobs.get(job_id)
+        if job is None:
+            return
+        if job.status not in (JobStatus.DONE, JobStatus.ERROR, JobStatus.CANCELED):
+            return
+        self._reset_job_to_queued(job)
+        self._update_retry_all()
+
+    def _on_retry_all(self) -> None:
+        """完了・エラー・キャンセルの全行を待機中に戻す。"""
+        if self._running:
+            return
+        for jid in list(self._order):
+            job = self._jobs.get(jid)
+            if job is None:
+                continue
+            if job.status not in (JobStatus.DONE, JobStatus.ERROR, JobStatus.CANCELED):
+                continue
+            self._reset_job_to_queued(job)
+        self._update_retry_all()
+
+    def _update_retry_all(self) -> None:
+        """「すべてやり直す」は対象行があるときだけ有効（処理中は押せない）。"""
+        if not hasattr(self, "retry_all_btn"):
+            return
+        has_terminal = any(
+            job.status in (JobStatus.DONE, JobStatus.ERROR, JobStatus.CANCELED)
+            for job in self._jobs.values()
+        )
+        self.retry_all_btn.setEnabled(bool(has_terminal) and not self._running)
 
     # ----------------------------------------------------- ワーカースロット
     def _on_progress(self, job_id: int, frac: float, msg: str) -> None:
@@ -934,8 +1393,9 @@ class MainWindow(QWidget):
         job.status = JobStatus.DONE
         job.progress = 1.0
         job.output_path = Path(out_path)
-        job.message = "完了"
+        job.message = self._done_text(job)
         self.queue.refresh(job_id)
+        self._update_retry_all()
 
     def _on_job_error(self, job_id: int, message: str) -> None:
         job = self._jobs.get(job_id)
@@ -945,6 +1405,7 @@ class MainWindow(QWidget):
         job.error = message
         job.message = f"エラー: {message}"
         self.queue.refresh(job_id)
+        self._update_retry_all()
 
     def _on_job_canceled(self, job_id: int) -> None:
         job = self._jobs.get(job_id)
@@ -953,6 +1414,7 @@ class MainWindow(QWidget):
         job.status = JobStatus.CANCELED
         job.message = "キャンセルされました"
         self.queue.refresh(job_id)
+        self._update_retry_all()
 
     def _on_queue_finished(self) -> None:
         # スレッド後始末
@@ -995,10 +1457,12 @@ class MainWindow(QWidget):
         # 選択の移動先を一覧が正しく引けるよう、台帳から先に外す
         self._jobs.pop(job_id, None)
         self._cancel_events.pop(job_id, None)
+        self._overrides.pop(job_id, None)
         if job_id in self._order:
             self._order.remove(job_id)
         self.queue.remove_job(job_id)
         self.preview.discard_file(str(job.input_path))
+        self._update_retry_all()
         self._sync_workspace()
 
     def _clear_queue(self) -> None:
@@ -1008,9 +1472,11 @@ class MainWindow(QWidget):
         self._jobs.clear()
         self._order.clear()
         self._cancel_events.clear()
+        self._overrides.clear()
         for jid in ids:
             self.queue.remove_job(jid)
         self.preview.discard_all()
+        self._update_retry_all()
         self._sync_workspace()
 
     # -------------------------------------------------------------- 補助

@@ -309,6 +309,22 @@ QPushButton#primary:disabled {{
     color: {p.text_mute};
 }}
 
+QPushButton#kindBtn {{
+    background-color: {p.input};
+    border: 1px solid {p.border};
+    border-radius: 6px;
+    min-height: 34px;
+    padding: 0 16px;
+    font-size: 15px;
+    color: {p.text_dim};
+}}
+QPushButton#kindBtn:checked {{
+    background-color: {p.accent_tint};
+    border-color: {p.accent_text};
+    color: {p.text};
+    font-weight: 700;
+}}
+
 QPushButton#accent {{
     background-color: {p.accent};
     color: {p.on_accent};
@@ -437,6 +453,16 @@ QPushButton#rowClose {{
 }}
 QPushButton#rowClose:hover {{
     color: {p.danger};
+}}
+QPushButton#rowRetry {{
+    background-color: transparent;
+    border: none;
+    color: {p.text_dim};
+    font-size: 16px;
+    padding: 0;
+}}
+QPushButton#rowRetry:hover {{
+    color: {p.text};
 }}
 
 QProgressBar {{

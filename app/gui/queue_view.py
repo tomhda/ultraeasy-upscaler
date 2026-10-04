@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
 
 from app.core.jobs import Job, JobKind, JobStatus
 
-from .icons import Icon, apply_icon_font
+from . import theme
+from .icons import Icon, apply_icon_font, make_icon
 
 _KIND_GLYPH = {
     JobKind.IMAGE: Icon.IMAGE,
@@ -49,15 +50,18 @@ class QueueRow(QFrame):
     """キュー内の 1 ジョブを表す行ウィジェット。"""
 
     removeRequested = Signal(int)  # job_id
+    retryRequested = Signal(int)  # job_id
     clicked = Signal(int)  # job_id
 
     def __init__(self, job: Job, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("queueRow")
         self.job = job
+        self._retry_locked = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._build()
         self.refresh()
+        theme.notifier.changed.connect(self._apply_retry_icon)
 
     def _build(self) -> None:
         outer = QVBoxLayout(self)
@@ -92,6 +96,17 @@ class QueueRow(QFrame):
         self._meta.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         text_col.addWidget(self._meta)
         top.addLayout(text_col, 1)
+
+        # やり直し（完了・エラー・キャンセルのときだけ出す）
+        self._retry = QPushButton()
+        self._retry.setObjectName("rowRetry")
+        self._retry.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._retry.setFixedSize(28, 28)
+        self._retry.setIconSize(QSize(18, 18))
+        self._retry.setToolTip("やり直す")
+        self._retry.clicked.connect(lambda: self.retryRequested.emit(self.job.id))
+        self._apply_retry_icon()
+        top.addWidget(self._retry, 0, Qt.AlignmentFlag.AlignTop)
 
         # ✕ 削除/キャンセル
         self._close = QPushButton("×")
@@ -210,6 +225,27 @@ class QueueRow(QFrame):
         # 完了/キャンセル後は ✕ をグレーアウトせず（再削除可）残す
         self._close.setEnabled(True)
 
+        # やり直しは完了・エラー・キャンセルの行だけに出し、本処理中は押せない
+        terminal = self.job.status in (
+            JobStatus.DONE, JobStatus.ERROR, JobStatus.CANCELED,
+        )
+        self._retry.setVisible(terminal)
+        self._retry.setEnabled(terminal and not self._retry_locked)
+
+    def _apply_retry_icon(self) -> None:
+        """やり直しボタンを現在の配色で描き直す（QSS では色を変えられないため）。"""
+        if not hasattr(self, "_retry"):
+            return
+        try:
+            self._retry.setIcon(make_icon(Icon.RETRY, 18, theme.current().text_dim))
+        except RuntimeError:
+            pass
+
+    def set_retry_locked(self, locked: bool) -> None:
+        """本処理中はやり直しを押せないようにする。"""
+        self._retry_locked = bool(locked)
+        self.refresh()
+
     def set_busy_icon(self, busy: bool) -> None:
         """処理中はツールチップを「キャンセル」寄りにする。"""
         self._close.setToolTip("処理を中止" if busy else "一覧から削除")
@@ -219,12 +255,14 @@ class QueueView(QWidget):
     """ジョブ行を縦に積むコンテナ。"""
 
     removeRequested = Signal(int)  # job_id
+    retryRequested = Signal(int)  # job_id
     selectionChanged = Signal(object)  # 選択中の job_id（無ければ None）
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._rows: dict[int, QueueRow] = {}
         self._selected: int | None = None
+        self._retry_locked = False
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(8)
@@ -256,13 +294,21 @@ class QueueView(QWidget):
             return self._rows[job.id]
         row = QueueRow(job)
         row.removeRequested.connect(self.removeRequested.emit)
+        row.retryRequested.connect(self.retryRequested.emit)
         row.clicked.connect(self.select)
+        row.set_retry_locked(self._retry_locked)
         # stretch の手前に挿入
         self._layout.insertWidget(self._layout.count() - 1, row)
         self._rows[job.id] = row
         if self._selected is None:
             self.select(job.id)
         return row
+
+    def set_retry_locked(self, locked: bool) -> None:
+        """本処理中は全行のやり直しを押せないようにする。"""
+        self._retry_locked = bool(locked)
+        for row in self._rows.values():
+            row.set_retry_locked(locked)
 
     def remove_job(self, job_id: int) -> None:
         row = self._rows.pop(job_id, None)

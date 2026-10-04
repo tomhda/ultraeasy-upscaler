@@ -20,6 +20,7 @@ class Icon:
     PAUSE = "\ue769"
     PLAY = "\ue768"
     PROCESSOR = "\uf158"
+    RETRY = "\ue72c"
     UPLOAD = "\ue74a"
 
 
