@@ -388,6 +388,10 @@ QFrame#card {{
     border: 1px solid {p.border};
     border-radius: 8px;
 }}
+QFrame#card[dragActive="true"] {{
+    background-color: {p.accent_tint};
+    border: 2px dashed {p.accent_text};
+}}
 QScrollArea {{
     border: none;
     background-color: transparent;

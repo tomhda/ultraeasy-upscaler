@@ -482,6 +482,7 @@ class MainWindow(QWidget):
         card = QFrame()
         card.setObjectName("card")
         card.setFixedWidth(_MEDIA_COL_WIDTH)
+        self.media_card = card
         lay = QVBoxLayout(card)
         lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(8)
@@ -540,13 +541,26 @@ class MainWindow(QWidget):
                     btn.setChecked(key == tab)
         self._sync_settings_widgets()
 
+    def _set_drop_highlight(self, active: bool) -> None:
+        """ドラッグ中、ウィンドウのどこでも落とせることを一覧全体の色で示す。"""
+        for widget in (self.media_card, self.drop_zone):
+            widget.setProperty("dragActive", active)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if event.mimeData().hasUrls() and not self._running:
             event.acceptProposedAction()
+            self._set_drop_highlight(True)
         else:
             event.ignore()
 
+    def dragLeaveEvent(self, event) -> None:  # noqa: N802
+        self._set_drop_highlight(False)
+        super().dragLeaveEvent(event)
+
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        self._set_drop_highlight(False)
         paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
         paths = [p for p in paths if p]
         if paths:

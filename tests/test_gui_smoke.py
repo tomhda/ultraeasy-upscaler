@@ -603,3 +603,39 @@ def test_removing_selected_row_moves_selection_to_remaining_row(app, tmp_path):
 
     win.close()
     app.processEvents()
+
+
+def test_dropping_anywhere_on_the_window_adds_files(app):
+    """左下の小さい枠だけでなく、ウィンドウ全体がドロップ先になっている。"""
+    from PySide6.QtCore import QMimeData, QPoint, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    win.add_paths([str(SAMPLE_IMAGE)])
+    app.processEvents()
+    assert win.acceptDrops()
+    # 一覧・プレビュー・設定の各列は自分ではドロップを受けず、ウィンドウに任せる
+    for area in (win.media_card, win.queue, win.preview, win.preview.view):
+        assert not area.acceptDrops()
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(SAMPLE_IMAGE))])
+    pos = QPoint(win.width() // 2, win.height() // 2)  # 中央のプレビューの上
+    enter = QDragEnterEvent(pos, Qt.DropAction.CopyAction, mime,
+                            Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    win.dragEnterEvent(enter)
+    assert enter.isAccepted()
+    assert win.media_card.property("dragActive") is True
+
+    drop = QDropEvent(pos, Qt.DropAction.CopyAction, mime,
+                      Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    win.dropEvent(drop)
+    app.processEvents()
+    assert win.queue.row_count() == 2
+    assert win.media_card.property("dragActive") is False
+
+    win.close()
+    app.processEvents()
