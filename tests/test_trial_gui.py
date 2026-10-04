@@ -407,3 +407,27 @@ def test_compare_view_keeps_zoomed_spot_when_result_arrives(app):
     assert abs(view.scale() - 0.25) < 1e-6
 
     view.close()
+
+
+def test_video_starts_at_two_seconds_or_the_middle_of_a_short_clip(app):
+    """動画は 2 秒の位置から始める（冒頭の黒画面を避ける）。短い動画は真ん中。"""
+    from pathlib import Path
+
+    from app.core.jobs import Job, JobKind
+    from app.gui.compare_view import TrialPanel
+
+    panel = TrialPanel(build_settings=lambda *_a: None, model_label=str)
+    panel._load_source_async = lambda: None  # コマの取り出しは回さない
+
+    long_clip = Job(input_path=Path("long.mp4"), kind=JobKind.VIDEO)
+    long_clip.fps, long_clip.frame_count = 30.0, 30 * 600
+    panel.show_job(long_clip)
+    assert panel._seconds == 2.0
+    assert panel.time_label.text() == "0:02 / 10:00"
+
+    short_clip = Job(input_path=Path("short.mp4"), kind=JobKind.VIDEO)
+    short_clip.fps, short_clip.frame_count = 30.0, 30 * 3
+    panel.show_job(short_clip)
+    assert panel._seconds == 1.5
+
+    panel.shutdown()

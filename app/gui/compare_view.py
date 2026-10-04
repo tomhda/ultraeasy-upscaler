@@ -43,6 +43,9 @@ _SCALE_MAX = 32.0
 # 選択範囲の最小（元画像基準のピクセル）。小さすぎるドラッグは取り消す。
 _MIN_SELECT = 32
 
+# 動画を選んだときに最初に表示する位置（秒）
+_DEFAULT_START_SECONDS = 2.0
+
 # プレビュー枠の中だけの例外色（既存の #0b0f13 系と同じ扱い）。
 # 枠内は常に暗いため、白系で描く。QSS の対象外。
 _DIVIDER_COLOR = "#ffffff"
@@ -716,8 +719,11 @@ class TrialPanel(QWidget):
                 self._seconds = min(max(0.0, float(saved["seconds"])),
                                     duration or 0.0)
             else:
-                # 冒頭は黒画面が多いため、長さが分かれば1割の位置から始める。
-                self._seconds = (duration * 0.1) if duration else 0.0
+                # 冒頭は黒画面のことがあるため、2 秒の位置から始める。
+                # 4 秒より短い動画では真ん中を使う。
+                self._seconds = (
+                    min(_DEFAULT_START_SECONDS, duration / 2) if duration else 0.0
+                )
             self._rect = saved.get("rect") if saved else None
         else:
             self._duration = None
