@@ -1,222 +1,110 @@
 # ultraeasy-upscaler
 
-Windows ローカル専用の、画像・動画のアップスケールとフレーム補間ツール。
-超解像モデルを DirectML GPU・AMD Ryzen AI NPU・NVIDIA CUDA・Vulkan のいずれかで実行する。
+**[⬇ ultraeasy-upscaler v0.10.0 をダウンロード](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-portable-win64.zip)**（Windows x64 用の zip、376 MB）。手順は「[導入](#導入)」を参照。
+
+ultraeasy-upscaler は、画像と動画を AI で 4 倍に拡大する Windows 用のアプリ。
+
+処理はすべて手元の PC で行い、ファイルを外部に送らない。
+
+動画の拡大は時間がかかるので、先に 1 コマだけ拡大して、処理前と左右に並べて確かめられる。
+
+動画のコマ数を増やしてなめらかにするフレーム補間（RIFE v4.6）もできる。
 
 > **English summary.** Local image/video upscaler for Windows. Runs Real-ESRGAN, SPAN, SwinIR and AdcSR (one-step diffusion SR)
-> on DirectML GPU, AMD Ryzen AI NPU (VitisAI EP, XDNA2), NVIDIA CUDA or Vulkan.
-> Technical notes on the NPU side (SwinIR / AdcSR workarounds, DepthToSpace tail-cut, measurements) are in
+> on DirectML GPU, AMD Ryzen AI NPU (VitisAI EP, XDNA2), NVIDIA CUDA or Vulkan. Download the portable zip above.
+> Technical notes on the NPU side are in
 > [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes).
 
-- 入力: 画像 1 枚、フォルダ、動画（音声保持・H.264 出力）
-- 拡大: 4 倍固定の超解像モデル（下表）と、従来の realesrgan-ncnn-vulkan（2x/4x）
-- フレーム補間: RIFE v4.6（NCNN/Vulkan）
-- 試し: 選んだ 1 コマ（またはその一部）だけを先に拡大し、処理前と左右に並べて見比べる
-- NPU で動かすための技術的な記録（コンパイラの回避策、高速化、測定）は別リポジトリ [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes)
+![1 コマを試して、処理前と処理後を左右に並べた画面](docs/images/main.jpg)
 
-## 起動と必要物
+## できること
 
-### ポータブル版（exe）
+- 画像、フォルダ、動画を 4 倍に拡大する。動画は元の音声を残し、H.264 で保存する。
+- 本処理の前に、選んだ 1 コマ（またはその一部）だけを拡大して、処理前と見比べる。試したモデル同士も比べられる。
+- アニメ向け・実写向けなど、5 つのモデルから選ぶ。画像用と動画用で別のモデルを決めておける。
+- 特定のファイルだけ、別のモデルで処理する。
+- 終わったファイルを、一覧に残したまま別のモデルでやり直す。
+- 動画のフレーム補間（RIFE v4.6）を、拡大と組み合わせて、または単独で行う。
+- GPU（DirectX 12 対応のもの）で動作する。AMD Ryzen AI 搭載機では、追加のキットを入れると NPU でも動作する。
+- 配色は Windows のライト/ダーク設定とアクセント色に従う。
 
-[Releases](https://github.com/tomhda/ultraeasy-upscaler/releases/latest) の
-`ultraeasy-upscaler-portable-win64.zip` を展開し、`ultraeasy-upscaler.exe` を起動する。
-Python・ffmpeg・realesrgan-ncnn-vulkan・RIFE v4.6・DirectML 用ヘルパー（`winml-sr`）と
-GPU 用モデル（AdcSR を除く）を同梱している。DirectML GPU と Vulkan で動作する。
+## 画面
 
-NPU は標準では使わない。AMD Ryzen AI 搭載機で NPU を使う場合は、次の 2 つを追加する。
+▼ 左がメディアの一覧、中央がプレビュー、右が設定と「開始」。一覧の各行に、そのファイルを何で処理するかが出る。
+中央は「このコマを試す」を押した後の状態で、境界線の左が処理前、右が処理後。境界線はドラッグで動かせる。
 
-- AMD の Ryzen AI Software 1.8.0（AMD のサイトから入手して導入。NPU ドライバ 32.0.203.329 以降）
-- `ultraeasy-upscaler-npu-kit.zip`（NPU キット。exe のフォルダに上書きで展開する）。
-  AdcSR を NPU で使う場合は `ultraeasy-upscaler-npu-kit-adcsr.zip` も展開する
+![メイン画面](docs/images/main.jpg)
 
-NPU 用のモデルは、最初に一度だけ変換が必要になる。詳細設定の「NPU の準備」で、使うモデルだけを選んで変換する
-（所要時間は「[実測](#実測)」の表を参照）。
+▼ 「等倍」にすると、出力の 1 ピクセルを画面の 1 ピクセルに合わせて細部を比べられる。
+この画像は「このファイルだけ別の設定にする」を入れて、1 枚だけ別のモデルにした状態。
 
-### ソースから起動する場合（`setup.ps1`）
+![等倍での比較](docs/images/compare-zoom.jpg)
 
-GitHub Release の配布物（ビルド済み `winml-sr` と変換済み ONNX）を使う手順。
-`dotnet` SDK とモデルの変換作業は不要。
+画面の素材は [Big Buck Bunny](https://peach.blender.org) と [Tears of Steel](https://mango.blender.org)（© Blender Foundation, CC BY 3.0）、Superman (1941) はパブリックドメイン。
 
-```
-powershell -ExecutionPolicy Bypass -File setup.ps1
-```
+## 導入
 
-`-WithAdcSR` で AdcSR（約 1.8GB）を追加取得、`-WithNpu` で NPU 用モデルを追加取得する。
-取得後は `run.bat` をダブルクリック、または `.venv\Scripts\python.exe -m app.main` で起動する。
-`setup.ps1` は前提の確認、SHA-256 の検証、`vendor/winml-sr/` と `models/ai/` への展開、
-サンプル画像での動作確認まで行う。NPU は Ryzen AI Software 1.8.0 の導入案内のみ表示する。
-取得元は v0.9.1 の配布物（`winml-sr` とモデルは v0.9.1 から変更なし）。
+Windows 11（x64）と、DirectX 12 対応の GPU で動作を確認している。
 
-### 自分でビルド・変換する場合
+1. [`ultraeasy-upscaler-portable-win64.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-portable-win64.zip) をダウンロードする。
+2. 好きな場所に展開する。インストールは不要。
+3. `ultraeasy-upscaler.exe` を起動する。署名のない実行ファイルなので、Windows の SmartScreen が「Windows によって PC が保護されました」と表示することがある。その場合は「詳細情報」→「実行」を選ぶ。
 
-| 必要物 | 用途 | 必須 |
-|---|---|---|
-| Python 3.13（同梱の `.venv`） | 本体 | 必須 |
-| ffmpeg / ffprobe（PATH 上） | 動画の抽出・再結合・エンコード | 必須 |
-| `vendor/realesrgan/`（realesrgan-ncnn-vulkan 一式 exe + models） | Vulkan 経路・フォールバック | 必須 |
-| `vendor/rife/`（rife-ncnn-vulkan.exe + rife-v4.6） | フレーム補間 | 任意 |
-| `dotnet` 8 SDK で `tools/winml-sr` をビルド | DirectML GPU 経路（自分でビルドする場合のみ） | 任意 |
-| Ryzen AI Software 1.8.0 相当の Python 環境と VitisAI EP | NPU 経路 | 任意 |
-| PyTorch CUDA 環境（`scripts/setup_swinir.ps1` で `tmp/` に導入） | SwinIR-M CUDA 経路 | 任意 |
+zip には動作に必要なものがすべて入っている。フォルダの中のファイルは移動や削除をしないこと。
+削除するときは、展開したフォルダごと消す。
 
-Vulkan / RIFE の資材は `.venv\Scripts\python.exe scripts\get_models.py` で取得する。
-超解像モデルの取得と変換は「[モデルの取得と変換](#モデルの取得と変換)」を参照。
-`setup.ps1` が取得する zip を作り直すには `scripts\build_release.ps1`、ポータブル版と NPU キットは
-「[ポータブル版と NPU キットの作成](#ポータブル版と-npu-キットの作成)」を参照。
+## 使い方
 
-## 画面と使い方
+### 追加する
 
-画面は 3 列。左がメディアの一覧、中央がプレビュー、右が設定と「開始」。
+- 画像、動画、フォルダを、ウィンドウのどこにでもドラッグ＆ドロップする。左下の枠をクリックして選ぶこともできる。
 
-- **追加**: ファイルやフォルダを、ウィンドウのどこにでもドラッグ＆ドロップする。
-- **設定**: 右列の「画像」「動画」で、種類ごとに既定のモデルと倍率を決める（動画はフレーム補間モデルも）。
-  特定のファイルだけ変える場合は、一覧でそのファイルを選び「このファイルだけ別の設定にする」を入れる。
-  一覧の各行に、そのファイルが何で処理されるか（モデル・倍率・補間・個別設定の有無）を表示する。
-- **試す**: 中央の「試す」（動画は「このコマを試す」）で、選択中の 1 コマだけを本処理と同じ経路で拡大し、
-  境界線の左右に処理前と処理後を並べる。動画はスライダーでコマを選ぶ（初期位置は 2 秒）。
-  「範囲を選ぶ」で一部だけを試せる。試したモデルは覚えており、「左」「右」で比べる相手を選べる。
-  マウスホイールで拡大、ドラッグで移動、「等倍」で出力の 1 ピクセルを画面の 1 ピクセルに合わせる。
-- **やり直す**: 完了した行のやり直しボタン、または「すべてやり直す」で待機中に戻し、設定を変えて再処理する。
-- AI実行先・保存形式・出力フォルダなどは、右上の歯車（詳細設定）にある。
-- 配色は Windows のライト/ダーク設定とアクセント色に従う（プレビュー枠は常に暗い）。
+### モデルを選ぶ
 
-## AI 実行先
+- 右側の「画像」「動画」で、種類ごとに使うモデルを選ぶ。モデルの下に、向き不向きと速さの説明が出る。
+- 一覧でファイルを選んで「このファイルだけ別の設定にする」を入れると、そのファイルだけ別のモデルにできる。
+- どれを選ぶかは「[モデルの選び方](#モデルの選び方)」を参照。
 
-詳細設定の「AI実行先」で実行方式を選ぶ。既定の「自動（GPU優先）」は DirectML GPU に正規化され、
-ヘルパーの起動に失敗した画像・フォルダ・動画は Vulkan へフォールバックする。
-DirectML / NPU / CUDA は 4 倍固定の常駐ヘルパー（別プロセス）で推論し、
-Vulkan を選んだ場合だけ従来の Real-ESRGAN モデル一覧（2x/4x）を表示する。
+### 試す
 
-| AI実行先 | 実行方式 | 必要環境 | 備考 |
+- 一覧でファイルを選び、中央の「試す」（動画は「このコマを試す」）を押す。そのコマだけを本処理と同じ方法で拡大し、処理前と並べて表示する。
+- 動画は、プレビューの下のスライダーで試すコマを選ぶ。最初は 2 秒の位置になっている。
+- 「範囲を選ぶ」で、画の一部だけを試せる。時間のかかるモデルを短時間で確かめるときに使う。
+- モデルを変えてもう一度試すと、結果が増える。「左」「右」で、処理前と各モデルの結果から比べる相手を選ぶ。
+- マウスホイールで拡大、ドラッグで移動。「全体表示」「等倍」で表示倍率を切り替える。
+
+### 開始する
+
+- 「開始」を押すと、待機中のファイルを上から順に処理する。出力は元のファイルと同じ場所の `upscaled` フォルダに保存する（「出力先」と詳細設定で変更できる）。
+- 「一時停止」は、処理中のファイルが終わってから止まる。今すぐ止めるには、その行の × を押す。
+- 既にあるファイルは上書きせず、`(1)` のように番号を付ける。
+
+### やり直す
+
+- 終わった行の丸い矢印、または「すべてやり直す」で待機中に戻す。モデルを変えてから「開始」を押すと、もう一度処理する。
+
+### 詳細設定
+
+- 右上の歯車を押すと、AI の実行先、保存形式、動画の画質、出力フォルダ名、フレーム補間後の fps などを変更できる。
+
+## モデルの選び方
+
+時間は Radeon 860M（Ryzen AI 7 PRO 350 の内蔵 GPU）で 854×480 の 1 枚を 4 倍にしたときの値。
+
+| モデル | 向いているもの | 1 枚の時間 | 補足 |
 |---|---|---|---|
-| 自動（GPU優先） | DirectML GPU（`tools/winml-sr`） | ビルド済み `winml-sr.exe` | 起動失敗時は Vulkan |
-| GPU（DirectML） | 同上 | 同上 | 明示的に GPU を選ぶ |
-| NPU | VitisAI EP（`tools/npu-serve`） | Ryzen AI Software 1.8.0 と `tools/npu-serve`（ポータブル版では NPU キット） | 両方がある PC でだけ選択肢に出る。モデルごとに初回の変換（VAIML コンパイル）が必要 |
-| SwinIR-M（CUDA・超低速） | PyTorch CUDA（`tools/swinir`） | CUDA 環境と SwinIR-M 重み | NVIDIA 専用。起動できない場合に別モデルへ自動変更はしない |
-| Vulkan | realesrgan-ncnn-vulkan | `vendor/realesrgan` | 従来経路。フォールバック兼用 |
+| Anime Video v3 | アニメ・線画・CG | 0.46 秒 | 細部を整理してなめらかにする。劣化した古い素材に強い。実写には向かない |
+| 4xNomosUni SPAN | 実写 | 0.51 秒 | 元の質感や粒状感を残す。きれいな素材に向く |
+| Real-ESRGAN（AMD縮小版） | 実写 | 2.78 秒 | 輪郭や毛を 1 本ずつ立てる。加工感は強め。研究用途限定のライセンス |
+| SwinIR-M | 実写の静止画 | 59 秒 | 時間をかけて細部まで復元する |
+| AdcSR | 実写の静止画 | 108 秒 | 生成型で、質感を作り足す。動画には使えない。ポータブル版には含まない（下記） |
 
-NPU の入力が短辺 480px 未満のときは GPU へ自動切替する。
-NPU 用モデルの変換は、詳細設定の「NPU の準備」でモデルごとに実行する。未変換のモデルを選んだまま
-「開始」や「試す」を押した場合は、処理を始めずに「NPU の準備」へ案内する（処理の途中で変換は始めない）。
-NPU 経路は GPU をほぼ占有しない（推論中の iGPU 3D エンジンは idle 水準、CPU 2〜7%）。
+- 迷ったら、アニメ・CG は Anime Video v3、実写は 4xNomosUni SPAN から試す。
+- AdcSR を使うには、[v0.9.1 の `models-adcsr-gpu-fp32.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/tag/v0.9.1)（約 1.8GB）を
+  `models\ai` フォルダに展開する。使用条件は zip 内の NOTICE を参照。
+- 詳細設定の「AI実行先」で Vulkan を選ぶと、従来の realesrgan-ncnn-vulkan のモデル（2 倍・4 倍）を使える。
 
-## モデル
-
-DirectML / NPU では具体的なモデル名で選ぶ。GPU と NPU で対応する ONNX とタイルが異なる。
-
-| GUIのモデルキー | 表示名 | 実体モデル | アーキテクチャ | 用途 | 実行先 | 既定タイル (GPU / NPU) |
-|---|---|---|---|---|---|---|
-| `animevideov3` | Anime Video v3 | realesr-animevideov3（NPU は PReLU 分解版 `dp`） | SRVGGNetCompact | アニメ・線画・CG | GPU / NPU | 256〜512 自動 / 512 |
-| `4xNomosUni` | 4xNomosUni SPAN | 4xNomosUni_span_multijpg | SPAN（48nf） | 実写の毛・肌・背景の質感を残す | GPU / NPU | 256〜512 自動 / 512 |
-| `AMD-RRDB` | Real-ESRGAN（AMD縮小版） | AMD 縮小 RRDB 版 | RRDB | 輪郭を強く見せたい実写 | GPU / NPU | 256 / 256 |
-| `SwinIR` | SwinIR-M | 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN | SwinIR（window attention） | 静止画の最高画質（低速） | GPU / NPU / CUDA | 256 / 256 |
-| `AdcSR` | AdcSR | AdcSR net_params_200（SD2.1-base 派生・1 ステップ） | 生成型 1 ステップ拡散（UNet + VAE デコーダ） | 実写の静止画専用（動画不可） | GPU / NPU | 128 / 128（マージン 32） |
-
-選び方の目安:
-
-- 迷ったら「自動（GPU優先）」。アニメ・CG は Anime Video v3、実写は 4xNomosUni SPAN から。
-- 静止画を時間をかけて最高画質にするなら SwinIR-M か AdcSR。AdcSR は生成型なので実写向きで、テクスチャを作り足す。
-- GPU を他の作業に使いたいときは NPU。GPU を使わずに回せる（4xNomosUni SPAN は NPU が GPU の約 2 倍速い。Anime Video v3 は静止画で同等、動画は GPU が速い）。
-- AdcSR はタイルの継ぎ目に低周波の暗い格子が出るため、マージン 32 とクロスフェード合成に加え、平坦領域限定の固定テンプレート補正を合成時に適用する（[docs/adcsr-tile-diagnosis.md](docs/adcsr-tile-diagnosis.md)）。
-
-## 実測
-
-### AMD Ryzen AI 7 PRO 350（Radeon 860M / XDNA2 NPU）
-
-入力 854x480 → 4 倍（3416x1920）、タイル分割・結合・色変換込みの 1 枚あたり（常駐セッションの定常値、3 回の最良値）。
-GPU は fp32 ONNX を DirectML で、NPU は bf16cast を Ryzen AI SW 1.8.0 の VitisAI EP（VAIML コンパイル）で実行。
-ドライバ 32.0.203.329、32GB LPDDR5-8000。
-
-| モデル | GPU (DirectML, fp32) | NPU (VitisAI, bf16) | NPU bf16 忠実度* |
-|---|---|---|---|
-| Anime Video v3 | **0.46 秒** | 0.47 秒 | 49.4 dB |
-| 4xNomosUni SPAN | 0.51 秒 | **0.25 秒** | 46.9 dB |
-| Real-ESRGAN（AMD縮小版） | 2.78 秒 | 2.07 秒 | 37.9 dB** |
-| SwinIR-M | 59 秒 | 82 秒 | 38.5 dB |
-| AdcSR（112 タイル） | 108 秒 | 247 秒（1 タイル 2.05 秒 = 前半 0.7 + 後半 1.3） | 45.4 dB*** |
-
-\* 同一モデルの fp32 出力との PSNR。40 dB 前後は目視でほぼ判別不能の水準。
-\*\* Ryzen AI 1.7.1 時点の測定値（1.8.0 では速度のみ再測定）。
-\*\*\* 1280x534 の写真 1 枚（180 タイル）を GPU 版と比較した値。AdcSR は 1280x534 で GPU 約 4.5 分、NPU 約 6.5 分。
-NPU の値は NPU 電源モード Default での測定。`xrt-smi configure --pmode turbo`（AC 電源時）では同じキャッシュのまま
-Anime Video v3 0.35 秒、4xNomosUni SPAN 0.18 秒、Real-ESRGAN（AMD縮小版）1.23 秒、SwinIR-M 49 秒、AdcSR 131 秒（1280x534 で約 3.1 分）、
-動画は 4xNomosUni SPAN 4.89 fps、Anime Video v3 2.77 fps。出力は Default と同一。
-測定条件と高速化の内容は [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes) を参照。
-
-NPU 用モデルの初回変換（VAIML コンパイル）。アプリの「NPU の準備」と同じ条件（プロセス優先度 BelowNormal）で、
-空のキャッシュから変換が終わるまでを 2026-10-05 に測定。CPU 使用率は 16 論理コアに対する変換プロセスの値、
-メモリは変換プロセスのコミット（private bytes）の最大値。
-
-| モデル（変換する ONNX） | 所要時間 | CPU | メモリの最大 |
-|---|---|---|---|
-| Anime Video v3（tail-cut body, 512 タイル, bf16cast） | 903 秒（約 15 分） | 約 6%（1 コア相当） | 約 1.9GB |
-| 4xNomosUni SPAN（tail-cut body, 512 タイル, fp32 直接） | 850 秒（約 14 分） | 約 6% | 約 1.2GB |
-| Real-ESRGAN（AMD縮小版）（256 タイル, bf16cast） | 1529 秒（約 25 分） | 約 6% | 約 1.3GB |
-| SwinIR-M（256 タイル, bf16cast） | 3918 秒（約 65 分） | 約 6% | 約 25GB |
-| AdcSR（128 タイル, 前半＋後半） | 前半 5201 秒 + 後半 1811 秒（2026-09-12 の測定） | 未測定 | 未測定 |
-
-変換中に並行して実行した CPU 処理の所要時間は、変換なしのときの約 1.07 倍。優先度を Normal にしても所要時間はほぼ同じ（850 秒と 792 秒）。
-SwinIR-M の変換中は、物理メモリ 32GB の本機で空きメモリが 124MB まで下がった。
-
-動画（rawvideo パイプライン・音声保持・3 秒クリップの E2E）:
-
-| 経路 | 実効 fps | 1 フレームあたり |
-|---|---|---|
-| GPU (DirectML) × Anime Video v3 | **2.48 fps** | 0.40 秒 |
-| NPU (VitisAI) × Anime Video v3 | 1.95 fps | 0.51 秒 |
-| NPU (VitisAI) × 4xNomosUni SPAN | **3.61 fps** | 0.28 秒 |
-
-動画の 1 フレーム値が静止画より速いのは、デコード・変換と推論を重ねて隠すため。
-Vulkan 経路（realesrgan-ncnn-vulkan）の animevideov3 は実効約 0.7 秒 / 枚。
-
-### NVIDIA GeForce RTX 5060 Ti（Ryzen 7 9700X）
-
-2026-08-23 の実機確認。`animevideov3` 256 タイル、220x220 入力、overlap 16。
-
-| 経路 | セッション生成 | タイル処理 | wall total |
-|---|---:|---:|---:|
-| DirectML（NVIDIA GPU） | 1.5 秒 | 7.4 ms | 2.28 秒 |
-| NvTensorRTRTXExecutionProvider | 0.7 秒 | 7.6 ms | 1.67 秒 |
-
-両経路の出力 PSNR は 63.87 dB。854x480 入力の wall total は DirectML 1.50 秒、TensorRT 1.60 秒、Vulkan 1.888 秒（AMD 内蔵 GPU の DirectML は 3.11 秒）。
-動画（640x480→2560x1920、NVENC）では 12 秒クリップで DirectML 25.2 秒 / TensorRT 25.0 秒と差は約 0.8%、TensorRT の優位はモデル依存。
-SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 秒で約 57 秒。
-詳細は [docs/nvidia-smoke-results.md](docs/nvidia-smoke-results.md)、[docs/gpu-benchmark-2026-08-24.md](docs/gpu-benchmark-2026-08-24.md)、[docs/swinir-experimental.md](docs/swinir-experimental.md)。
-
-## 動画の処理
-
-- 「アップスケーラーモデル」と「フレーム補間モデル」は独立して選べ、双方に「なし」がある（アップスケールのみ／補間のみ／両方）。
-- 両方を選んだ場合の順序は詳細設定「処理の順番」で選ぶ。既定は「アプコン→補間」（重いモデルの対象フレーム数を補間前に抑えられる）。高解像度出力でメモリが厳しい場合のみ「補間→アプコン」。
-- 出力は再生互換性を優先して H.264、元音声を保持する。最大出力サイズは `UEU_MAX_VIDEO_DIM`（既定 3840x2160）。
-- RIFE 補間が有効な動画は PNG フレーム経路を使う。補間なしの動画は rawvideo 3 スレッドパイプライン（ffmpeg デコード → AI 推論 → ffmpeg エンコード）で、PNG の中間書き出しを省略する。
-- SwinIR-M CUDA の動画は 150 フレーム単位で H.264 チャンクを確定し、中止・異常終了後に同じ入力と設定で再実行すると完了済みチャンクを飛ばして再開する（再開データは出力先の `.＜出力名＞.swinir-work-*`、完成後に自動削除）。RIFE との併用と HDR 動画には未対応。
-- AdcSR は静止画専用で、動画には使えない。HDR 動画（PQ/HLG）は未対応。
-- 「一時停止」は現在のジョブ完了後に停止する。実行中ジョブを今すぐ中止するには一覧の行の × を押す。
-- 設定は「開始」を押した時点の値が待機中の各ファイルへ適用される。モデル・倍率・フレーム補間モデルは
-  画像用と動画用の既定、またはファイルごとの個別設定から決まり、AI実行先・出力先・詳細設定は全体で共通。
-
-## モデルの取得と変換
-
-`setup.ps1` を使う場合、変換済みのモデルは Release から取得されるので、この作業は不要。
-重みの取得から ONNX 化・NPU 用の変換までを自分で行う手順は [docs/model-conversion.md](docs/model-conversion.md)。
-
-## パス設定（環境変数で上書き可能）
-
-| 環境変数 | 既定値 | 用途 |
-|---|---|---|
-| `UEU_WINML_HELPER` | `vendor/winml-sr/winml-sr.exe`、次に `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinML ヘルパーの明示指定 |
-| `UEU_MODELS_DIR` | `models/ai` | GPU fp32 / NPU bf16cast モデルの探索先 |
-| `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU 常駐サーバーを起動する Python |
-| `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU 用モデルの変換結果（キャッシュ）の置き場所 |
-| `UEU_ADCSR_NPU2` | `1` | `0` で AdcSR の NPU 2 プロセス構成を無効化（GPU 実行へ） |
-| `UEU_NPU_TAILCUT` | `1` | `0` で NPU tail-cut を無効化（全体モデルで実行） |
-| `UEU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA 環境の Python |
-| `UEU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M 重みの明示指定 |
-| `UEU_SWINIR_STARTUP_TIMEOUT` | `1800` 秒 | CUDA worker の起動待ち（30〜86400 秒） |
-| `UEU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100〜300 フレーム） |
-| `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264 出力の最大幅×高さ（例: `1920x1080`） |
-
-## モデルの画質比較
+### 画質の比較
 
 列は左から（すべて GPU/DirectML・fp32 で実行）:
 
@@ -241,56 +129,54 @@ SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 �
 - 4xNomosUni SPAN: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
 - Real-ESRGAN（AMD縮小版）: 輪郭や毛の 1 本 1 本を立てる知覚系。加工感は強め
 
-## NPU に関する技術メモ
+## NPU を使う場合
 
-NPU で動かすための回避策、高速化、測定の記録は別リポジトリにまとめている:
-[ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes)（英語のページと、日本語の研究ノート全文）。
+AMD Ryzen AI 搭載機では、GPU を空けたまま NPU で処理できる。標準では使わず、次の 2 つを入れた PC でだけ選べるようになる。
 
-- 報告済みの不具合: [amd/RyzenAI-SW#397](https://github.com/amd/RyzenAI-SW/issues/397)（負の Slice 境界での assertion）、[#398](https://github.com/amd/RyzenAI-SW/issues/398)（長い NPU カーネルでの TDR ライブダンプ）、[#402](https://github.com/amd/RyzenAI-SW/issues/402)（同一プロセスのセッション間で出力が NaN になる）
+- AMD の Ryzen AI Software 1.8.0（AMD のサイトから入手して導入。NPU ドライバ 32.0.203.329 以降）
+- [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-npu-kit.zip)（56 MB）。
+  AdcSR も NPU で使う場合は [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-npu-kit-adcsr.zip)（1.7 GB）も
 
-## ポータブル版と NPU キットの作成
+手順:
 
-PowerShell 7（`pwsh`）で実行する。
+1. ultraeasy-upscaler を終了し、キットの zip の中身を `ultraeasy-upscaler.exe` があるフォルダに上書きで展開する。
+2. 起動して歯車を押し、「NPU の準備」で使うモデルの「変換する」を押す。変換はモデルごとに最初の一度だけ必要。
+3. 変換が終わったら、「AI実行先」で NPU を選ぶ。
 
-```
-pwsh -File scripts\build_portable.ps1 -WithHelper
-pwsh -File scripts\build_npu_kit.ps1 -WithAdcSR
-```
+▼ 「NPU の準備」。モデルごとに、変換の目安の時間が出る。
 
-- `build_portable.ps1` は PyInstaller で `portable_dist/ultraeasy-upscaler/` と `ultraeasy-upscaler-portable-win64.zip` を作る。
-  Python・ffmpeg・realesrgan-ncnn-vulkan・RIFE v4.6 を同梱し、`-WithHelper` で `vendor/winml-sr/` と GPU 用モデル（AdcSR を除く）も同梱する。
-  同梱物のライセンス文書（`THIRD-PARTY-NOTICES.txt` ほか）も入れる。NPU 専用のファイルは入れない。
-  作成後に exe の自己テスト（同梱バイナリとモデルが exe の隣から見つかるか）を実行する。
-- `build_npu_kit.ps1` は `tools/npu-serve/` と NPU 用モデルを `ultraeasy-upscaler-npu-kit.zip` にまとめる。
-  `-WithAdcSR` で AdcSR の前半・後半とマニフェストを `ultraeasy-upscaler-npu-kit-adcsr.zip`（無圧縮）にまとめる。
-  どちらも exe のフォルダに上書きで展開する構造。
+![NPU の準備](docs/images/npu-prepare.jpg)
 
-## アーキテクチャ
+変換にかかる時間とメモリ（Ryzen AI 7 PRO 350 での実測）:
 
-- **GUI**: PySide6。`app/gui`
-  - `main_window.py` 3 列の画面、画像用・動画用・個別の設定、やり直し
-  - `queue_view.py` メディアの一覧、`compare_view.py` 左右比較と試し、`settings_drawer.py` 詳細設定と「NPU の準備」
-  - `theme.py` 配色（Windows のライト/ダークとアクセント色に連動）
-- **コア（GUI 非依存・単体テスト可）**: `app/core`
-  - `binaries.py` 外部バイナリ / モデル探索
-  - `media.py` 種別判定・ffprobe メタ取得
-  - `upscaler.py` 常駐ヘルパーと realesrgan-ncnn-vulkan の統合ラッパ（画像 / フォルダ）
-  - `helper_backend.py` / `serve_client.py` DirectML / NPU / CUDA ヘルパーのモデル解決・常駐セッション・バイナリプロトコル
-  - `video.py` ffmpeg 抽出 / 再結合 / HW エンコード、rawvideo パイプライン、SwinIR CUDA のチャンク再開
-  - `interpolator.py` RIFE NCNN/Vulkan フレーム補間
-  - `engine.py` ジョブのオーケストレーション、`jobs.py` / `settings.py` データモデル
-  - `trial.py` 試し（コマの取り出し・切り出し・本処理と同じ経路での 1 枚の拡大）
-  - `npu_prepare.py` NPU キットの有無、モデルごとの変換状態、変換の実行
-  - `npu_backend.py` / `npu_worker.py` 旧 NPU API（スクリプト互換のため残置、GUI では使用しない）
-- **ヘルパー（常駐プロセス）**: `tools/winml-sr/`（C#、DirectML。クロスフェード合成と AdcSR の格子補正を含む）、
-  `tools/npu-serve/`（Python、VitisAI EP。AdcSR は `npu_worker.py` × 2 と `npu_twostage.py` の 2 プロセス構成）、
-  `tools/swinir/`（Python、PyTorch CUDA）
+| モデル | 時間 | メモリの最大 |
+|---|---|---|
+| Anime Video v3 | 約 15 分 | 約 1.9GB |
+| 4xNomosUni SPAN | 約 14 分 | 約 1.2GB |
+| Real-ESRGAN（AMD縮小版） | 約 25 分 | 約 1.3GB |
+| SwinIR-M | 約 65 分 | 約 25GB |
+| AdcSR | 約 2 時間 | 未測定 |
 
-## 開発
+変換中の CPU 使用は 1 コア分で、PC はそのまま使える。SwinIR-M はメモリを多く使うので、ほかのアプリを閉じてから実行する。
+NPU ドライバや Ryzen AI Software を更新すると、変換のやり直しが必要になることがある。
 
-```
-.venv\Scripts\python.exe -m pytest        # コアの単体テスト
-```
+NPU で動かすための技術的な記録（コンパイラの回避策、高速化、測定）は、別のリポジトリ
+[ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes) にまとめている。
+
+## 制限
+
+- 拡大は 4 倍固定。2 倍は、AI実行先を Vulkan にしたときの一部のモデルだけ。
+- 動画の出力は H.264 で、最大 3840×2160。これを超える場合は縮小して保存する。
+- HDR 動画（PQ / HLG）は処理できない。
+- AdcSR は静止画専用で、動画には使えない。
+- 「試す」は拡大だけを確かめる。フレーム補間の結果は確かめられない。
+- モデルなどの設定は、アプリを終了すると既定に戻る。
+- NPU は、Ryzen AI Software を入れた AMD Ryzen AI 搭載機でだけ使える。
+
+## 技術的な詳細
+
+ソースからの起動、実行方式ごとの必要環境、実測、環境変数、内部の構成、ポータブル版の作り方は
+[docs/technical.md](docs/technical.md) を参照。
 
 ## ライセンスと帰属
 
