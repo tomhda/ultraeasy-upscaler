@@ -50,7 +50,10 @@ $realesrganSource = Join-Path $repo "vendor\realesrgan"
 if (-not (Test-Path -LiteralPath (Join-Path $realesrganSource "realesrgan-ncnn-vulkan.exe"))) {
     throw "Real-ESRGAN assets are missing"
 }
-Copy-Item -Path (Join-Path $realesrganSource "*") -Destination $realesrganOut -Recurse -Force
+# 上流の配布物に入っているサンプル（画像・アニメの動画）は再配布しない。
+$realesrganSamples = @("input.jpg", "input2.jpg", "onepiece_demo.mp4")
+Get-ChildItem -LiteralPath $realesrganSource | Where-Object { $realesrganSamples -notcontains $_.Name } |
+    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $realesrganOut -Recurse -Force }
 
 $rifeBase = Get-ChildItem -LiteralPath (Join-Path $repo "vendor\rife") -Recurse `
     -Filter "rife-ncnn-vulkan.exe" | Select-Object -First 1 -ExpandProperty DirectoryName
@@ -68,6 +71,15 @@ $ffmpeg = (Get-Command ffmpeg -ErrorAction Stop).Source
 $ffprobe = (Get-Command ffprobe -ErrorAction Stop).Source
 Copy-Item -LiteralPath $ffmpeg -Destination (Join-Path $ffmpegOut "ffmpeg.exe") -Force
 Copy-Item -LiteralPath $ffprobe -Destination (Join-Path $ffmpegOut "ffprobe.exe") -Force
+# ffmpeg は GPL のビルドを同梱することがあるため、ライセンスとソースの入手元を必ず添える。
+$ffmpegRoot = Split-Path -Parent (Split-Path -Parent $ffmpeg)
+foreach ($name in @("LICENSE", "README.txt")) {
+    $doc = Join-Path $ffmpegRoot $name
+    if (-not (Test-Path -LiteralPath $doc)) {
+        throw "ffmpeg の $name が見つかりません（ライセンス文書を同梱できません）: $doc"
+    }
+    Copy-Item -LiteralPath $doc -Destination (Join-Path $vendorOut "ffmpeg\$name") -Force
+}
 
 if ($WithHelper) {
     $helperSource = Join-Path $repo "vendor\winml-sr"
@@ -95,7 +107,26 @@ if ($WithHelper) {
     foreach ($file in $onnxFiles) {
         Copy-Item -LiteralPath $file.FullName -Destination $modelsOut -Force
     }
+    # モデルの帰属とライセンス（CC-BY の表示、研究用途限定の条件などを含む）
+    $modelDocs = @(
+        "NOTICE-models-gpu-fp32.txt", "LICENSE-BSD-3-Real-ESRGAN.txt", "LICENSE-CC-BY-4.0.txt",
+        "LICENSE-RAIL-MS-AMD-RRDB.txt", "LICENSE-Apache-2.0-SwinIR.txt"
+    )
+    foreach ($name in $modelDocs) {
+        $doc = Join-Path $modelsSource $name
+        if (-not (Test-Path -LiteralPath $doc)) { throw "モデルのライセンス文書がありません: $doc" }
+        Copy-Item -LiteralPath $doc -Destination $modelsOut -Force
+    }
 }
+
+# 本体と同梱物のライセンス
+$notices = Join-Path $repo "scripts\portable-notices"
+Copy-Item -LiteralPath (Join-Path $repo "LICENSE") -Destination (Join-Path $app "LICENSE.txt") -Force
+Copy-Item -LiteralPath (Join-Path $notices "THIRD-PARTY-NOTICES.txt") -Destination $app -Force
+$qtLicenses = Join-Path $app "licenses\PySide6"
+New-Item -ItemType Directory -Path $qtLicenses -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $notices "LGPL-3.0.txt") -Destination $qtLicenses -Force
+Copy-Item -LiteralPath (Join-Path $ffmpegRoot "LICENSE") -Destination (Join-Path $qtLicenses "GPL-3.0.txt") -Force
 
 Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination (Join-Path $app "README.md") -Force
 @"

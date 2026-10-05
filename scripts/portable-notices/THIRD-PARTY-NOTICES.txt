@@ -1,0 +1,47 @@
+ultraeasy-upscaler ポータブル版 — 同梱物のライセンスと入手元
+
+ultraeasy-upscaler 本体は MIT License（LICENSE.txt）。
+このフォルダには、下記の第三者のソフトウェアとモデルを、それぞれのライセンスのまま同梱している。
+
+1. FFmpeg（vendor/ffmpeg/bin/ffmpeg.exe, ffprobe.exe）
+   - 版: 同梱の vendor/ffmpeg/README.txt に記載（gyan.dev の full build）
+   - ライセンス: GNU General Public License v3（vendor/ffmpeg/LICENSE）
+   - ソースコード: vendor/ffmpeg/README.txt の "Source Code" の URL、および https://www.gyan.dev/ffmpeg/builds/
+   - 本体とは別のプログラムとして、子プロセスで呼び出している。
+
+2. Qt 6 / PySide6 / Shiboken6（_internal/PySide6/, _internal/shiboken6/）
+   - ライセンス: GNU Lesser General Public License v3 ほか（licenses/PySide6/ に原文）
+   - ソースコード: https://download.qt.io/official_releases/QtForPython/ および https://code.qt.io/
+   - Qt のライブラリは個別の DLL として置いてあり、同じ版の互換ビルドに差し替えられる。
+
+3. Python ランタイム（_internal/）
+   - ライセンス: Python Software Foundation License Version 2
+   - https://www.python.org/
+
+4. PyInstaller のブートローダー（ultraeasy-upscaler.exe）
+   - ライセンス: GPL v2 以降＋ブートローダー例外（生成した実行ファイルは任意のライセンスで配布できる）
+   - https://pyinstaller.org/
+
+5. Pillow、NumPy（_internal/）
+   - Pillow: MIT-CMU License（https://python-pillow.org/）
+   - NumPy: BSD 3-Clause License（https://numpy.org/）
+
+6. realesrgan-ncnn-vulkan と Real-ESRGAN のモデル（vendor/realesrgan/）
+   - realesrgan-ncnn-vulkan: MIT License（https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan）
+   - モデル（realesr-animevideov3、realesr-general-x4v3、realesrgan-x4plus ほか）:
+     BSD 3-Clause License（https://github.com/xinntao/Real-ESRGAN。原文は models/ai/LICENSE-BSD-3-Real-ESRGAN.txt）
+   - ncnn: BSD 3-Clause License（https://github.com/Tencent/ncnn）
+
+7. rife-ncnn-vulkan と RIFE v4.6 のモデル（vendor/rife/）
+   - rife-ncnn-vulkan: MIT License（vendor/rife/LICENSE、https://github.com/nihui/rife-ncnn-vulkan）
+   - RIFE のモデル: MIT License（https://github.com/hzwer/Practical-RIFE）
+
+8. winml-sr と Windows ML ランタイム（vendor/winml-sr/）— GPU 版を同梱した場合のみ
+   - winml-sr 本体: MIT License（ultraeasy-upscaler の一部）
+   - Microsoft Windows ML Runtime、ONNX Runtime、DirectML:
+     vendor/winml-sr/license.txt、ThirdPartyNotices.txt、NOTICE-winml-sr.txt を参照
+
+9. 超解像モデル（models/ai/）— GPU 版を同梱した場合のみ
+   - モデルごとの帰属とライセンスは models/ai/NOTICE-models-gpu-fp32.txt を参照。
+   - 4xNomosUni_span_multijpg は CC-BY-4.0（Philip Hofmann/Phips）。表示を保持すること。
+   - Real-ESRGAN（AMD縮小版）は Research-only RAIL-MS で、研究用途に限られる。

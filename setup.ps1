@@ -20,7 +20,9 @@
     powershell -ExecutionPolicy Bypass -File setup.ps1 -LocalDist tmp\easy-setup\dist -WithAdcSR
 #>
 param(
-    [string]$Release = "latest",
+    # setup.ps1 用の配布物（winml-sr とモデルの zip）を置いてある Release。
+    # v0.10.0 以降の Release はポータブル版と NPU キットだけを載せるため、既定を固定する。
+    [string]$Release = "v0.9.1",
     [switch]$WithAdcSR,
     [switch]$WithNpu,
     [string]$LocalDist = ""
