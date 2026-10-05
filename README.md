@@ -15,7 +15,7 @@ ultraeasy-upscaler は、画像と動画を AI で 4 倍に拡大する Windows 
 > Technical notes on the NPU side are in
 > [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes).
 
-![1 コマを試して、処理前と処理後を左右に並べた画面](docs/images/main.jpg)
+![写真を AdcSR で試し、処理前と処理後を等倍で左右に並べた画面](docs/images/compare-zoom.jpg)
 
 ## できること
 
@@ -31,12 +31,11 @@ ultraeasy-upscaler は、画像と動画を AI で 4 倍に拡大する Windows 
 ## 画面
 
 ▼ 左がメディアの一覧、中央がプレビュー、右が設定と「開始」。一覧の各行に、そのファイルを何で処理するかが出る。
-中央は「このコマを試す」を押した後の状態で、境界線の左が処理前、右が処理後。境界線はドラッグで動かせる。
+中央は写真を AdcSR で試した後の状態で、境界線の左が処理前、右が処理後。境界線はドラッグで動かせる。
 
 ![メイン画面](docs/images/main.jpg)
 
-▼ 「等倍」にすると、出力の 1 ピクセルを画面の 1 ピクセルに合わせて細部を比べられる。
-この画像は「このファイルだけ別の設定にする」を入れて、1 枚だけ別のモデルにした状態。
+▼ 「等倍」にすると、出力の 1 ピクセルを画面の 1 ピクセルに合わせて細部を比べられる。上と同じ写真の顔の部分。
 
 ![等倍での比較](docs/images/compare-zoom.jpg)
 
@@ -106,12 +105,9 @@ zip には動作に必要なものがすべて入っている。フォルダの�
 
 ### 画質の比較
 
-列は左から（すべて GPU/DirectML・fp32 で実行）:
-
-1. オリジナル（lanczos 4x・AI なし）
-2. Anime Video v3 (`animevideov3`) = realesr-animevideov3
-3. 4xNomosUni SPAN (`4xNomosUni`) = 4xNomosUni_span_multijpg
-4. Real-ESRGAN（AMD縮小版） (`AMD-RRDB`) = AMD 縮小 RRDB 版
+同じ素材の同じ範囲を、各モデルで 4 倍にしたもの（すべて GPU / DirectML で実行）。
+上段は左から オリジナル（Lanczos で 4 倍・AI なし）、Anime Video v3、4xNomosUni SPAN。
+下段は左から Real-ESRGAN（AMD縮小版）、SwinIR-M、AdcSR。
 
 トゥーン CG — Big Buck Bunny (480p):
 
@@ -128,6 +124,10 @@ zip には動作に必要なものがすべて入っている。フォルダの�
 - Anime Video v3: 細部を整理してなめらかに。劣化した古い素材に最も強い
 - 4xNomosUni SPAN: 原本の質感・粒状感を尊重する忠実系。綺麗なソースで真価
 - Real-ESRGAN（AMD縮小版）: 輪郭や毛の 1 本 1 本を立てる知覚系。加工感は強め
+- SwinIR-M: 輪郭を崩さずに細部を締める。4xNomosUni SPAN より時間がかかる
+- AdcSR: 肌のしわ、毛、布の織り目などを描き足す生成型。実写では最も精細。セル画では元のざらつきまで質感として描くので向かない
+
+作り直す場合は `scripts/make_model_guide.py` を使う。
 
 ## NPU を使う場合
 
