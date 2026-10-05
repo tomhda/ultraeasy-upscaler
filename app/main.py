@@ -26,6 +26,13 @@ def portable_self_test() -> int:
             helper_backend._resolve_model(UpscaleBackend.WINML_GPU, DEFAULT_HELPER_MODEL, 256)
         except helper_backend.HelperBackendUnavailable:
             return 4
+    # NPU キットを展開してある場合は、そのモデルも exe の隣から見つかること
+    # （Ryzen AI Software の有無は PC 次第なので、ここでは見ない）
+    if (binaries.repo_root() / "tools" / "npu-serve" / "npu_serve.py").is_file():
+        from app.core import npu_prepare
+
+        if not npu_prepare.npu_models():
+            return 5
     return 0
 
 
