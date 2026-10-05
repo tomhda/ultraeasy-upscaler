@@ -212,3 +212,19 @@ pwsh -File scripts\build_npu_kit.ps1 -WithAdcSR
 ```
 .venv\Scripts\python.exe -m pytest        # コアの単体テスト
 ```
+
+README の「画質の比較」の画像は `scripts/make_model_guide.py` で作り直せる（各素材をアプリと同じ経路で 5 つのモデルに通す）。
+
+## ライセンスと、配布物への同梱
+
+- 本リポジトリのコード: [MIT](../LICENSE)
+- `vendor/amd-npu/` の Real-ESRGAN NPU モデル: AMD 公式モデル由来のため [Research-only RAIL-MS](../vendor/amd-npu/LICENSE)（研究用途限定）
+- Anime Video v3 / Real-ESRGAN Anime の NPU モデル: BSD-3-Clause の [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) 重みから変換
+- 4xNomosUni_span_multijpg: CC-BY-4.0, by Philip Hofmann/Phips（取得元と SHA-256 は [docs/span-bench-results.md](span-bench-results.md)）
+- 003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN: Apache-2.0, by Jingyun Liang（SwinIR）。CUDA 経路の実装由来は `tools/swinir/NOTICE.md`
+- AdcSR: Apache-2.0, Guaishou74851（CVPR 2025）。基盤の Stable Diffusion 2.1-base は CreativeML Open RAIL++-M の適用対象で、使用前に利用者自身が使用条件を確認すること（全文は Hugging Face の配布ページにあり、ログインが必要）
+- Release 配布物の zip には上記のライセンス文（`scripts/release-licenses/` と同一内容）と各モデルの NOTICE を同梱する。`winml-sr-win-x64.zip` には Microsoft Windows ML Runtime の license.txt と ThirdPartyNotices.txt を同梱し、再配布条件（license.txt §3）を NOTICE-winml-sr.txt に記載する。AdcSR の zip には同系統の CreativeML Open RAIL-M 全文（使用制限 Attachment A を含む）を同梱し、再配布時は同じ使用制限を利用者に課す
+- ポータブル版には FFmpeg（gyan.dev の full build、GPL v3）、Qt 6 / PySide6（LGPL v3）、realesrgan-ncnn-vulkan（MIT）、rife-ncnn-vulkan（MIT）などを
+  それぞれのライセンスのまま同梱する。一覧と入手元は同梱の `THIRD-PARTY-NOTICES.txt`（原本は `scripts/portable-notices/`）。
+  上流の配布物に含まれるサンプル画像・動画は同梱しない
+- ベンチマーク画像の素材: [Big Buck Bunny](https://peach.blender.org) / [Tears of Steel](https://mango.blender.org)（© Blender Foundation, CC-BY 3.0）、Superman (1941) はパブリックドメイン
