@@ -40,6 +40,11 @@ MODELS = [
     ("AdcSR", HELPER_MODEL_ADCSR),
 ]
 ORIGINAL_LABEL = "オリジナル（Lanczos で 4 倍・AI なし）"
+# 英語版の README 用のラベル（アプリの英語表示と同じ表記）
+EN_LABELS = {
+    ORIGINAL_LABEL: "Original (enlarged 4× with Lanczos, no AI)",
+    "Real-ESRGAN（AMD縮小版）": "Real-ESRGAN (AMD compact)",
+}
 
 # 素材ごとの切り出し範囲（元画像の座標: x, y, w, h）。4 倍後に 752x560 になる。
 SOURCES = {
@@ -54,8 +59,9 @@ BACKGROUND = (20, 20, 20)
 LABEL_COLOR = (235, 235, 235)
 
 
-def _font(size: int) -> ImageFont.FreeTypeFont:
-    for name in ("YuGothM.ttc", "meiryo.ttc", "msgothic.ttc"):
+def _font(size: int, lang: str = "ja") -> ImageFont.FreeTypeFont:
+    names = ("segoeui.ttf",) if lang == "en" else ()
+    for name in (*names, "YuGothM.ttc", "meiryo.ttc", "msgothic.ttc"):
         path = Path("C:/Windows/Fonts") / name
         if path.is_file():
             return ImageFont.truetype(str(path), size)
@@ -73,7 +79,7 @@ def _upscaled(src: Path, model_key: str, work: Path) -> Path:
     return out
 
 
-def make_sheet(name: str, sources: Path, work: Path, dest: Path) -> None:
+def make_sheet(name: str, sources: Path, work: Path, dest: Path, lang: str = "ja") -> None:
     filename, (x, y, w, h) = SOURCES[name]
     src = sources / filename
     box = (x * 4, y * 4, (x + w) * 4, (y + h) * 4)
@@ -92,14 +98,16 @@ def make_sheet(name: str, sources: Path, work: Path, dest: Path) -> None:
         BACKGROUND,
     )
     draw = ImageDraw.Draw(sheet)
-    font = _font(20)
+    font = _font(20, lang)
     for index, (label, tile) in enumerate(tiles):
+        if lang == "en":
+            label = EN_LABELS.get(label, label)
         left = (index % COLUMNS) * (tile_w + GAP)
         top = (index // COLUMNS) * (LABEL_HEIGHT + tile_h + GAP)
         draw.text((left + 10, top + 5), label, font=font, fill=LABEL_COLOR)
         sheet.paste(tile, (left, top + LABEL_HEIGHT))
     dest.mkdir(parents=True, exist_ok=True)
-    out = dest / f"model_guide_{name}.png"
+    out = dest / (f"model_guide_{name}_en.png" if lang == "en" else f"model_guide_{name}.png")
     sheet.save(out, optimize=True)
     print(f"{out} {sheet.size}", flush=True)
 
@@ -110,10 +118,11 @@ def main() -> int:
     parser.add_argument("--work", type=Path, default=ROOT / "tmp" / "model-guide")
     parser.add_argument("--dest", type=Path, default=ROOT / "docs" / "benchmarks")
     parser.add_argument("--only", choices=sorted(SOURCES), nargs="*")
+    parser.add_argument("--lang", choices=("ja", "en"), default="ja", help="ラベルの言語")
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=True)
     for name in args.only or sorted(SOURCES):
-        make_sheet(name, args.sources, args.work, args.dest)
+        make_sheet(name, args.sources, args.work, args.dest, args.lang)
     return 0
 
 

@@ -305,7 +305,7 @@ def test_language_row_restores_saved():
     application  # noqa: B018 - インスタンス維持の意図を明示
 
 
-# --- 既定英語でも起動直後の GUI が壊れない（いまは日本語が出るだけ） ---
+# --- 英語にしたとき、起動直後の画面が英語で出る ---
 
 def test_main_window_boots_in_english():
     from PySide6.QtWidgets import QApplication
@@ -314,16 +314,23 @@ def test_main_window_boots_in_english():
 
     application = QApplication.instance() or QApplication([])
     set_language("en")
+    win = None
     try:
         win = MainWindow()
         win.show()
         application.processEvents()
         assert win.windowTitle().startswith("ultraeasy-upscaler")
-        assert win.start_btn.text() != ""
-        assert win.model_combo.count() > 0
-        assert win.model_combo.itemText(0) != ""
+        assert win.start_btn.text() == "Start"
+        assert win.pause_btn.text() == "Pause"
+        assert win.model_combo.itemText(0) == "None (no upscaling)"
+        # 印（◎など）は英語では言葉になる
+        assert "Speed: High" in win.model_combo.itemText(1)
+        assert win.model_hint.text().startswith("For anime.")
         assert win.drawer.language_combo.count() == 3
     finally:
+        # 閉じないと試し用の一時フォルダが残る
+        if win is not None:
+            win.close()
         set_language("ja")
         application.processEvents()
 

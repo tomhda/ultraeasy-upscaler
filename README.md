@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-**[⬇ ultraeasy-upscaler v0.10.0 をダウンロード](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-portable-win64.zip)**
+**[⬇ ultraeasy-upscaler v0.11.0 をダウンロード](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip)**
 （Windows x64 用の zip、376 MB）。手順は「[導入](#導入)」を参照。
 
 ultraeasy-upscaler は、画像や動画を かんたん操作でアップスケール/フレーム補間ができる Windows 用のアプリです。
@@ -47,7 +47,7 @@ Superman (1941)（パブリックドメイン）
 
 Windows 11（x64）と、DirectX 12 対応の GPU で動作確認済み
 
-1. [`ultraeasy-upscaler-portable-win64.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-portable-win64.zip) をダウンロード
+1. [`ultraeasy-upscaler-portable-win64.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip) をダウンロード
 2. zip を好きな場所に展開（ポータブル版のためインストール不要）。
 3. `ultraeasy-upscaler.exe` を起動。署名のない実行ファイルなので、Windows の SmartScreen が「Windows によって PC が保護されました」と表示することがある。その場合は「詳細情報」→「実行」。
 
@@ -86,7 +86,8 @@ zip には動作に必要な全ファイルが入っているため、フォル�
 
 ### 詳細設定
 
-- 右上の歯車を押すと、AI の実行先、保存形式、動画の画質、出力フォルダ名、フレーム補間後の fps などが変更可能です。
+- 右上の歯車を押すと、AI の実行先、保存形式、動画の画質、出力フォルダ名、フレーム補間後の fps、表示言語などが変更可能です。
+- 画面は日本語と英語に対応しています。最初は Windows の表示言語に合わせて決まり、「表示言語」で変更できます（次回の起動から切り替わります）。
 
 ## モデルの選び方
 
@@ -135,14 +136,14 @@ zip には動作に必要な全ファイルが入っているため、フォル�
 AMD Ryzen AI 搭載機では、追加キットをダウンロードすることで NPU 処理が可能。次の 2 つが導入済みの場合、選択可能になる。
 
 - AMD の [Ryzen AI Software 1.8.0](https://ryzenai.docs.amd.com/en/latest/inst.html)（AMD のサイトから入手して導入。NPU ドライバ 32.0.203.329 以降）
-- [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-npu-kit.zip)（56 MB）。
+- [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit.zip)（56 MB）。
 
-AdcSR を NPU で使う場合は、追加でNPU専用モデル [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-npu-kit-adcsr.zip)（1.7 GB）も必要。
+AdcSR を NPU で使う場合は、追加でNPU専用モデル [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit-adcsr.zip)（1.7 GB）も必要。
 
 手順:
 
 1. ultraeasy-upscaler を終了し、キットの zip の中身を `ultraeasy-upscaler.exe` があるフォルダに上書きで展開する。
-2. 起動して歯車を押し、「NPU の準備」で、使うモデルを NPU 用に変換する（モデルの行にある「変換する」を押す）。NPU ではモデルをそのままでは動かせないため、モデルごとに最初の一度だけこの作業が必要。変換作業は重くないがメモリ一部を占有し、数分～数時間かかるため注意。
+2. 起動して歯車を押し、「NPU の準備」で、使うモデルを NPU 用に変換する（モデルの行にある「NPU 用に変換」を押す）。NPU ではモデルをそのままでは動かせないため、モデルごとに最初の一度だけこの作業が必要。変換作業は重くないがメモリ一部を占有し、数分～数時間かかるため注意。
 3. NPU 用への変換が終わったら、「AI実行先」で NPU を選択。
 
 ▼ 「NPU の準備」。モデルごとに、NPU 用への変換にかかる時間の目安が出る

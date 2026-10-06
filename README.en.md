@@ -2,7 +2,7 @@
 
 [日本語](README.md)
 
-**[⬇ Download ultraeasy-upscaler v0.10.0](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-portable-win64.zip)**
+**[⬇ Download ultraeasy-upscaler v0.11.0](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip)**
 (zip for Windows x64, 376 MB). See [Install](#install) for the steps.
 
 ultraeasy-upscaler is a Windows app that upscales images and videos, and interpolates video frames, with a few clicks.
@@ -11,7 +11,7 @@ It supports up to five super-resolution models, including Real-ESRGAN, and the R
 You can drop in many files and process them in one go. It runs on a GPU, and on the NPU of some PCs.
 You can compare the results of several models side by side, and for a video you can process one chosen frame first to check the result.
 
-![A photo tried with AdcSR, shown at 100% with the original on the left and the result on the right](docs/images/compare-zoom.jpg)
+![A photo tried with AdcSR, shown at 100% with the original on the left and the result on the right](docs/images/compare-zoom-en.jpg)
 
 ## What it does
 
@@ -33,13 +33,11 @@ You can compare the results of several models side by side, and for a video you 
 ▼ The main window. The media list is on the left, the preview is in the middle, and the settings are on the right.
 The preview shows a photo after it was tried with AdcSR: the original is left of the divider and the result is right of it.
 
-![The main window](docs/images/main.jpg)
+![The main window](docs/images/main-en.jpg)
 
 ▼ The comparison can also be shown at 100%.
 
-![Comparison at 100%](docs/images/compare-zoom.jpg)
-
-The screenshots show the Japanese interface.
+![Comparison at 100%](docs/images/compare-zoom-en.jpg)
 
 Material used:
 [Big Buck Bunny](https://peach.blender.org) and [Tears of Steel](https://mango.blender.org) (both © Blender Foundation, CC BY 3.0),
@@ -49,7 +47,7 @@ and Superman (1941), which is in the public domain.
 
 Tested on Windows 11 (x64) with a DirectX 12 GPU.
 
-1. Download [`ultraeasy-upscaler-portable-win64.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-portable-win64.zip).
+1. Download [`ultraeasy-upscaler-portable-win64.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip).
 2. Extract the zip anywhere you like. It is a portable app and needs no installation.
 3. Run `ultraeasy-upscaler.exe`. The file is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Select **More info**, then **Run anyway**.
 
@@ -88,7 +86,8 @@ To uninstall, delete the extracted folder.
 
 ### More settings
 
-- The gear at the top right opens settings for where the AI runs, the file format, video quality, the output folder name, the frame rate after interpolation, and more.
+- The gear at the top right opens settings for where the AI runs, the file format, video quality, the output folder name, the frame rate after interpolation, the display language, and more.
+- The interface is available in English and Japanese. It starts in the Windows display language, and you can change it under **Display language** (the change takes effect the next time the app starts).
 
 ## Choosing a model
 
@@ -112,19 +111,19 @@ Times are for enlarging one 854×480 image 4× on a Radeon 860M (the integrated 
 Results enlarged 4×.
 Top row, left to right: the original (enlarged 4× with Lanczos, no AI), Anime Video v3, 4xNomosUni SPAN.
 Bottom row, left to right: Real-ESRGAN (AMD compact), SwinIR-M, AdcSR.
-All of them were run on the GPU with DirectML. The labels in the images are in Japanese.
+All of them were run on the GPU with DirectML.
 
 Toon CG: Big Buck Bunny (480p)
 
-![Big Buck Bunny](docs/benchmarks/model_guide_bbb.png)
+![Big Buck Bunny](docs/benchmarks/model_guide_bbb_en.png)
 
 Cel animation: Superman (1941, 320×240)
 
-![Superman 1941](docs/benchmarks/model_guide_sup.png)
+![Superman 1941](docs/benchmarks/model_guide_sup_en.png)
 
 Live action: Tears of Steel (720p)
 
-![Tears of Steel](docs/benchmarks/model_guide_tos.png)
+![Tears of Steel](docs/benchmarks/model_guide_tos_en.png)
 
 - Anime Video v3: tidies details and smooths the picture. The strongest on old, degraded material.
 - 4xNomosUni SPAN: keeps the original texture and grain. Its processing is mild, and the cleaner the source, the better it suits.
@@ -137,9 +136,9 @@ Live action: Tears of Steel (720p)
 On AMD Ryzen AI PCs, downloading an extra kit lets the app process on the NPU. The NPU becomes selectable when both of the following are in place.
 
 - AMD's [Ryzen AI Software 1.8.0](https://ryzenai.docs.amd.com/en/latest/inst.html) (get it from AMD and install it; NPU driver 32.0.203.329 or later)
-- [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-npu-kit.zip) (56 MB)
+- [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit.zip) (56 MB)
 
-To use AdcSR on the NPU, you also need the NPU-only model [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.10.0/ultraeasy-upscaler-npu-kit-adcsr.zip) (1.7 GB).
+To use AdcSR on the NPU, you also need the NPU-only model [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit-adcsr.zip) (1.7 GB).
 
 Steps:
 
@@ -149,7 +148,7 @@ Steps:
 
 ▼ **NPU setup**. Each model shows an estimate of how long its conversion for the NPU takes.
 
-![NPU setup](docs/images/npu-prepare.jpg)
+![NPU setup](docs/images/npu-prepare-en.jpg)
 
 Time and memory needed to convert a model for the NPU (measured on a Ryzen AI 7 PRO 350):
 
@@ -197,5 +196,5 @@ Running from source, the requirements of each engine, measurements, environment 
 | RIFE v4.6 | hzwer ([Practical-RIFE](https://github.com/hzwer/Practical-RIFE)) | MIT |
 
 - The portable build bundles FFmpeg (GPL v3), Qt 6 / PySide6 (LGPL v3), realesrgan-ncnn-vulkan (MIT), rife-ncnn-vulkan (MIT), the Microsoft Windows ML runtime, and others.
-  The list and where to get each one are in `THIRD-PARTY-NOTICES.txt` in the zip (in Japanese), and the full texts of the model licenses are in the `models\ai` folder.
+  The list and where to get each one are in `THIRD-PARTY-NOTICES.en.txt` in the zip, and the full texts of the model licenses are in the `models\ai` folder.
 - Material in the screenshots and comparison images: [Big Buck Bunny](https://peach.blender.org) and [Tears of Steel](https://mango.blender.org) (© Blender Foundation, CC BY 3.0), and Superman (1941), which is in the public domain.
