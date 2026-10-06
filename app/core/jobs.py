@@ -7,6 +7,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
+from ..i18n import N_
+
 if TYPE_CHECKING:
     from .settings import UpscaleSettings
 
@@ -46,7 +48,7 @@ class Job:
 
     status: JobStatus = JobStatus.QUEUED
     progress: float = 0.0          # 0.0 - 1.0
-    message: str = "待機中"
+    message: str = N_("待機中")
 
     # メタデータ（probe で埋める。表示用）
     width: int = 0

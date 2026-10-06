@@ -9,6 +9,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
+from app.i18n import t
+
 from .icons import Icon, apply_icon_font
 
 
@@ -36,7 +38,7 @@ class DropZone(QFrame):
     def _build_compact(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 8)
-        hint = QLabel("ここにドロップ、またはクリックで追加")
+        hint = QLabel(t("ここにドロップ、またはクリックで追加"))
         hint.setObjectName("dropHintSmall")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -61,13 +63,13 @@ class DropZone(QFrame):
         glyph_row.addStretch(1)
         root.addLayout(glyph_row)
 
-        title = QLabel("画像・動画をドロップ")
+        title = QLabel(t("画像・動画をドロップ"))
         title.setObjectName("dropTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         root.addWidget(title)
 
-        hint = QLabel("クリックでファイル選択 / 複数選択OK")
+        hint = QLabel(t("クリックでファイル選択 / 複数選択OK"))
         hint.setObjectName("dropHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)

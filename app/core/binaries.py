@@ -8,6 +8,8 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
+from ..i18n import t
+
 
 class BinaryError(RuntimeError):
     """必要なバイナリ/モデルが見つからない。"""
@@ -29,8 +31,11 @@ def realesrgan_exe() -> str:
     exe = realesrgan_dir() / "realesrgan-ncnn-vulkan.exe"
     if not exe.exists():
         raise BinaryError(
-            f"realesrgan-ncnn-vulkan.exe が見つかりません: {exe}\n"
-            "vendor/realesrgan/ に展開してください。"
+            t(
+                "realesrgan-ncnn-vulkan.exe が見つかりません: {exe}\n"
+                "vendor/realesrgan/ に展開してください。",
+                exe=exe,
+            )
         )
     return str(exe)
 
@@ -78,8 +83,11 @@ def npu_model_spec(model: str | None) -> tuple[Path, int]:
     key = model or DEFAULT_NPU_MODEL
     if key not in NPU_MODELS:
         raise BinaryError(
-            f"モデル '{key}' はNPUバックエンドに対応していません。"
-            "GPU (Vulkan) を選ぶか、NPU対応モデルに切り替えてください。"
+            t(
+                "モデル '{key}' はNPUバックエンドに対応していません。"
+                "GPU (Vulkan) を選ぶか、NPU対応モデルに切り替えてください。",
+                key=key,
+            )
         )
     fname, scale = NPU_MODELS[key]
     return npu_models_dir() / fname, scale
@@ -97,7 +105,7 @@ def _which(name: str) -> str:
     found = shutil.which(name)
     if found:
         return found
-    raise BinaryError(f"{name} が見つかりません（PATH を確認してください）。")
+    raise BinaryError(t("{name} が見つかりません（PATH を確認してください）。", name=name))
 
 
 @lru_cache(maxsize=None)
@@ -133,8 +141,11 @@ def rife_exe() -> str:
         if candidate.exists():
             return str(candidate)
     raise BinaryError(
-        "rife-ncnn-vulkan.exe が見つかりません: "
-        f"{base}\nモデル取得スクリプトを実行してください。"
+        t(
+            "rife-ncnn-vulkan.exe が見つかりません: {base}\n"
+            "モデル取得スクリプトを実行してください。",
+            base=base,
+        )
     )
 
 
@@ -156,7 +167,7 @@ def available_interpolation_models() -> list[str]:
 def interpolation_model_dir(model: str) -> Path:
     path = rife_models_dir() / model
     if not path.is_dir():
-        raise BinaryError(f"フレーム補間モデルが見つかりません: {path}")
+        raise BinaryError(t("フレーム補間モデルが見つかりません: {path}", path=path))
     return path
 
 

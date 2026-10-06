@@ -12,6 +12,19 @@ if str(_ROOT) not in sys.path:
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _fix_display_language_ja(monkeypatch, tmp_path):
+    """全テストを日本語表示に固定し、設定ファイルは一時場所へ向ける。
+
+    TASK5 の言語切り替えで既存テストの期待文言が変わらないようにする。
+    """
+    from app import i18n
+
+    monkeypatch.setenv("UEU_LANG", "ja")
+    monkeypatch.setenv("UEU_SETTINGS_DIR", str(tmp_path / "ueu-settings"))
+    monkeypatch.setattr(i18n, "_LANG", "ja", raising=False)
+
+
 @pytest.fixture
 def force_npu_available(monkeypatch, tmp_path):
     """GUI テストは NPU キットの有無に依らず NPU ありで実行する。

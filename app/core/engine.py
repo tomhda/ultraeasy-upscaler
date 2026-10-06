@@ -11,6 +11,7 @@ import tempfile
 from dataclasses import replace
 from pathlib import Path
 
+from ..i18n import t
 from . import interpolator, media, upscaler, video
 from .jobs import Cancelled, Job, JobKind, ProgressCb
 from .settings import (
@@ -83,15 +84,15 @@ def process_job(job: Job, settings: UpscaleSettings,
         return _process_folder(job, settings, progress, cancel)
     if job.kind == JobKind.VIDEO:
         return _process_video(job, settings, progress, cancel)
-    raise ValueError(f"未知のジョブ種別: {job.kind}")
+    raise ValueError(t("未知のジョブ種別: {kind}", kind=job.kind))
 
 
 def _process_image(job, settings, progress, cancel) -> Path:
     if not settings.upscale_enabled:
-        raise ValueError("画像にはアップスケーラーモデルを選択してください。")
+        raise ValueError(t("画像にはアップスケーラーモデルを選択してください。"))
     out = _image_output(job, settings)
     tmp = _part_path(out)
-    progress(0.0, "アップスケール中…")
+    progress(0.0, t("アップスケール中…"))
     try:
         upscaler.upscale_image(str(job.input_path), str(tmp), settings,
                                progress=progress, cancel=cancel)
@@ -99,20 +100,20 @@ def _process_image(job, settings, progress, cancel) -> Path:
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    progress(1.0, "完了")
+    progress(1.0, t("完了"))
     return out
 
 
 def _process_folder(job, settings, progress, cancel) -> Path:
     if not settings.upscale_enabled:
-        raise ValueError("画像フォルダにはアップスケーラーモデルを選択してください。")
+        raise ValueError(t("画像フォルダにはアップスケーラーモデルを選択してください。"))
     base = _output_base(job, settings)
     out_dir = base / f"{job.input_path.name}{settings.output_suffix()}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    progress(0.0, "フォルダを一括アップスケール中…")
+    progress(0.0, t("フォルダを一括アップスケール中…"))
     upscaler.upscale_folder(str(job.input_path), str(out_dir), settings,
                             progress=progress, cancel=cancel)
-    progress(1.0, "完了")
+    progress(1.0, t("完了"))
     return out_dir
 
 
@@ -120,12 +121,12 @@ def _process_video(job, settings, progress, cancel) -> Path:
     from .settings import HELPER_MODEL_ADCSR, canonical_helper_model
 
     if canonical_helper_model(settings.model) == HELPER_MODEL_ADCSR:
-        raise ValueError("AdcSRは静止画専用です。動画には他のモデルを選んでください")
+        raise ValueError(t("AdcSRは静止画専用です。動画には他のモデルを選んでください"))
     if settings.backend == UpscaleBackend.SWINIR_CUDA and settings.interpolation_enabled:
-        raise ValueError("SwinIR CUDA動画ではフレーム補間を併用できません")
+        raise ValueError(t("SwinIR CUDA動画ではフレーム補間を併用できません"))
     if not settings.upscale_enabled and not settings.interpolation_enabled:
         raise ValueError(
-            "アップスケーラーモデルまたはフレーム補間モデルを選択してください。"
+            t("アップスケーラーモデルまたはフレーム補間モデルを選択してください。")
         )
     tmp = Path(tempfile.mkdtemp(prefix="ueu_"))
     src_frames = tmp / "src"
@@ -134,7 +135,7 @@ def _process_video(job, settings, progress, cancel) -> Path:
     src_frames.mkdir()
     try:
         _check_cancel(cancel)
-        progress(0.01, "動画を解析中…")
+        progress(0.01, t("動画を解析中…"))
         info = media.probe(str(job.input_path))
         fps = info.fps or job.fps or 30.0
 
@@ -162,7 +163,7 @@ def _process_video(job, settings, progress, cancel) -> Path:
             else:
                 # チェックポイントは、正式出力が確定してからのみ削除する。
                 shutil.rmtree(work_dir, ignore_errors=True)
-                progress(1.0, "完了")
+                progress(1.0, t("完了"))
                 return out
 
         # RIFEはフレームファイルを前提にするため、補間が有効なジョブでは
@@ -186,19 +187,26 @@ def _process_video(job, settings, progress, cancel) -> Path:
             except helper_backend.HelperBackendUnavailable as exc:
                 out_tmp.unlink(missing_ok=True)
                 active_settings = vulkan_fallback_settings(settings)
-                progress(0.02, f"Vulkanへ切替（モデル: {active_settings.model} で代替） ({exc})")
+                progress(
+                    0.02,
+                    t(
+                        "Vulkanへ切替（モデル: {model} で代替） ({error})",
+                        model=active_settings.model,
+                        error=exc,
+                    ),
+                )
             except BaseException:
                 out_tmp.unlink(missing_ok=True)
                 raise
             else:
                 os.replace(out_tmp, out)
-                progress(1.0, "完了")
+                progress(1.0, t("完了"))
                 return out
 
-        progress(0.02, "フレームを抽出中…")
+        progress(0.02, t("フレームを抽出中…"))
         video.extract_frames(
             str(job.input_path), str(src_frames),
-            progress=lambda f, m: progress(0.02 + 0.18 * f, m or "フレーム抽出中…"),
+            progress=lambda f, m: progress(0.02 + 0.18 * f, m or t("フレーム抽出中…")),
             cancel=cancel,
         )
 
@@ -208,12 +216,12 @@ def _process_video(job, settings, progress, cancel) -> Path:
         def _run_interpolation(start: float, end: float) -> None:
             nonlocal current_frames, output_fps
             interp_frames.mkdir()
-            progress(start, "RIFEでフレーム補間中…")
+            progress(start, t("RIFEでフレーム補間中…"))
             _count, output_fps = interpolator.interpolate_folder(
                 str(current_frames), str(interp_frames), settings, fps,
                 progress=lambda f, m: progress(
                     start + (end - start) * f,
-                    m or "RIFEでフレーム補間中…",
+                    m or t("RIFEでフレーム補間中…"),
                 ),
                 cancel=cancel,
             )
@@ -228,12 +236,12 @@ def _process_video(job, settings, progress, cancel) -> Path:
                 active_settings,
                 image_format="png",
             )
-            progress(start, "フレームをアップスケール中…")
+            progress(start, t("フレームをアップスケール中…"))
             upscaler.upscale_folder(
                 str(current_frames), str(up_frames), frame_settings,
                 progress=lambda f, m: progress(
                     start + (end - start) * f,
-                    m or "アップスケール中…",
+                    m or t("アップスケール中…"),
                 ),
                 cancel=cancel,
             )
@@ -257,18 +265,18 @@ def _process_video(job, settings, progress, cancel) -> Path:
 
         out = _video_output(job, settings)
         out_tmp = _part_path(out)
-        progress(0.80, "動画を再結合中…")
+        progress(0.80, t("動画を再結合中…"))
         try:
             video.reassemble(
                 str(current_frames), str(job.input_path), str(out_tmp), output_fps, active_settings,
-                progress=lambda f, m: progress(0.80 + 0.20 * f, m or "再結合中…"),
+                progress=lambda f, m: progress(0.80 + 0.20 * f, m or t("再結合中…")),
                 cancel=cancel,
             )
             os.replace(out_tmp, out)
         except BaseException:
             out_tmp.unlink(missing_ok=True)
             raise
-        progress(1.0, "完了")
+        progress(1.0, t("完了"))
         return out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

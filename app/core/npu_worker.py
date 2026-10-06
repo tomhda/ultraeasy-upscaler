@@ -9,6 +9,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from ..i18n import t
 from . import binaries, media
 
 
@@ -23,15 +24,21 @@ def _write_image(path: Path, img_bgr) -> None:
     ext = path.suffix or ".png"
     ok, encoded = cv2.imencode(ext, img_bgr)
     if not ok:
-        raise RuntimeError(f"画像をエンコードできませんでした: {path}")
+        raise RuntimeError(
+            t("画像をエンコードできませんでした: {path}", path=path)
+        )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         encoded.tofile(str(path))
     except OSError as exc:
-        raise RuntimeError(f"画像を書き出せませんでした: {path}") from exc
+        raise RuntimeError(
+            t("画像を書き出せませんでした: {path}", path=path)
+        ) from exc
     except Exception as exc:
-        raise RuntimeError(f"画像を書き出せませんでした: {path}") from exc
+        raise RuntimeError(
+            t("画像を書き出せませんでした: {path}", path=path)
+        ) from exc
 
 
 def _read_image(path: Path):
@@ -41,11 +48,15 @@ def _read_image(path: Path):
     try:
         data = np.fromfile(str(path), dtype=np.uint8)
     except OSError as exc:
-        raise RuntimeError(f"画像を読めませんでした: {path}") from exc
+        raise RuntimeError(
+            t("画像を読めませんでした: {path}", path=path)
+        ) from exc
 
     img_bgr = cv2.imdecode(data, cv2.IMREAD_COLOR)
     if img_bgr is None:
-        raise RuntimeError(f"画像を読めませんでした: {path}")
+        raise RuntimeError(
+            t("画像を読めませんでした: {path}", path=path)
+        )
     return img_bgr
 
 
@@ -55,7 +66,11 @@ def _build_runner(model_name: str | None):
     model, sr_scale = binaries.npu_model_spec(model_name)
     if not model.exists():
         raise RuntimeError(
-            f"NPU ONNXモデルが見つかりません ({model_name or 'default'}): {model}"
+            t(
+                "NPU ONNXモデルが見つかりません ({name}): {model}",
+                name=model_name or "default",
+                model=model,
+            )
         )
     cache = binaries.npu_cache_dir() / f"modelcachekey_{model.stem}"
     if not cache.is_dir():
@@ -69,12 +84,12 @@ def _build_runner(model_name: str | None):
 
 def _run_image(input_path: Path, output_path: Path, model_name: str | None) -> None:
     runner = _build_runner(model_name)
-    _emit_progress(0.01, "画像を読み込み中…")
+    _emit_progress(0.01, t("画像を読み込み中…"))
     img_bgr = _read_image(input_path)
     sr_bgr = runner.run(img_bgr, _emit_progress)
-    _emit_progress(0.98, "画像を書き出し中…")
+    _emit_progress(0.98, t("画像を書き出し中…"))
     _write_image(output_path, sr_bgr)
-    _emit_progress(1.0, "完了")
+    _emit_progress(1.0, t("完了"))
 
 
 def _run_folder(input_dir: Path, output_dir: Path, image_format: str,
@@ -86,7 +101,7 @@ def _run_folder(input_dir: Path, output_dir: Path, image_format: str,
     ]
     if not images:
         output_dir.mkdir(parents=True, exist_ok=True)
-        _emit_progress(1.0, "0/0 枚")
+        _emit_progress(1.0, t("0/0 枚"))
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -96,16 +111,24 @@ def _run_folder(input_dir: Path, output_dir: Path, image_format: str,
         span = 1.0 / total
 
         def file_progress(frac: float, msg: str) -> None:
-            _emit_progress(base + span * frac, f"{index}/{total} 枚: {msg}")
+            _emit_progress(
+                base + span * frac,
+                t(
+                    "{index}/{total} 枚: {message}",
+                    index=index,
+                    total=total,
+                    message=msg,
+                ),
+            )
 
-        file_progress(0.01, "読み込み中…")
+        file_progress(0.01, t("読み込み中…"))
         img_bgr = _read_image(src)
         sr_bgr = runner.run(img_bgr, file_progress)
         out = output_dir / f"{src.stem}.{image_format}"
-        file_progress(0.98, "書き出し中…")
+        file_progress(0.98, t("書き出し中…"))
         _write_image(out, sr_bgr)
 
-    _emit_progress(1.0, f"{total}/{total} 枚")
+    _emit_progress(1.0, t("{done}/{total} 枚", done=total, total=total))
 
 
 def main(argv: list[str] | None = None) -> int:

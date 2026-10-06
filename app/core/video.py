@@ -25,6 +25,7 @@ from typing import Optional
 
 import numpy as np
 
+from ..i18n import t
 from . import binaries
 from .jobs import Cancelled, ProgressCb
 from .settings import (
@@ -64,15 +65,31 @@ def _coerce_video_dim(value) -> tuple[int, int]:
     if isinstance(value, str):
         parts = [part for part in _VIDEO_DIM_SEPARATOR_RE.split(value.strip()) if part]
         if len(parts) != 2:
-            raise ValueError(f"動画の最大寸法は WIDTHxHEIGHT で指定してください: {value!r}")
+            raise ValueError(
+                t(
+                    "動画の最大寸法は WIDTHxHEIGHT で指定してください: {value!r}",
+                    value=value,
+                )
+            )
         value = parts
     try:
         width, height = value
         width, height = int(width), int(height)
     except (TypeError, ValueError, IndexError):
-        raise ValueError(f"動画の最大寸法は (幅, 高さ) で指定してください: {value!r}") from None
+        raise ValueError(
+            t(
+                "動画の最大寸法は (幅, 高さ) で指定してください: {value!r}",
+                value=value,
+            )
+        ) from None
     if width < 2 or height < 2:
-        raise ValueError(f"動画の最大寸法は2以上で指定してください: {width}x{height}")
+        raise ValueError(
+            t(
+                "動画の最大寸法は2以上で指定してください: {width}x{height}",
+                width=width,
+                height=height,
+            )
+        )
     return width, height
 
 
@@ -110,7 +127,9 @@ def fit_video_dimensions(
     """
     width, height = int(width), int(height)
     if width <= 0 or height <= 0:
-        raise ValueError(f"動画の寸法が不正です: {width}x{height}")
+        raise ValueError(
+            t("動画の寸法が不正です: {width}x{height}", width=width, height=height)
+        )
     max_width, max_height = _coerce_video_dim(max_dim)
     max_width = max(2, max_width // 2 * 2)
     max_height = max(2, max_height // 2 * 2)
@@ -154,7 +173,11 @@ def _video_filter_for_dimensions(
 def _fit_progress_message(dim: tuple[int, int] | None) -> str | None:
     if dim is None:
         return None
-    return f"出力を{dim[0]}x{dim[1]}へ縮小（H.264上限のため）"
+    return t(
+        "出力を{width}x{height}へ縮小（H.264上限のため）",
+        width=dim[0],
+        height=dim[1],
+    )
 
 
 @lru_cache(maxsize=None)
@@ -335,7 +358,11 @@ def _run_with_progress(cmd: list[str], total_frames: Optional[int],
     if ret != 0:
         tail = (stderr or "").strip().splitlines()[-15:]
         raise RuntimeError(
-            "ffmpeg が失敗しました (exit %d):\n%s" % (ret, "\n".join(tail))
+            t(
+                "ffmpeg が失敗しました (exit {ret}):\n{tail}",
+                ret=ret,
+                tail="\n".join(tail),
+            )
         )
 
 
@@ -367,7 +394,9 @@ def extract_frames(video_path: str, out_dir: str,
     except Exception:
         total_frames = None
     if info is not None and info.color_transfer in {"smpte2084", "arib-std-b67"}:
-        raise ValueError("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+        raise ValueError(
+            t("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+        )
 
     out_pattern = str(out / FRAME_PATTERN)
     cmd = [
@@ -379,13 +408,15 @@ def extract_frames(video_path: str, out_dir: str,
     ]
 
     if progress:
-        progress(0.0, "フレーム抽出中…")
-    _run_with_progress(cmd, total_frames, progress, cancel, "フレーム抽出中…")
+        progress(0.0, t("フレーム抽出中…"))
+    _run_with_progress(
+        cmd, total_frames, progress, cancel, t("フレーム抽出中…")
+    )
 
     # 実際に書き出されたファイル数を数えて返す（これが信頼できる値）。
     count = sum(1 for _ in out.glob(FRAME_GLOB))
     if progress:
-        progress(1.0, "フレーム抽出完了")
+        progress(1.0, t("フレーム抽出完了"))
     return count
 
 
@@ -490,10 +521,12 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
     cmd += [str(out), "-progress", "pipe:1", "-nostats"]
 
     if progress:
-        progress(0.0, _fit_progress_message(fit_dim) or "動画を再結合中…")
+        progress(0.0, _fit_progress_message(fit_dim) or t("動画を再結合中…"))
 
     try:
-        _run_with_progress(cmd, total_frames, progress, cancel, "再結合中…")
+        _run_with_progress(
+            cmd, total_frames, progress, cancel, t("再結合中…")
+        )
     except RuntimeError:
         # 音声 copy がコンテナ非互換なら aac 再エンコードで再試行する。
         if want_audio:
@@ -512,12 +545,14 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
             cmd2 += ["-map", "0:v:0", "-map", "1:a:0",
                      "-c:a", "aac", "-b:a", "192k"]
             cmd2 += [str(out), "-progress", "pipe:1", "-nostats"]
-            _run_with_progress(cmd2, total_frames, progress, cancel, "再結合中…")
+            _run_with_progress(
+                cmd2, total_frames, progress, cancel, t("再結合中…")
+            )
         else:
             raise
 
     if progress:
-        progress(1.0, "再結合完了")
+        progress(1.0, t("再結合完了"))
 
 
 SWINIR_PYTHON_ENV = "UEU_SWINIR_PYTHON"
@@ -554,11 +589,17 @@ def _swinir_paths() -> tuple[Path, Path, Path]:
     )).expanduser()
     script = root / "tools" / "swinir" / "worker.py"
     if not python.is_file():
-        raise RuntimeError(f"SwinIR CUDA用Pythonが見つかりません: {python}")
+        raise RuntimeError(
+            t("SwinIR CUDA用Pythonが見つかりません: {path}", path=python)
+        )
     if not script.is_file():
-        raise RuntimeError(f"SwinIR CUDAワーカーが見つかりません: {script}")
+        raise RuntimeError(
+            t("SwinIR CUDAワーカーが見つかりません: {path}", path=script)
+        )
     if not model.is_file():
-        raise RuntimeError(f"SwinIR CUDAの重みが見つかりません: {model}")
+        raise RuntimeError(
+            t("SwinIR CUDAの重みが見つかりません: {path}", path=model)
+        )
     return python.resolve(), script.resolve(), model.resolve()
 
 
@@ -693,7 +734,9 @@ def _swinir_count_cfr_frames(in_path: str, fps: float, cancel) -> int:
     ]
     returncode, stdout, stderr = _run_capture_cancelable(cmd, cancel)
     if returncode != 0:
-        raise RuntimeError("SwinIR動画のフレーム数確認に失敗しました:\n" + stderr)
+        raise RuntimeError(
+            t("SwinIR動画のフレーム数確認に失敗しました:\n{tail}", tail=stderr)
+        )
     frames = 0
     for line in stdout.splitlines():
         key, separator, value = line.partition("=")
@@ -703,7 +746,9 @@ def _swinir_count_cfr_frames(in_path: str, fps: float, cancel) -> int:
             except ValueError:
                 pass
     if frames <= 0:
-        raise RuntimeError("SwinIR動画のCFR変換後フレーム数を取得できません")
+        raise RuntimeError(
+            t("SwinIR動画のCFR変換後フレーム数を取得できません")
+        )
     return frames
 
 
@@ -752,7 +797,9 @@ def _swinir_discard_frames(decoder, frame_bytes: int, count: int, cancel) -> Non
         if cancel is not None and cancel.is_set():
             raise Cancelled()
         if _read_raw_frame(decoder.stdout, frame_bytes) is None:
-            raise RuntimeError("SwinIR動画decoderのフレーム数が不足しています")
+            raise RuntimeError(
+            t("SwinIR動画decoderのフレーム数が不足しています")
+        )
 
 
 def _swinir_encode_chunk(
@@ -804,7 +851,7 @@ def _swinir_run_chunk(
     """1チャンクを処理し、成功時だけH.264ファイルを残す。"""
     del in_path, start
     if decoder_proc is None:
-        raise ValueError("SwinIRチャンク処理には共有decoderが必要です")
+        raise ValueError(t("SwinIRチャンク処理には共有decoderが必要です"))
     # 拡張子はffmpegの出力形式判定に使われるため、.tmpを拡張子の前へ置く。
     tmp = chunk_path.with_name(f".{chunk_path.stem}.tmp{chunk_path.suffix}")
     tmp.unlink(missing_ok=True)
@@ -845,20 +892,32 @@ def _swinir_run_chunk(
             encoded += 1
             progress(
                 0.97 * (processed_before + encoded) / total_frames,
-                f"SwinIR動画 {processed_before + encoded}/{total_frames}フレーム",
+                t(
+                    "SwinIR動画 {done}/{total}フレーム",
+                    done=processed_before + encoded,
+                    total=total_frames,
+                ),
             )
         encoder.stdin.close()
         encoder_ret = encoder.wait()
         encoder_drain.join(timeout=2.0)
         if decoded != count:
-            raise RuntimeError(f"SwinIRチャンクのフレーム数が不足しています: {decoded}/{count}")
+            raise RuntimeError(
+                t(
+                    "SwinIRチャンクのフレーム数が不足しています: {decoded}/{count}",
+                    decoded=decoded,
+                    count=count,
+                )
+            )
         if encoder_ret != 0:
             raise RuntimeError(
-                "SwinIRチャンクのffmpeg処理に失敗しました:\n"
-                + "\n".join(encoder_stderr[-15:])
+                t(
+                    "SwinIRチャンクのffmpeg処理に失敗しました:\n{tail}",
+                    tail="\n".join(encoder_stderr[-15:]),
+                )
             )
         if not tmp.is_file() or tmp.stat().st_size == 0:
-            raise RuntimeError("SwinIRチャンクが生成されませんでした")
+            raise RuntimeError(t("SwinIRチャンクが生成されませんでした"))
         os.replace(tmp, chunk_path)
         return encoded
     except BaseException:
@@ -901,9 +960,13 @@ def _swinir_concat_mux(
     finally:
         list_path.unlink(missing_ok=True)
     if returncode != 0:
-        raise RuntimeError("SwinIRチャンクの結合に失敗しました:\n" + stderr)
+        raise RuntimeError(
+            t("SwinIRチャンクの結合に失敗しました:\n{tail}", tail=stderr)
+        )
     if not Path(out_path).is_file() or Path(out_path).stat().st_size == 0:
-        raise RuntimeError(f"SwinIR動画出力が生成されませんでした: {out_path}")
+        raise RuntimeError(
+            t("SwinIR動画出力が生成されませんでした: {out}", out=out_path)
+        )
 
 
 def upscale_video_swinir_chunked(
@@ -917,20 +980,26 @@ def upscale_video_swinir_chunked(
     """SwinIR CUDA動画をH.264チャンクへ保存し、manifestから再開する。"""
     progress = progress or (lambda _fraction, _message: None)
     if settings.backend != UpscaleBackend.SWINIR_CUDA:
-        raise ValueError("SwinIR CUDAチャンク経路にはSWINIR_CUDA backendが必要です")
+        raise ValueError(
+            t("SwinIR CUDAチャンク経路にはSWINIR_CUDA backendが必要です")
+        )
     if canonical_helper_model(settings.model) != HELPER_MODEL_SWINIR:
-        raise ValueError("SwinIR CUDA経路ではSwinIR-Mモデルを選択してください")
+        raise ValueError(
+            t("SwinIR CUDA経路ではSwinIR-Mモデルを選択してください")
+        )
     from . import media
     info = media.probe(in_path)
     if info.color_transfer in {"smpte2084", "arib-std-b67"}:
-        raise ValueError("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+        raise ValueError(
+            t("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+        )
     width, height = info.display_width, info.display_height
     fps = info.fps or 30.0
     if width <= 0 or height <= 0:
-        raise RuntimeError("SwinIR動画の解像度を取得できません")
+        raise RuntimeError(t("SwinIR動画の解像度を取得できません"))
     work = Path(work_dir) if work_dir is not None else swinir_workdir(in_path, out_path, settings)
     work.mkdir(parents=True, exist_ok=True)
-    progress(0.0, "SwinIR動画の再開データを確認中…")
+    progress(0.0, t("SwinIR動画の再開データを確認中…"))
     video_encoder = detect_hw_encoder("h264") if settings.hw_encode else None
     video_encoder = video_encoder or "libx264"
     identity = _swinir_identity(in_path, settings, video_encoder, cancel)
@@ -953,7 +1022,7 @@ def upscale_video_swinir_chunked(
     if isinstance(cached_total, int) and cached_total > 0:
         total = cached_total
     else:
-        progress(0.0, "SwinIR動画のフレーム数を確認中…")
+        progress(0.0, t("SwinIR動画のフレーム数を確認中…"))
         total = _swinir_count_cfr_frames(in_path, fps, cancel)
     manifest["identity"] = identity
     manifest["version"] = 2
@@ -1049,19 +1118,23 @@ def upscale_video_swinir_chunked(
                     decoder_drain.join(timeout=2.0)
                 if decoder_ret != 0:
                     raise RuntimeError(
-                        "SwinIR動画のデコードに失敗しました:\n"
-                        + "\n".join(decoder_stderr[-15:])
+                        t(
+                            "SwinIR動画のデコードに失敗しました:\n{tail}",
+                            tail="\n".join(decoder_stderr[-15:]),
+                        )
                     )
                 if extra_frames:
                     raise RuntimeError(
-                        "SwinIR動画のフレーム数が事前確認後に変化しました: "
-                        f"{total}+{extra_frames}"
+                        t(
+                            "SwinIR動画のフレーム数が事前確認後に変化しました: {detail}",
+                            detail=f"{total}+{extra_frames}",
+                        )
                     )
-        progress(0.98, "SwinIR動画のチャンクを結合中…")
+        progress(0.98, t("SwinIR動画のチャンクを結合中…"))
         if cancel is not None and cancel.is_set():
             raise Cancelled()
         _swinir_concat_mux(chunks, in_path, out_path, settings, cancel=cancel)
-        progress(1.0, "完了")
+        progress(1.0, t("完了"))
         return Path(out_path)
     finally:
         if decoder is not None and decoder.poll() is None:
@@ -1095,17 +1168,26 @@ def _ffmpeg_pipeline_error(
     """パイプ経路の失敗をstderr優先で利用者向け例外へ変換する。"""
     tail = "\n".join(line for line in stderr_lines[-15:] if line)
     if tail:
-        return RuntimeError(f"{label}に失敗しました:\n{tail}")
+        return RuntimeError(
+            t("{label}に失敗しました:\n{tail}", label=label, tail=tail)
+        )
     if isinstance(cause, (BrokenPipeError, OSError, EOFError)):
         return RuntimeError(
-            f"{label}に失敗しました（ffmpegとのパイプが閉じられました。"
-            "ffmpegのstderrは取得できませんでした）"
+            t(
+                "{label}に失敗しました（ffmpegとのパイプが閉じられました。"
+                "ffmpegのstderrは取得できませんでした）",
+                label=label,
+            )
         )
     if returncode is not None:
         return RuntimeError(
-            f"{label}に失敗しました（ffmpeg exit {returncode}、stderrなし）"
+            t(
+                "{label}に失敗しました（ffmpeg exit {returncode}、stderrなし）",
+                label=label,
+                returncode=returncode,
+            )
         )
-    return RuntimeError(f"{label}に失敗しました")
+    return RuntimeError(t("{label}に失敗しました", label=label))
 
 
 def upscale_video_piped(
@@ -1123,14 +1205,18 @@ def upscale_video_piped(
     progress = progress or (lambda _fraction, _message: None)
     info = media.probe(in_path)
     if info.color_transfer in {"smpte2084", "arib-std-b67"}:
-        raise ValueError("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+        raise ValueError(
+            t("HDR動画（PQ/HLG）は未対応です。SDRに変換してから処理してください")
+        )
     width, height = info.display_width, info.display_height
     fps = info.fps or 30.0
     total_frames = info.frame_count
     if width <= 0 or height <= 0:
-        raise RuntimeError(f"動画の解像度を取得できません: {in_path}")
+        raise RuntimeError(
+            t("動画の解像度を取得できません: {path}", path=in_path)
+        )
 
-    progress(0.0, "AI準備中…")
+    progress(0.0, t("AI準備中…"))
     session = helper_backend.open_session(settings, width, height, progress, cancel)
     out_width = width * session.scale
     out_height = height * session.scale
@@ -1283,8 +1369,18 @@ def upscale_video_piped(
                     encoder_proc.stdin.write(np.ascontiguousarray(item).tobytes())
                     processed += 1
                     fraction = min(0.999, processed / total_frames) if total_frames else 0.0
-                    suffix = f" {processed}/{total_frames}フレーム" if total_frames else f" {processed}フレーム"
-                    progress(fraction, "動画をアップスケール中…" + suffix)
+                    if total_frames:
+                        message = t(
+                            "動画をアップスケール中… {processed}/{total}フレーム",
+                            processed=processed,
+                            total=total_frames,
+                        )
+                    else:
+                        message = t(
+                            "動画をアップスケール中… {processed}フレーム",
+                            processed=processed,
+                        )
+                    progress(fraction, message)
             except BaseException as exc:
                 _fail("encoder", exc)
 
@@ -1322,26 +1418,28 @@ def upscale_video_piped(
                 raise exc
             if stage == "encoder" and isinstance(exc, (BrokenPipeError, OSError, EOFError)):
                 raise _ffmpeg_pipeline_error(
-                    "動画エンコード", encoder_stderr,
+                    t("動画エンコード"), encoder_stderr,
                     cause=exc, returncode=encoder_ret,
                 ) from exc
             if stage == "decoder" and isinstance(exc, (BrokenPipeError, OSError, EOFError)):
                 raise _ffmpeg_pipeline_error(
-                    "動画デコード", decoder_stderr,
+                    t("動画デコード"), decoder_stderr,
                     cause=exc, returncode=decoder_ret,
                 ) from exc
             raise exc
         if decoder_ret != 0:
             raise _ffmpeg_pipeline_error(
-                "動画デコード", decoder_stderr, returncode=decoder_ret
+                t("動画デコード"), decoder_stderr, returncode=decoder_ret
             )
         if encoder_ret != 0:
             raise _ffmpeg_pipeline_error(
-                "動画エンコード", encoder_stderr, returncode=encoder_ret
+                t("動画エンコード"), encoder_stderr, returncode=encoder_ret
             )
         if not out.is_file() or out.stat().st_size == 0:
-            raise RuntimeError(f"動画出力が生成されませんでした: {out}")
-        progress(1.0, "完了")
+            raise RuntimeError(
+                t("動画出力が生成されませんでした: {out}", out=out)
+            )
+        progress(1.0, t("完了"))
     finally:
         if decoder is not None and decoder.poll() is None:
             _terminate(decoder)

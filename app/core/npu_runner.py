@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
+
+from ..i18n import t
 import onnxruntime as ort
 
 os.environ.setdefault("XLNX_ENABLE_CACHE", "1")
@@ -149,13 +151,15 @@ class NpuRealEsrganRunner:
         providers = ort.get_available_providers()
         if "VitisAIExecutionProvider" not in providers:
             raise RuntimeError(
-                "VitisAIExecutionProvider が利用できません。"
-                f" available={providers}"
+                t(
+                    "VitisAIExecutionProvider が利用できません。{available}",
+                    available=f" available={providers}",
+                )
             )
 
         npu_type = get_npu_info()
         if not npu_type:
-            raise RuntimeError("対応するRyzen AI NPUが見つかりません。")
+            raise RuntimeError(t("対応するRyzen AI NPUが見つかりません。"))
 
         print(f"Using NPU type: {npu_type}", flush=True)
         print("Running inference with providers: ['VitisAIExecutionProvider']", flush=True)
@@ -192,7 +196,7 @@ class NpuRealEsrganRunner:
         if img_bgr.ndim != 3:
             raise ValueError("expected BGR image with 3 channels")
 
-        progress(0.05, "NPU前処理中…")
+        progress(0.05, t("NPU前処理中…"))
         img_chw = _preprocess(img_bgr)
         tiles_chw, orig_hw, padded_hw = _split_tiles(
             img_chw, (self._in_h, self._in_w), self.tile_overlap
@@ -212,9 +216,12 @@ class NpuRealEsrganRunner:
                 sr_tile = np.transpose(sr_tile, [2, 0, 1])
             sr_tiles_chw.append(sr_tile)
 
-            progress(0.08 + 0.84 * (idx / total), f"{idx}/{total} タイル")
+            progress(
+                0.08 + 0.84 * (idx / total),
+                t("{idx}/{total} タイル", idx=idx, total=total),
+            )
 
-        progress(0.94, "NPU後処理中…")
+        progress(0.94, t("NPU後処理中…"))
         sr_orig_hw = (orig_hw[0] * self.sr_scale, orig_hw[1] * self.sr_scale)
         sr_padded_hw = (padded_hw[0] * self.sr_scale, padded_hw[1] * self.sr_scale)
         sr_overlap = self.tile_overlap * self.sr_scale

@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from ..i18n import t
 from . import binaries, jobs, media
 from .jobs import ProgressCb
 from .settings import UpscaleBackend, UpscaleSettings, vulkan_fallback_settings
@@ -50,8 +51,13 @@ def _build_cmd(in_path: str, out_path: str, settings: UpscaleSettings) -> list[s
     # 防御的チェック: GUI 側は model_supports_scale でガードしているが念のため。
     if not binaries.model_supports_scale(model, scale):
         raise ValueError(
-            f"モデル '{model}' は倍率 x{scale} に対応していません"
-            f"（{binaries.models_dir()} に該当 param がありません）。"
+            t(
+                "モデル '{model}' は倍率 x{scale} に対応していません"
+                "（{models_dir} に該当 param がありません）。",
+                model=model,
+                scale=scale,
+                models_dir=binaries.models_dir(),
+            )
         )
 
     cmd: list[str] = [
@@ -144,7 +150,14 @@ def upscale_image(in_path: str, out_path: str, settings: UpscaleSettings,
                 raise
             # DirectML/NPUのモデル不在・helper起動失敗時は、既存のVulkan資産へ退避する。
             settings = vulkan_fallback_settings(settings)
-            progress(0.0, f"Vulkanへ切替（モデル: {settings.model} で代替） ({exc})")
+            progress(
+                0.0,
+                t(
+                    "Vulkanへ切替（モデル: {model} で代替） ({error})",
+                    model=settings.model,
+                    error=exc,
+                ),
+            )
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -174,7 +187,9 @@ def upscale_image(in_path: str, out_path: str, settings: UpscaleSettings,
                 frac = max(0.0, min(1.0, float(m.group(1)) / 100.0))
                 if frac >= last_fraction:
                     last_fraction = frac
-                    progress(frac, f"アップスケール中… {int(frac * 100)}%")
+                    progress(
+                        frac, t("アップスケール中… {pct}%", pct=int(frac * 100))
+                    )
         ret = proc.wait()
     finally:
         if proc.poll() is None:
@@ -187,14 +202,26 @@ def upscale_image(in_path: str, out_path: str, settings: UpscaleSettings,
     if ret != 0:
         tail = "\n".join(stderr_lines[-8:])
         raise RuntimeError(
-            f"realesrgan-ncnn-vulkan が失敗しました (exit={ret})\ncmd: {' '.join(cmd)}\n{tail}"
+            t(
+                "realesrgan-ncnn-vulkan が失敗しました (exit={ret})\n"
+                "cmd: {cmd}\n{tail}",
+                ret=ret,
+                cmd=" ".join(cmd),
+                tail=tail,
+            )
         )
 
     if not out.exists():
         tail = "\n".join(stderr_lines[-8:])
-        raise RuntimeError(f"出力ファイルが生成されませんでした: {out}\n{tail}")
+        raise RuntimeError(
+            t(
+                "出力ファイルが生成されませんでした: {out}\n{tail}",
+                out=out,
+                tail=tail,
+            )
+        )
 
-    progress(1.0, "完了")
+    progress(1.0, t("完了"))
 
 
 def _count_images(d: Path) -> int:
@@ -235,7 +262,14 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
             if settings.backend == UpscaleBackend.SWINIR_CUDA:
                 raise
             settings = vulkan_fallback_settings(settings)
-            progress(0.0, f"Vulkanへ切替（モデル: {settings.model} で代替） ({exc})")
+            progress(
+                0.0,
+                t(
+                    "Vulkanへ切替（モデル: {model} で代替） ({error})",
+                    model=settings.model,
+                    error=exc,
+                ),
+            )
 
     in_p = Path(in_dir)
     out_p = Path(out_dir)
@@ -244,7 +278,7 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
     total = _count_images(in_p)
     if total == 0:
         # 画像が無ければ何もせず完了扱い。
-        progress(1.0, "0/0 枚")
+        progress(1.0, t("0/0 枚"))
         return
 
     fmt = (settings.image_format or "png").lower().replace("jpeg", "jpg")
@@ -268,9 +302,18 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
             raise jobs.Cancelled()
         upscale_image(str(source), str(outputs[source]), settings,
                       progress=lambda f, m, i=index: progress(
-                          (i - 1 + f) / total, f"{i}/{total} 枚 {m}"),
+                          (i - 1 + f) / total,
+                          t(
+                              "{i}/{total} 枚 {message}",
+                              i=i,
+                              total=total,
+                              message=m,
+                          ),
+                      ),
                       cancel=cancel)
-    progress(1.0, f"{len(outputs)}/{total} 枚")
+    progress(
+        1.0, t("{done}/{total} 枚", done=len(outputs), total=total)
+    )
     return
 
     cmd = _build_cmd(in_dir, out_dir, settings)
@@ -290,7 +333,9 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
         while not stop_poll.is_set():
             done = min(_count_images(out_p), total)
             frac = done / total if total else 1.0
-            progress(min(frac, 0.999), f"{done}/{total} 枚")
+            progress(
+                min(frac, 0.999), t("{done}/{total} 枚", done=done, total=total)
+            )
             if stop_poll.wait(0.3):
                 break
 
@@ -330,8 +375,14 @@ def upscale_folder(in_dir: str, out_dir: str, settings: UpscaleSettings,
     if ret != 0:
         tail = "\n".join(stderr_lines[-8:])
         raise RuntimeError(
-            f"realesrgan-ncnn-vulkan が失敗しました (exit={ret})\ncmd: {' '.join(cmd)}\n{tail}"
+            t(
+                "realesrgan-ncnn-vulkan が失敗しました (exit={ret})\n"
+                "cmd: {cmd}\n{tail}",
+                ret=ret,
+                cmd=" ".join(cmd),
+                tail=tail,
+            )
         )
 
     done = _count_images(out_p)
-    progress(1.0, f"{done}/{total} 枚")
+    progress(1.0, t("{done}/{total} 枚", done=done, total=total))

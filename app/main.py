@@ -39,6 +39,9 @@ def portable_self_test() -> int:
 def main() -> int:
     if "--portable-self-test" in sys.argv:
         return portable_self_test()
+    from app.i18n import init_language
+
+    init_language()
     from app.gui.main_window import run  # GUI エージェントが提供する run(argv)->int
     return run(sys.argv)
 

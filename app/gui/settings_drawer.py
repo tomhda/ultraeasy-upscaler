@@ -21,12 +21,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import helper_backend, npu_prepare
+from app.core import user_settings
 from app.core.jobs import Cancelled
 from app.core.settings import (
     ProcessingOrder,
     UpscaleBackend,
     UpscaleSettings,
 )
+from app.i18n import N_, t
 
 from . import theme
 from .compare_view import sanitize_error_message
@@ -36,52 +38,57 @@ _IMAGE_FORMATS = ["png", "jpg", "webp"]
 # 現状のエンコーダ選択(H.264系)とは噛み合わないため除外（フェーズ2で対応検討）。
 _VIDEO_FORMATS = ["mp4", "mkv", "mov"]
 _VIDEO_QUALITY_OPTIONS = [
-    ("高画質（容量大）", 18),
-    ("標準", 23),
-    ("軽量（容量小）", 28),
+    (N_("高画質（容量大）"), 18),
+    (N_("標準"), 23),
+    (N_("軽量（容量小）"), 28),
 ]
 _TARGET_FPS_OPTIONS = [
-    ("元動画の2倍", None),
+    (N_("元動画の2倍"), None),
     ("60 fps", 60.0),
     ("120 fps", 120.0),
 ]
 _PROCESSING_ORDER_OPTIONS = [
-    ("アプコン → 補間（速い）", ProcessingOrder.UPSCALE_FIRST.value),
-    ("補間 → アプコン（省メモリ）", ProcessingOrder.INTERPOLATE_FIRST.value),
+    (N_("アプコン → 補間（速い）"), ProcessingOrder.UPSCALE_FIRST.value),
+    (N_("補間 → アプコン（省メモリ）"), ProcessingOrder.INTERPOLATE_FIRST.value),
 ]
 _TILE_OPTIONS = [
-    ("自動", 0),
-    ("メモリ節約", 128),
-    ("強めに節約", 64),
+    (N_("自動"), 0),
+    (N_("メモリ節約"), 128),
+    (N_("強めに節約"), 64),
 ]
 _GPU_OPTIONS = [
-    ("自動", -1),
+    (N_("自動"), -1),
     ("GPU 0", 0),
     ("GPU 1", 1),
     ("GPU 2", 2),
     ("GPU 3", 3),
 ]
 _BACKEND_OPTIONS = [
-    ("自動（GPU優先）", "auto"),
-    ("GPU（DirectML）", UpscaleBackend.WINML_GPU.value),
-    ("NPU（GPU温存）", UpscaleBackend.NPU_NATIVE.value),
-    ("SwinIR-M（CUDA・超低速）", UpscaleBackend.SWINIR_CUDA.value),
-    ("Vulkan", UpscaleBackend.VULKAN.value),
+    (N_("自動（GPU優先）"), "auto"),
+    (N_("GPU（DirectML）"), UpscaleBackend.WINML_GPU.value),
+    (N_("NPU（GPU温存）"), UpscaleBackend.NPU_NATIVE.value),
+    (N_("SwinIR-M（CUDA・超低速）"), UpscaleBackend.SWINIR_CUDA.value),
+    (N_("Vulkan"), UpscaleBackend.VULKAN.value),
+]
+_LANGUAGE_OPTIONS = [
+    (N_("Windows の設定に合わせる"), "auto"),
+    (N_("日本語"), "ja"),
+    (N_("English"), "en"),
 ]
 _HELP = {
-    "backend": "AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。SwinIR CUDAは実写向けですが動画処理は非常に低速です。",
-    "image_format": "画像を書き出す形式です。pngは劣化なし、jpgは容量小、webpは容量を抑えやすい形式です。",
-    "video_format": "動画ファイルの保存形式です。mp4は再生互換性が高く、mkv/movは用途に合わせて選びます。",
-    "video_quality": "CRF/QPは動画の圧縮品質です。数字が小さいほど高画質で容量は大きくなります。",
-    "tile_size": "タイルは画像を分割して処理する単位です。通常は自動でOK。メモリ不足で失敗するときだけ節約側にします。",
-    "gpu_id": "通常は自動でOK。GPUが複数あるPCで、使うGPUを固定したい時だけ番号を選びます。",
-    "subfolder": "出力をまとめるフォルダ名です。上段の出力先が「元の場所」なら、元画像の横にこの名前のフォルダを作ります。",
-    "hw_encode": "動画の書き出しにGPUを使います。対応していれば速くなります。失敗時は通常エンコードに戻します。",
-    "keep_audio": "元動画の音声を、新しく作る動画にも入れます。",
-    "tta": "TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。",
-    "create_folder": "チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。",
-    "target_fps": "フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。",
-    "processing_order": "アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。",
+    "backend": N_("AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。SwinIR CUDAは実写向けですが動画処理は非常に低速です。"),
+    "image_format": N_("画像を書き出す形式です。pngは劣化なし、jpgは容量小、webpは容量を抑えやすい形式です。"),
+    "video_format": N_("動画ファイルの保存形式です。mp4は再生互換性が高く、mkv/movは用途に合わせて選びます。"),
+    "video_quality": N_("CRF/QPは動画の圧縮品質です。数字が小さいほど高画質で容量は大きくなります。"),
+    "tile_size": N_("タイルは画像を分割して処理する単位です。通常は自動でOK。メモリ不足で失敗するときだけ節約側にします。"),
+    "gpu_id": N_("通常は自動でOK。GPUが複数あるPCで、使うGPUを固定したい時だけ番号を選びます。"),
+    "subfolder": N_("出力をまとめるフォルダ名です。上段の出力先が「元の場所」なら、元画像の横にこの名前のフォルダを作ります。"),
+    "hw_encode": N_("動画の書き出しにGPUを使います。対応していれば速くなります。失敗時は通常エンコードに戻します。"),
+    "keep_audio": N_("元動画の音声を、新しく作る動画にも入れます。"),
+    "tta": N_("TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。"),
+    "create_folder": N_("チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。"),
+    "target_fps": N_("フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。"),
+    "processing_order": N_("アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。"),
 }
 
 
@@ -92,15 +99,21 @@ def format_convert_elapsed(seconds: float) -> str:
         body = f"{total // 3600}:{(total % 3600) // 60:02d}:{total % 60:02d}"
     else:
         body = f"{total // 60}:{total % 60:02d}"
-    return f"変換中（経過 {body}）"
+    return t("変換中（経過 {body}）", body=body)
 
 
 def format_convert_estimate(minutes: int) -> str:
     """未変換の行に出す目安（60 分以上は「約○時間」「約○時間○分」の形）。"""
     if minutes >= 60:
         hours, rest = divmod(int(minutes), 60)
-        return f"初回変換の目安: 約{hours}時間" + (f"{rest}分" if rest else "")
-    return f"初回変換の目安: 約{int(minutes)}分"
+        if rest:
+            return t(
+                "初回変換の目安: 約{hours}時間{rest}分",
+                hours=hours,
+                rest=rest,
+            )
+        return t("初回変換の目安: 約{hours}時間", hours=hours)
+    return t("初回変換の目安: 約{minutes}分", minutes=int(minutes))
 
 
 class _NpuConvertWorker(QObject):
@@ -131,7 +144,7 @@ class ClearCheckBox(QCheckBox):
 
     def __init__(self, label: str, parent=None) -> None:
         super().__init__(parent)
-        self.setText(label)
+        self.setText(t(label))
         self.setObjectName("clearCheck")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(34)
@@ -274,11 +287,11 @@ class SettingsDrawer(QFrame):
         row = QHBoxLayout(wrap)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
-        lab = QLabel(text)
+        lab = QLabel(t(text))
         lab.setObjectName("fieldLabel")
         row.addWidget(lab)
         if help_text:
-            row.addWidget(HelpIcon(help_text))
+            row.addWidget(HelpIcon(t(help_text)))
         row.addStretch(1)
         return wrap
 
@@ -289,14 +302,14 @@ class SettingsDrawer(QFrame):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
         row.addWidget(checkbox)
-        row.addWidget(HelpIcon(help_text))
+        row.addWidget(HelpIcon(t(help_text)))
         row.addStretch(1)
         return wrap
 
     def _combo_with_data(self, options: list[tuple[str, object]]) -> QComboBox:
         combo = QComboBox()
         for label, value in options:
-            combo.addItem(label, value)
+            combo.addItem(t(label), value)
         return combo
 
     def _set_combo_value(self, combo: QComboBox, value: object) -> None:
@@ -308,7 +321,7 @@ class SettingsDrawer(QFrame):
         root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(12)
 
-        title = QLabel("詳細設定")
+        title = QLabel(t("詳細設定"))
         title.setObjectName("sectionTitle")
         root.addWidget(title)
 
@@ -325,51 +338,63 @@ class SettingsDrawer(QFrame):
             if value != UpscaleBackend.NPU_NATIVE.value or npu_prepare.npu_available()
         ]
         self.backend = self._combo_with_data(backend_options)
-        grid.addWidget(self._label("AI実行先", _HELP["backend"]), 0, 0)
+        grid.addWidget(self._label(N_("AI実行先"), _HELP["backend"]), 0, 0)
         grid.addWidget(self.backend, 0, 1)
 
         # --- 画像の保存形式 ---
         self.image_format = QComboBox()
         self.image_format.addItems(_IMAGE_FORMATS)
-        grid.addWidget(self._label("画像の保存形式", _HELP["image_format"]), 0, 2)
+        grid.addWidget(self._label(N_("画像の保存形式"), _HELP["image_format"]), 0, 2)
         grid.addWidget(self.image_format, 0, 3)
 
         # --- 動画の保存形式 ---
         self.video_format = QComboBox()
         self.video_format.addItems(_VIDEO_FORMATS)
-        grid.addWidget(self._label("動画の保存形式", _HELP["video_format"]), 1, 0)
+        grid.addWidget(self._label(N_("動画の保存形式"), _HELP["video_format"]), 1, 0)
         grid.addWidget(self.video_format, 1, 1)
 
         # --- 動画の画質 ---
         self.video_quality = self._combo_with_data(_VIDEO_QUALITY_OPTIONS)
-        grid.addWidget(self._label("動画の画質 (CRF/QP)", _HELP["video_quality"]), 1, 2)
+        grid.addWidget(self._label(N_("動画の画質 (CRF/QP)"), _HELP["video_quality"]), 1, 2)
         grid.addWidget(self.video_quality, 1, 3)
 
         # --- 分割処理 ---
         self.tile_size = self._combo_with_data(_TILE_OPTIONS)
-        grid.addWidget(self._label("分割処理 (タイル)", _HELP["tile_size"]), 2, 0)
+        grid.addWidget(self._label(N_("分割処理 (タイル)"), _HELP["tile_size"]), 2, 0)
         grid.addWidget(self.tile_size, 2, 1)
 
         # --- 使うGPU ---
         self.gpu_id = self._combo_with_data(_GPU_OPTIONS)
-        grid.addWidget(self._label("使うGPU", _HELP["gpu_id"]), 2, 2)
+        grid.addWidget(self._label(N_("使うGPU"), _HELP["gpu_id"]), 2, 2)
         grid.addWidget(self.gpu_id, 2, 3)
 
         # --- 出力フォルダ名 ---
         self.subfolder_name = QLineEdit()
         self.subfolder_name.setPlaceholderText("upscaled")
-        grid.addWidget(self._label("出力フォルダ名", _HELP["subfolder"]), 3, 0)
+        grid.addWidget(self._label(N_("出力フォルダ名"), _HELP["subfolder"]), 3, 0)
         grid.addWidget(self.subfolder_name, 3, 1)
 
         # --- フレーム補間後のfps ---
         self.target_fps = self._combo_with_data(_TARGET_FPS_OPTIONS)
-        grid.addWidget(self._label("補間後のfps", _HELP["target_fps"]), 3, 2)
+        grid.addWidget(self._label(N_("補間後のfps"), _HELP["target_fps"]), 3, 2)
         grid.addWidget(self.target_fps, 3, 3)
 
         # --- 処理の順番（アプコン×補間 併用時） ---
         self.processing_order = self._combo_with_data(_PROCESSING_ORDER_OPTIONS)
-        grid.addWidget(self._label("処理の順番", _HELP["processing_order"]), 4, 0)
+        grid.addWidget(self._label(N_("処理の順番"), _HELP["processing_order"]), 4, 0)
         grid.addWidget(self.processing_order, 4, 1)
+
+        # --- 表示言語（既存の項目の並びの最後。切り替えは次回起動から） ---
+        self.language_combo = self._combo_with_data(_LANGUAGE_OPTIONS)
+        grid.addWidget(self._label(N_("表示言語"), None), 5, 0)
+        grid.addWidget(self.language_combo, 5, 1)
+        self.language_notice = QLabel("")
+        self.language_notice.setObjectName("hint")
+        grid.addWidget(self.language_notice, 6, 0, 1, 4)
+        self.language_combo.currentIndexChanged.connect(
+            self._on_language_changed
+        )
+        self._load_language_combo()
 
         root.addLayout(grid)
 
@@ -377,10 +402,10 @@ class SettingsDrawer(QFrame):
         toggles = QGridLayout()
         toggles.setHorizontalSpacing(12)
         toggles.setVerticalSpacing(8)
-        self.hw_encode = ClearCheckBox("動画の保存を速くする")
-        self.keep_audio = ClearCheckBox("動画の音声を残す")
-        self.tta_mode = ClearCheckBox("高品質モード (TTA)")
-        self.create_subfolder = ClearCheckBox("出力フォルダを作る")
+        self.hw_encode = ClearCheckBox(N_("動画の保存を速くする"))
+        self.keep_audio = ClearCheckBox(N_("動画の音声を残す"))
+        self.tta_mode = ClearCheckBox(N_("高品質モード (TTA)"))
+        self.create_subfolder = ClearCheckBox(N_("出力フォルダを作る"))
         toggles.addWidget(self._check_row(self.hw_encode, _HELP["hw_encode"]), 0, 0)
         toggles.addWidget(self._check_row(self.keep_audio, _HELP["keep_audio"]), 0, 1)
         toggles.addWidget(self._check_row(self.tta_mode, _HELP["tta"]), 1, 0)
@@ -400,13 +425,15 @@ class SettingsDrawer(QFrame):
         line.setObjectName("separator")
         line.setFixedHeight(1)
         section.addWidget(line)
-        heading = QLabel("NPU の準備")
+        heading = QLabel(t("NPU の準備"))
         heading.setObjectName("sectionTitle")
         section.addWidget(heading)
         desc = QLabel(
-            "NPU で使うモデルは、最初に一度だけ変換が必要です。"
-            "使うモデルだけ変換してください。"
-            "変換中も PC は使えますが、SwinIR-M と AdcSR はメモリを多く使います。"
+            t(
+                "NPU で使うモデルは、最初に一度だけ変換が必要です。"
+                "使うモデルだけ変換してください。"
+                "変換中も PC は使えますが、SwinIR-M と AdcSR はメモリを多く使います。"
+            )
         )
         desc.setObjectName("hint")
         desc.setWordWrap(True)
@@ -429,7 +456,32 @@ class SettingsDrawer(QFrame):
         # 出力フォルダ名はチェック時のみ有効
         self.create_subfolder.toggled.connect(self.subfolder_name.setEnabled)
 
+        # 選択欄は中身の長さに引っ張られず縮められるようにする
+        # （英語の表示では項目が長く、欄が領域からはみ出すため）。
+        for combo in self.findChildren(QComboBox):
+            combo.setMinimumContentsLength(8)
+            combo.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+
         self.load_defaults()
+
+    # --- 表示言語（切り替えは次回の起動から有効） ---
+    def _load_language_combo(self) -> None:
+        """保存された言語を欄に反映する（案内の1行は出さない）。"""
+        saved = user_settings.load_language()
+        index = self.language_combo.findData(saved)
+        previous = self.language_combo.blockSignals(True)
+        try:
+            self.language_combo.setCurrentIndex(index if index >= 0 else 0)
+        finally:
+            self.language_combo.blockSignals(previous)
+        self.language_notice.setText("")
+
+    def _on_language_changed(self) -> None:
+        """選択を保存し、次回起動から有効になる案内を出す。"""
+        user_settings.save_language(str(self.language_combo.currentData()))
+        self.language_notice.setText(t("次回の起動から切り替わります。"))
 
     # --- 既定値の読込／設定への反映 ---
     def load_defaults(self, settings: UpscaleSettings | None = None) -> None:
@@ -497,13 +549,15 @@ class SettingsDrawer(QFrame):
                 name = model.label_key
             name_label = QLabel(str(name))
             name_label.setObjectName("fieldLabel")
-            status_label = QLabel("変換済み" if model.converted else "未変換")
+            status_label = QLabel(
+                t("変換済み") if model.converted else t("未変換")
+            )
             status_label.setObjectName("hint")
             estimate_label = QLabel(
                 "" if model.converted else format_convert_estimate(model.minutes)
             )
             estimate_label.setObjectName("hint")
-            button = QPushButton("変換する")
+            button = QPushButton(t("NPU 用に変換"))
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(
                 lambda _=False, key=model.key: self._on_npu_button(key)
@@ -546,7 +600,7 @@ class SettingsDrawer(QFrame):
                 self.cancel_conversion()
             return
         if self._external_busy:
-            self.npu_status.setText("処理中は変換できません")
+            self.npu_status.setText(t("処理中は変換できません"))
             return
         if model_key not in self.npu_rows:
             return
@@ -573,7 +627,7 @@ class SettingsDrawer(QFrame):
                 widgets["status"].setText(
                     format_convert_elapsed(0.0))
                 widgets["estimate"].setText("")
-                button.setText("中止")
+                button.setText(t("中止"))
                 button.setVisible(True)
                 button.setEnabled(True)
             else:
@@ -633,10 +687,10 @@ class SettingsDrawer(QFrame):
         self._finish_conversion()
         if key is not None and key in self.npu_rows:
             widgets = self.npu_rows[key]
-            widgets["status"].setText("変換済み")
+            widgets["status"].setText(t("変換済み"))
             widgets["estimate"].setText("")
             widgets["button"].setVisible(False)
-        self.npu_status.setText("変換が終わりました。")
+        self.npu_status.setText(t("変換が終わりました。"))
 
     def _on_convert_failed(self, message: str) -> None:
         key = self._npu_convert_key
@@ -644,14 +698,18 @@ class SettingsDrawer(QFrame):
         self._finish_conversion()
         if key is not None and key in self.npu_rows:
             widgets = self.npu_rows[key]
-            widgets["status"].setText("失敗")
+            widgets["status"].setText(t("失敗"))
             widgets["estimate"].setText(
                 format_convert_estimate(minutes) if minutes else "")
             button = widgets["button"]
-            button.setText("変換する")
+            button.setText(t("NPU 用に変換"))
             button.setVisible(True)
         self.npu_status.setText(
-            f"変換できませんでした: {sanitize_error_message(message, self._npu_redactions(key))}")
+            t(
+                "変換できませんでした: {message}",
+                message=sanitize_error_message(message, self._npu_redactions(key)),
+            )
+        )
 
     def _on_convert_canceled(self) -> None:
         key = self._npu_convert_key
@@ -659,13 +717,13 @@ class SettingsDrawer(QFrame):
         self._finish_conversion()
         if key is not None and key in self.npu_rows:
             widgets = self.npu_rows[key]
-            widgets["status"].setText("未変換")
+            widgets["status"].setText(t("未変換"))
             widgets["estimate"].setText(
                 format_convert_estimate(minutes) if minutes else "")
             button = widgets["button"]
-            button.setText("変換する")
+            button.setText(t("NPU 用に変換"))
             button.setVisible(True)
-        self.npu_status.setText("中止しました")
+        self.npu_status.setText(t("中止しました"))
 
     @staticmethod
     def _npu_redactions(model_key: str | None) -> list[str]:

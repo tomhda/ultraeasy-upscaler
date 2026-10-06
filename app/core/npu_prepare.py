@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 
+from ..i18n import t
 from . import binaries, helper_backend, jobs
 from .helper_backend import HelperBackendUnavailable
 from .settings import (
@@ -105,7 +106,10 @@ def npu_models() -> list[NpuModel]:
 
 def not_converted_message(label: str) -> str:
     """未変換のまま開始・試しを押したときの状況行の文言。"""
-    return f"{label}は NPU 用の変換がまだです。詳細設定の「NPU の準備」で変換してください。"
+    return t(
+        "{label}は NPU 用の変換がまだです。詳細設定の「NPU の準備」で変換してください。",
+        label=label,
+    )
 
 
 def convert(model_key: str, progress=None, cancel=None) -> None:
@@ -116,10 +120,10 @@ def convert(model_key: str, progress=None, cancel=None) -> None:
     """
     key = canonical_helper_model(model_key)
     if key not in NPU_CONVERT_MINUTES:
-        raise ValueError(f"NPU で変換できないモデルです: {model_key}")
+        raise ValueError(t("NPU で変換できないモデルです: {model}", model=model_key))
     if helper_backend.npu_compiled(key) is None:
         raise HelperBackendUnavailable(
-            f"NPU 用のファイルが揃っていません: {model_key}")
+            t("NPU 用のファイルが揃っていません: {model}", model=model_key))
     settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=key, scale=4)
     session = helper_backend.open_session(
         settings, _CONVERT_WIDTH, _CONVERT_HEIGHT,

@@ -10,8 +10,22 @@ from dataclasses import dataclass
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QPalette
 
+from app.i18n import language as _current_language
+
 # アクセント色を取得できないときの既定
 _FALLBACK_ACCENT = "#21c7d9"
+
+# 言語別のフォント指定（QSS の font-family に入れる）
+_JA_FONTS = '"Yu Gothic UI", "Meiryo UI", "Segoe UI", sans-serif'
+_EN_FONTS = '"Segoe UI", "Yu Gothic UI", sans-serif'
+
+
+def font_family(language: str | None = None) -> str:
+    """現在の言語に合う font-family（テスト用に言語指定可）。"""
+    lang = language if language is not None else _current_language()
+    if lang == "en":
+        return _EN_FONTS
+    return _JA_FONTS
 
 
 @dataclass(frozen=True)
@@ -115,12 +129,13 @@ def build_palette(dark: bool, accent: str) -> Palette:
     )
 
 
-def build_qss(p: Palette) -> str:
+def build_qss(p: Palette, language: str | None = None) -> str:
+    fonts = font_family(language)
     return f"""
 QWidget {{
     background-color: {p.bg};
     color: {p.text};
-    font-family: "Yu Gothic UI", "Meiryo UI", "Segoe UI", sans-serif;
+    font-family: {fonts};
     font-size: 14px;
     letter-spacing: 0px;
 }}
@@ -258,7 +273,7 @@ QLabel#helpPopup {{
     border: 1px solid {p.border_light};
     border-radius: 6px;
     padding: 9px 11px;
-    font-family: "Yu Gothic UI", "Meiryo UI", "Segoe UI", sans-serif;
+    font-family: {fonts};
     font-size: 13px;
     line-height: 1.35;
 }}

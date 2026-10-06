@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..i18n import t
 from . import binaries
 from .jobs import Cancelled
 
@@ -107,7 +108,9 @@ class ServeClient:
                 creationflags=(self._creationflags | _CREATE_NO_WINDOW),
             )
         except OSError as exc:
-            raise ServeClientError(f"AI helperを起動できません: {self.command[0]}") from exc
+            raise ServeClientError(
+                t("AI helperを起動できません: {command}", command=self.command[0])
+            ) from exc
 
         self._start_stderr_drain()
         finished = threading.Event()
@@ -130,7 +133,12 @@ class ServeClient:
                 if cancel is not None and cancel.is_set():
                     raise Cancelled()
                 if timeout is not None and elapsed >= timeout:
-                    raise ServeClientError(f"AI helperの準備が{timeout:g}秒以内に完了しませんでした")
+                    raise ServeClientError(
+                        t(
+                            "AI helperの準備が{timeout:g}秒以内に完了しませんでした",
+                            timeout=timeout,
+                        )
+                    )
                 if progress is not None:
                     progress(elapsed)
 
@@ -169,7 +177,9 @@ class ServeClient:
             assert proc.stdin is not None
             self._write_timed(proc, packet, timeout)
         except (BrokenPipeError, OSError) as exc:
-            raise ServeClientError(self._failure_message("AI helperへの送信に失敗しました")) from exc
+            raise ServeClientError(
+                self._failure_message(t("AI helperへの送信に失敗しました"))
+            ) from exc
 
     def _write_timed(self, proc, packet: bytes, timeout: float | None) -> None:
         """write+flush を別スレッドで行い、期限切れは強制終了して打ち切る。"""
@@ -194,14 +204,23 @@ class ServeClient:
         if thread.is_alive():
             self.close(force=True)
             raise ServeClientError(
-                self._failure_message(f"AI helperへの送信が{timeout:g}秒以内に完了しませんでした")
+                self._failure_message(
+                    t(
+                        "AI helperへの送信が{timeout:g}秒以内に完了しませんでした",
+                        timeout=timeout,
+                    )
+                )
             )
         error = box.get("error")
         if isinstance(error, (BrokenPipeError, OSError)):
-            raise ServeClientError(self._failure_message("AI helperへの送信に失敗しました")) from error  # type: ignore[misc]
+            raise ServeClientError(
+                self._failure_message(t("AI helperへの送信に失敗しました"))
+            ) from error  # type: ignore[misc]
         if isinstance(error, BaseException):
             raise ServeClientError(
-                self._failure_message(f"AI helperへの送信に失敗しました: {error}")
+                self._failure_message(
+                    t("AI helperへの送信に失敗しました: {error}", error=error)
+                )
             ) from error
 
     def receive(self, cancel=None) -> np.ndarray:
@@ -305,7 +324,12 @@ class ServeClient:
             count = proc.stdout.readinto(view[got:])
             if not count:
                 raise EOFError(
-                    f"AI helperがstdoutを閉じました (need={len(view)}, got={got}, exit={proc.poll()})"
+                    t(
+                        "AI helperがstdoutを閉じました (need={need}, got={got}, exit={exit})",
+                        need=len(view),
+                        got=got,
+                        exit=proc.poll(),
+                    )
                 )
             got += count
 
@@ -317,7 +341,12 @@ class ServeClient:
             chunk = proc.stdout.read(size - len(buf))
             if not chunk:
                 raise EOFError(
-                    f"AI helperがstdoutを閉じました (need={size}, got={len(buf)}, exit={proc.poll()})"
+                    t(
+                        "AI helperがstdoutを閉じました (need={need}, got={got}, exit={exit})",
+                        need=size,
+                        got=len(buf),
+                        exit=proc.poll(),
+                    )
                 )
             buf += chunk
         return bytes(buf)

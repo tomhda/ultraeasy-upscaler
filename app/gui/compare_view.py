@@ -29,6 +29,7 @@ from app.core import helper_backend, npu_prepare
 from app.core import trial as trial_core
 from app.core.jobs import Job, JobKind
 from app.core.settings import UpscaleBackend, UpscaleSettings
+from app.i18n import t
 
 # 境界線の掴み判定の片側幅（ピクセル）。細すぎると掴めないため余裕を持つ。
 _DIVIDER_GRAB = 7
@@ -99,7 +100,7 @@ def sanitize_error_message(text: str, redactions: list[str]) -> str:
     msg = msg.replace("（）", "").replace("()", "").replace("''", "").strip()
     if len(msg) > 200:
         msg = msg[:200]
-    return msg or "不明なエラー"
+    return msg or t("不明なエラー")
 
 
 class CompareView(QFrame):
@@ -637,21 +638,21 @@ class TrialPanel(QWidget):
         # ボタン行: 試す・範囲選択・右寄せで全体表示/等倍。
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self.trial_btn = QPushButton("試す")
+        self.trial_btn = QPushButton(t("試す"))
         self.trial_btn.setObjectName("accent")
         self.trial_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.trial_btn.clicked.connect(self._on_trial_button)
         btn_row.addWidget(self.trial_btn)
-        self.range_btn = QPushButton("範囲を選ぶ")
+        self.range_btn = QPushButton(t("範囲を選ぶ"))
         self.range_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.range_btn.clicked.connect(self._on_range_button)
         btn_row.addWidget(self.range_btn)
         btn_row.addStretch(1)
-        self.fit_btn = QPushButton("全体表示")
+        self.fit_btn = QPushButton(t("全体表示"))
         self.fit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.fit_btn.clicked.connect(self.view.fit_view)
         btn_row.addWidget(self.fit_btn)
-        self.actual_btn = QPushButton("等倍")
+        self.actual_btn = QPushButton(t("等倍"))
         self.actual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.actual_btn.clicked.connect(self.view.actual_pixels)
         btn_row.addWidget(self.actual_btn)
@@ -662,7 +663,7 @@ class TrialPanel(QWidget):
         # 比べる相手の行: 左・右のコンボ2つ。
         cmp_row = QHBoxLayout()
         cmp_row.setSpacing(8)
-        self.left_title = QLabel("左")
+        self.left_title = QLabel(t("左"))
         self.left_title.setObjectName("hint")
         cmp_row.addWidget(self.left_title)
         self.left_combo = QComboBox()
@@ -670,7 +671,7 @@ class TrialPanel(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         cmp_row.addWidget(self.left_combo, 1)
-        self.right_title = QLabel("右")
+        self.right_title = QLabel(t("右"))
         self.right_title.setObjectName("hint")
         cmp_row.addWidget(self.right_title)
         self.right_combo = QComboBox()
@@ -709,7 +710,7 @@ class TrialPanel(QWidget):
             self._duration = None
             self._rect = None
             self.view.clear()
-            self.view.set_message("左の一覧からファイルを選ぶと、ここに表示します。")
+            self.view.set_message(t("左の一覧からファイルを選ぶと、ここに表示します。"))
             self._rebuild_combos()
             self.refresh()
             return
@@ -821,7 +822,7 @@ class TrialPanel(QWidget):
             self._source_image = None
             self._source_png = None
             self.view.clear()
-            self.view.set_message("このファイルは表示できません。処理はできます。")
+            self.view.set_message(t("このファイルは表示できません。処理はできます。"))
             self.refresh()
             return
         self._source_image = image
@@ -933,8 +934,8 @@ class TrialPanel(QWidget):
         try:
             self.left_combo.clear()
             self.right_combo.clear()
-            self.left_combo.addItem("処理前", None)
-            self.right_combo.addItem("処理前", None)
+            self.left_combo.addItem(t("処理前"), None)
+            self.right_combo.addItem(t("処理前"), None)
             for key in matches:
                 label = self._results[key]["label"]
                 self.left_combo.addItem(label, key)
@@ -976,10 +977,10 @@ class TrialPanel(QWidget):
 
     def _resolve_side(self, key: object) -> tuple[QImage | None, str]:
         if key is None:
-            return self._display_source(), "処理前"
+            return self._display_source(), t("処理前")
         entry = self._results.get(key)  # type: ignore[arg-type]
         if entry is None:
-            return self._display_source(), "処理前"
+            return self._display_source(), t("処理前")
         image = entry.get("qimage")
         if image is None or image.isNull():
             try:
@@ -987,7 +988,7 @@ class TrialPanel(QWidget):
             except Exception:
                 loaded = QImage()
             if loaded.isNull():
-                return self._display_source(), "処理前"
+                return self._display_source(), t("処理前")
             entry["qimage"] = loaded
             image = loaded
         return image, str(entry["label"])
@@ -1006,11 +1007,11 @@ class TrialPanel(QWidget):
             return
         if job.kind == JobKind.FOLDER:
             self.view.clear()
-            self.view.set_message("フォルダの中身はここには表示されません。")
+            self.view.set_message(t("フォルダの中身はここには表示されません。"))
             return
         if self._source_image is None:
             self.view.clear()
-            self.view.set_message("読み込み中…")
+            self.view.set_message(t("読み込み中…"))
             return
         self.view.set_message("")
         left_image, left_label = self._resolve_side(self.left_combo.currentData())
@@ -1025,19 +1026,19 @@ class TrialPanel(QWidget):
         running = self.is_trial_running()
         selecting = self.view.is_selection_mode()
         if running:
-            self.trial_btn.setText("中止")
+            self.trial_btn.setText(t("中止"))
         elif self._rect is not None:
-            self.trial_btn.setText("この範囲を試す")
+            self.trial_btn.setText(t("この範囲を試す"))
         elif job is not None and job.kind == JobKind.VIDEO:
-            self.trial_btn.setText("このコマを試す")
+            self.trial_btn.setText(t("このコマを試す"))
         else:
-            self.trial_btn.setText("試す")
+            self.trial_btn.setText(t("試す"))
         if self._rect is not None:
-            self.range_btn.setText("範囲を解除")
+            self.range_btn.setText(t("範囲を解除"))
         elif selecting:
-            self.range_btn.setText("画の上をドラッグして範囲を選んでください")
+            self.range_btn.setText(t("画の上をドラッグして範囲を選んでください"))
         else:
-            self.range_btn.setText("範囲を選ぶ")
+            self.range_btn.setText(t("範囲を選ぶ"))
 
         is_video = job is not None and job.kind == JobKind.VIDEO
         self.video_row.setVisible(is_video)
@@ -1081,15 +1082,15 @@ class TrialPanel(QWidget):
         if self._status_hold:
             self.status_label.setText(self._status_hold)
         elif self._npu_converting:
-            self.status_label.setText("NPU の変換中は試せません")
+            self.status_label.setText(t("NPU の変換中は試せません"))
         elif self._main_running:
-            self.status_label.setText("処理中は試せません")
+            self.status_label.setText(t("処理中は試せません"))
         elif job is not None and job.kind == JobKind.FOLDER:
             self.status_label.setText(
-                "フォルダは試せません。中の画像を 1 枚追加すると試せます。"
+                t("フォルダは試せません。中の画像を 1 枚追加すると試せます。")
             )
         elif model_missing:
-            self.status_label.setText("モデルを選ぶと試せます")
+            self.status_label.setText(t("モデルを選ぶと試せます"))
         else:
             self.status_label.setText("")
 
@@ -1210,8 +1211,9 @@ class TrialPanel(QWidget):
             _os2.close(fd)
             self._temp_by_file.setdefault(file_str, set()).add(out_name)
         except Exception as exc:
-            self._status_hold = (
-                f"試せませんでした: {sanitize_error_message(str(exc), self._redactions(settings))}"
+            self._status_hold = t(
+                "試せませんでした: {message}",
+                message=sanitize_error_message(str(exc), self._redactions(settings)),
             )
             self.refresh()
             return
@@ -1228,7 +1230,7 @@ class TrialPanel(QWidget):
         self._trial_cancel = cancel
         self._trial_key = key
         self._trial_thread = thread
-        self.status_label.setText("試しています…")
+        self.status_label.setText(t("試しています…"))
         self.refresh()
         try:
             self.trial_running_changed.emit(True)
@@ -1243,9 +1245,9 @@ class TrialPanel(QWidget):
         try:
             pct = int(round(max(0.0, min(1.0, float(frac))) * 100))
         except (TypeError, ValueError):
-            self.status_label.setText("試しています…")
+            self.status_label.setText(t("試しています…"))
             return
-        self.status_label.setText(f"試しています… {pct}%")
+        self.status_label.setText(t("試しています… {pct}%", pct=pct))
 
     @Slot(str)
     def _on_trial_succeeded(self, out_path: str) -> None:
@@ -1275,7 +1277,10 @@ class TrialPanel(QWidget):
     def _on_trial_failed(self, message: str) -> None:
         settings = self._current_settings_or_none()
         redactions = self._redactions(settings) if settings is not None else []
-        self._status_hold = f"試せませんでした: {sanitize_error_message(message, redactions)}"
+        self._status_hold = t(
+            "試せませんでした: {message}",
+            message=sanitize_error_message(message, redactions),
+        )
         self._remove_running_output()
         self._stop_trial_thread()
         self.refresh()
@@ -1283,7 +1288,7 @@ class TrialPanel(QWidget):
     @Slot()
     def _on_trial_canceled(self) -> None:
         self._remove_running_output()
-        self._status_hold = "中止しました"
+        self._status_hold = t("中止しました")
         self._stop_trial_thread()
         self.refresh()
 

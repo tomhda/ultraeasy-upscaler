@@ -49,6 +49,8 @@ from app.core.settings import (
     helper_model_family,
 )
 
+from app.i18n import N_, t
+
 from .compare_view import TrialPanel
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
@@ -73,19 +75,19 @@ _HELPER_BACKENDS = {
     UpscaleBackend.SWINIR_CUDA,
 }
 _MODEL_LABELS = {
-    "realesrgan-x4plus": "Real-ESRGAN",
-    "realesrgan-x4plus-anime": "Real-ESRGAN Anime",
-    "realesr-animevideov3": "Anime Video v3",
-    HELPER_MODEL_ANIME: "Anime Video v3",
-    "realesr-general-x4v3": "General Video v3（ノイズ除去強）",
-    "realesr-general-wdn-x4v3": "General Video v3（ノイズ除去弱）",
-    HELPER_MODEL_SPAN: "4xNomosUni SPAN",
-    HELPER_MODEL_AMD_RRDB: "Real-ESRGAN（AMD縮小版）",
-    HELPER_MODEL_SWINIR: "SwinIR-M",
-    HELPER_MODEL_ADCSR: "AdcSR",
+    "realesrgan-x4plus": N_("Real-ESRGAN"),
+    "realesrgan-x4plus-anime": N_("Real-ESRGAN Anime"),
+    "realesr-animevideov3": N_("Anime Video v3"),
+    HELPER_MODEL_ANIME: N_("Anime Video v3"),
+    "realesr-general-x4v3": N_("General Video v3（ノイズ除去強）"),
+    "realesr-general-wdn-x4v3": N_("General Video v3（ノイズ除去弱）"),
+    HELPER_MODEL_SPAN: N_("4xNomosUni SPAN"),
+    HELPER_MODEL_AMD_RRDB: N_("Real-ESRGAN（AMD縮小版）"),
+    HELPER_MODEL_SWINIR: N_("SwinIR-M"),
+    HELPER_MODEL_ADCSR: N_("AdcSR"),
 }
 _HELPER_MODEL_OPTIONS = [
-    ("なし（拡大しない）", None),
+    (N_("なし（拡大しない）"), None),
     (_MODEL_LABELS[HELPER_MODEL_ANIME], HELPER_MODEL_ANIME),
     (_MODEL_LABELS[HELPER_MODEL_SPAN], HELPER_MODEL_SPAN),
     (_MODEL_LABELS[HELPER_MODEL_AMD_RRDB], HELPER_MODEL_AMD_RRDB),
@@ -96,84 +98,87 @@ _HELPER_MODEL_VALUES = {
     value for _label, value in _HELPER_MODEL_OPTIONS if value is not None
 }
 _SWINIR_CUDA_MODEL_OPTIONS = [
-    ("なし（拡大しない）", None),
-    ("SwinIR-M（real-world x4）", HELPER_MODEL_SWINIR),
+    (N_("なし（拡大しない）"), None),
+    (N_("SwinIR-M（real-world x4）"), HELPER_MODEL_SWINIR),
 ]
 
 # 説明行に出す文。モデルの向き不向き → 速さ → 実行先ごとの注意、の順に並べる。
 _MODEL_DESC = {
-    HELPER_MODEL_ANIME: "アニメ向け。線をくっきり仕上げます。実写には向きません。",
-    "realesr-animevideov3": "アニメ向け。線をくっきり仕上げます。実写には向きません。",
-    HELPER_MODEL_SPAN: "実写向け。元の質感を残して自然に仕上げます。",
-    HELPER_MODEL_AMD_RRDB: "実写向け。輪郭をくっきり仕上げます。",
-    HELPER_MODEL_SWINIR: "実写向け。細部まで丁寧に仕上げます。",
-    HELPER_MODEL_ADCSR: "実写の静止画向け。いちばん高画質です。動画には使えません。",
-    "realesrgan-x4plus": "実写向け。高画質です。",
-    "realesrgan-x4plus-anime": "アニメ向け。高画質です。",
-    "realesr-general-x4v3": "実写・アニメ兼用。ノイズを強めに消します。",
-    "realesr-general-wdn-x4v3": "実写向け。ノイズ消しは控えめです。",
+    HELPER_MODEL_ANIME: N_("アニメ向け。線をくっきり仕上げます。実写には向きません。"),
+    "realesr-animevideov3": N_("アニメ向け。線をくっきり仕上げます。実写には向きません。"),
+    HELPER_MODEL_SPAN: N_("実写向け。元の質感を残して自然に仕上げます。"),
+    HELPER_MODEL_AMD_RRDB: N_("実写向け。輪郭をくっきり仕上げます。"),
+    HELPER_MODEL_SWINIR: N_("実写向け。細部まで丁寧に仕上げます。"),
+    HELPER_MODEL_ADCSR: N_("実写の静止画向け。いちばん高画質です。動画には使えません。"),
+    "realesrgan-x4plus": N_("実写向け。高画質です。"),
+    "realesrgan-x4plus-anime": N_("アニメ向け。高画質です。"),
+    "realesr-general-x4v3": N_("実写・アニメ兼用。ノイズを強めに消します。"),
+    "realesr-general-wdn-x4v3": N_("実写向け。ノイズ消しは控えめです。"),
 }
 _SPEED_TEXT = {
-    "◎": "処理は速いです。",
-    "○": "速さはふつうです。",
-    "△": "少し時間がかかります。",
-    "✕": "かなり時間がかかります。",
-    "極遅": "動画は1秒ぶんに数十秒かかる超低速です。",
+    "◎": N_("処理は速いです。"),
+    "○": N_("速さはふつうです。"),
+    "△": N_("少し時間がかかります。"),
+    "✕": N_("かなり時間がかかります。"),
+    "極遅": N_("動画は1秒ぶんに数十秒かかる超低速です。"),
 }
 _BACKEND_NOTE = {
-    UpscaleBackend.NPU_NATIVE: "NPUで処理するので、GPUを空けたまま他の作業ができます。",
-    UpscaleBackend.NPU: "NPUで処理するので、GPUを空けたまま他の作業ができます。",
-    UpscaleBackend.SWINIR_CUDA: "NVIDIAのGPUが必要です。",
-    UpscaleBackend.VULKAN: "処理中はPCが熱くなり、他の作業が重くなります。",
+    UpscaleBackend.NPU_NATIVE: N_("NPUで処理するので、GPUを空けたまま他の作業ができます。"),
+    UpscaleBackend.NPU: N_("NPUで処理するので、GPUを空けたまま他の作業ができます。"),
+    UpscaleBackend.SWINIR_CUDA: N_("NVIDIAのGPUが必要です。"),
+    UpscaleBackend.VULKAN: N_("処理中はPCが熱くなり、他の作業が重くなります。"),
 }
 
 # (backend, model) → (速度, 画質, アニメ適性, 実写適性, 推奨タグ or None)
+# 速度・画質・適性の印。英語の表示では言葉に置き換える（◎○△✕ は日本語圏の記号のため）。
+_RATING_MARKS = (N_("◎◎"), N_("◎"), N_("○"), N_("△"), N_("✕"))
+
 _MODEL_INFO: dict[tuple[UpscaleBackend, str],
                   tuple[str, str, str, str, str | None]] = {
     (UpscaleBackend.VULKAN, "realesr-animevideov3"):
-        ("◎", "◎", "◎", "△", "アニメ"),
+        ("◎", "◎", "◎", "△", N_("アニメ")),
     (UpscaleBackend.VULKAN, "realesr-general-x4v3"):
         ("◎", "○", "○", "○", None),
     (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"):
-        ("◎", "○", "○", "◎", "実写"),
+        ("◎", "○", "○", "◎", N_("実写")),
     (UpscaleBackend.VULKAN, "realesrgan-x4plus"):
         ("✕", "◎", "○", "◎", None),
     (UpscaleBackend.VULKAN, "realesrgan-x4plus-anime"):
         ("✕", "◎", "◎", "○", None),
     (UpscaleBackend.NPU, "realesrgan-x4plus"):
-        ("◎", "◎", "○", "◎", "実写"),
+        ("◎", "◎", "○", "◎", N_("実写")),
     (UpscaleBackend.NPU, "realesrgan-x4plus-anime"):
         ("○", "◎", "◎", "○", None),
     (UpscaleBackend.NPU, "realesr-animevideov3"):
-        ("◎", "◎", "◎", "△", "アニメ"),
+        ("◎", "◎", "◎", "△", N_("アニメ")),
     (UpscaleBackend.WINML_GPU, HELPER_MODEL_ANIME):
-        ("◎", "◎", "◎", "△", "アニメ"),
+        ("◎", "◎", "◎", "△", N_("アニメ")),
     (UpscaleBackend.WINML_GPU, HELPER_MODEL_SPAN):
-        ("◎", "◎", "○", "◎", "実写"),
+        ("◎", "◎", "○", "◎", N_("実写")),
     (UpscaleBackend.WINML_GPU, HELPER_MODEL_AMD_RRDB):
         ("△", "◎", "○", "◎", None),
     (UpscaleBackend.WINML_GPU, HELPER_MODEL_SWINIR):
-        ("✕", "◎", "○", "◎", "静止画"),
+        ("✕", "◎", "○", "◎", N_("静止画")),
     (UpscaleBackend.WINML_GPU, HELPER_MODEL_ADCSR):
-        ("✕", "◎◎", "○", "◎", "実写"),
+        ("✕", "◎◎", "○", "◎", N_("実写")),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ADCSR):
-        ("✕", "◎◎", "○", "◎", "実写"),
+        ("✕", "◎◎", "○", "◎", N_("実写")),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ANIME):
-        ("○", "◎", "◎", "△", "アニメ"),
+        ("○", "◎", "◎", "△", N_("アニメ")),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SPAN):
-        ("◎", "◎", "○", "◎", "実写"),
+        ("◎", "◎", "○", "◎", N_("実写")),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_AMD_RRDB):
         ("△", "◎", "○", "◎", None),
     (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SWINIR):
-        ("✕", "◎", "○", "◎", "静止画"),
+        ("✕", "◎", "○", "◎", N_("静止画")),
     (UpscaleBackend.SWINIR_CUDA, HELPER_MODEL_SWINIR):
-        ("極遅", "◎◎", "△", "◎", "実写・再開可"),
+        (N_("極遅"), "◎◎", "△", "◎", N_("実写・再開可")),
 }
 
 
 def _combo_closed_text(text: str) -> str:
     """閉じた表示はモデル名だけ（一覧の印｜…・（未変換）は出さない）。"""
-    return str(text).split("｜")[0].removesuffix("（未変換）")
+    return str(text).split("｜")[0].removesuffix(t("（未変換）"))
 
 
 class ModelCombo(QComboBox):
@@ -243,7 +248,7 @@ class MainWindow(QWidget):
         # AI実行先は詳細設定ドロワーにあるコンボをそのまま使う
         # モデルの表示名は右列の表とそろえる（NPU 変換画面へ渡す）。
         self.drawer = SettingsDrawer(
-            model_label=lambda key: _MODEL_LABELS.get(key, key)
+            model_label=lambda key: t(_MODEL_LABELS.get(key, key))
         )
         self.drawer.npu_converting_changed.connect(
             self._on_npu_converting_changed)
@@ -268,7 +273,7 @@ class MainWindow(QWidget):
         work_row.addWidget(self._build_media_panel())
         self.preview = TrialPanel(
             build_settings=self.build_settings,
-            model_label=lambda key: _MODEL_LABELS.get(key, key),
+            model_label=lambda key: t(_MODEL_LABELS.get(key, key)),
         )
         self.preview.trial_running_changed.connect(self._on_trial_running_changed)
         work_row.addWidget(self.preview, 1)
@@ -277,6 +282,7 @@ class MainWindow(QWidget):
         drawer_scroll = QScrollArea()
         drawer_scroll.setWidgetResizable(True)
         drawer_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        drawer_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         drawer_scroll.setWidget(self.drawer)
 
         self.stack = QStackedWidget()
@@ -323,7 +329,7 @@ class MainWindow(QWidget):
         row.addWidget(title)
         row.addStretch(1)
 
-        self.output_open_btn = QPushButton("出力先を開く")
+        self.output_open_btn = QPushButton(t("出力先を開く"))
         self.output_open_btn.setObjectName("toolbarButton")
         self.output_open_btn.setIconSize(QSize(22, 22))
         self.output_open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -334,7 +340,7 @@ class MainWindow(QWidget):
         self.settings_btn.setObjectName("iconButton")
         self.settings_btn.setIconSize(QSize(24, 24))
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.settings_btn.setToolTip("詳細設定")
+        self.settings_btn.setToolTip(t("詳細設定"))
         self.settings_btn.clicked.connect(self._toggle_drawer)
         row.addWidget(self.settings_btn)
 
@@ -367,7 +373,7 @@ class MainWindow(QWidget):
         outer.setContentsMargins(16, 14, 16, 16)
         outer.setSpacing(12)
 
-        title = QLabel("設定")
+        title = QLabel(t("設定"))
         title.setObjectName("sectionTitle")
         outer.addWidget(title)
 
@@ -389,7 +395,7 @@ class MainWindow(QWidget):
         kind_box.setContentsMargins(0, 0, 0, 0)
         kind_box.setSpacing(6)
         self._kind_btns: dict[str, QPushButton] = {}
-        for key, label in ((_IMAGE_TAB, "画像"), (_VIDEO_TAB, "動画")):
+        for key, label in ((_IMAGE_TAB, t("画像")), (_VIDEO_TAB, t("動画"))):
             btn = QPushButton(label)
             btn.setObjectName("kindBtn")
             btn.setCheckable(True)
@@ -403,13 +409,13 @@ class MainWindow(QWidget):
         kind_wrap.setLayout(kind_box)
         col.addWidget(kind_wrap)
 
-        self._per_file_check = ClearCheckBox("このファイルだけ別の設定にする")
+        self._per_file_check = ClearCheckBox(N_("このファイルだけ別の設定にする"))
         self._per_file_check.toggled.connect(self._on_per_file_toggled)
         col.addWidget(self._per_file_check)
 
         self.model_combo = ModelCombo()
         self._compact(self.model_combo)
-        col.addLayout(self._field("モデル", self.model_combo))
+        col.addLayout(self._field(t("モデル"), self.model_combo))
 
         # 選択中の 処理×モデル の説明
         self.model_hint = QLabel("")
@@ -434,16 +440,18 @@ class MainWindow(QWidget):
         scale_wrap = QWidget()
         scale_wrap.setObjectName("scaleWrap")
         scale_wrap.setLayout(scale_box)
-        col.addLayout(self._field("倍率", scale_wrap))
+        col.addLayout(self._field(t("倍率"), scale_wrap))
 
         # フレーム補間モデル（アップスケールとは独立。動画用の設定）
         self.interpolation_combo = QComboBox()
-        self.interpolation_combo.addItem("なし（補間しない）", None)
+        self.interpolation_combo.addItem(t("なし（補間しない）"), None)
         for model in binaries.available_interpolation_models():
-            label = "RIFE v4.6" if model == "rife-v4.6" else model
-            self.interpolation_combo.addItem(label, model)
+            if model == "rife-v4.6":
+                self.interpolation_combo.addItem(t("RIFE v4.6"), model)
+            else:
+                self.interpolation_combo.addItem(model, model)
         if self.interpolation_combo.count() == 1:
-            self.interpolation_combo.addItem("モデル未検出", "__missing__")
+            self.interpolation_combo.addItem(t("モデル未検出"), "__missing__")
             self.interpolation_combo.model().item(1).setEnabled(False)
         self.interpolation_combo.currentIndexChanged.connect(
             lambda _i: self._on_interpolation_changed()
@@ -452,7 +460,7 @@ class MainWindow(QWidget):
         self._interp_wrap = QWidget()
         self._interp_wrap.setObjectName("scaleWrap")
         interp_layout = self._field(
-            "フレーム補間モデル", self._compact(self.interpolation_combo)
+            t("フレーム補間モデル"), self._compact(self.interpolation_combo)
         )
         interp_layout.setContentsMargins(0, 0, 0, 0)
         self._interp_wrap.setLayout(interp_layout)
@@ -460,10 +468,10 @@ class MainWindow(QWidget):
 
         # 出力先
         self.output_combo = QComboBox()
-        self.output_combo.addItems(["元の場所", "フォルダ選択…"])
+        self.output_combo.addItems([t("元の場所"), t("フォルダ選択…")])
         self.output_combo.activated.connect(self._on_output_changed)
         self._output_dir: str | None = None
-        col.addLayout(self._field("出力先", self._compact(self.output_combo)))
+        col.addLayout(self._field(t("出力先"), self._compact(self.output_combo)))
         col.addStretch(1)
 
         self.status_label = QLabel("")
@@ -471,15 +479,15 @@ class MainWindow(QWidget):
         self.status_label.setWordWrap(True)
         outer.addWidget(self.status_label)
 
-        self.pause_btn = QPushButton("一時停止")
+        self.pause_btn = QPushButton(t("一時停止"))
         self.pause_btn.setIconSize(QSize(20, 20))
         self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pause_btn.setEnabled(False)
-        self.pause_btn.setToolTip("現在のジョブ完了後に停止します")
+        self.pause_btn.setToolTip(t("現在のジョブ完了後に停止します"))
         self.pause_btn.clicked.connect(self._on_pause)
         outer.addWidget(self.pause_btn)
 
-        self.start_btn = QPushButton("開始")
+        self.start_btn = QPushButton(t("開始"))
         self.start_btn.setObjectName("primary")
         self.start_btn.setIconSize(QSize(26, 26))
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -499,17 +507,17 @@ class MainWindow(QWidget):
         lay.setSpacing(8)
 
         head = QHBoxLayout()
-        title = QLabel("メディア")
+        title = QLabel(t("メディア"))
         title.setObjectName("sectionTitle")
         head.addWidget(title)
         head.addStretch(1)
-        self.retry_all_btn = QPushButton("すべてやり直す")
+        self.retry_all_btn = QPushButton(t("すべてやり直す"))
         self.retry_all_btn.setObjectName("link")
         self.retry_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.retry_all_btn.setEnabled(False)
         self.retry_all_btn.clicked.connect(self._on_retry_all)
         head.addWidget(self.retry_all_btn)
-        self.clear_btn = QPushButton("すべて削除")
+        self.clear_btn = QPushButton(t("すべて削除"))
         self.clear_btn.setObjectName("link")
         self.clear_btn.setIconSize(QSize(18, 18))
         self.clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -622,8 +630,13 @@ class MainWindow(QWidget):
                 skipped.append(Path(p).name)
         if skipped:
             self._flash_hint(
-                f"{added} 件追加 / {len(skipped)} 件は未対応のためスキップ: "
-                + ", ".join(skipped[:3]) + ("…" if len(skipped) > 3 else "")
+                t(
+                    "{added} 件追加 / {skipped} 件は未対応のためスキップ: {names}{more}",
+                    added=added,
+                    skipped=len(skipped),
+                    names=", ".join(skipped[:3]),
+                    more="…" if len(skipped) > 3 else "",
+                )
             )
 
     def _on_paths_dropped(self, paths: list[str]) -> None:
@@ -631,16 +644,18 @@ class MainWindow(QWidget):
 
     def _pick_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
-            self, "ファイルを選択（複数可）", "",
-            "対応ファイル (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
-            "*.mp4 *.mkv *.mov *.avi *.webm *.m4v *.wmv *.flv *.mpg *.mpeg *.ts *.m2ts);;"
-            "すべて (*.*)",
+            self, t("ファイルを選択（複数可）"), "",
+            t(
+                "対応ファイル (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff "
+                "*.mp4 *.mkv *.mov *.avi *.webm *.m4v *.wmv *.flv *.mpg *.mpeg *.ts *.m2ts);;"
+                "すべて (*.*)"
+            ),
         )
         if files:
             self.add_paths(files)
 
     def _pick_folder(self) -> None:
-        d = QFileDialog.getExistingDirectory(self, "フォルダを選択")
+        d = QFileDialog.getExistingDirectory(self, t("フォルダを選択"))
         if d:
             self.add_paths([d])
 
@@ -920,10 +935,10 @@ class MainWindow(QWidget):
         selected = self._target_model()
         if models is None:
             models = binaries.available_models()
-        options: list[tuple[str, object]] = [("なし（拡大しない）", None)]
+        options: list[tuple[str, object]] = [(N_("なし（拡大しない）"), None)]
         options.extend((_MODEL_LABELS.get(model, model), model) for model in models)
         if not models:
-            options.append(("モデル未検出", "__missing__"))
+            options.append((N_("モデル未検出"), "__missing__"))
         elif selected is not None and selected not in models:
             selected = DEFAULT_MODEL if DEFAULT_MODEL in models else None
         self._save_model_to_target(selected)
@@ -945,7 +960,7 @@ class MainWindow(QWidget):
         try:
             self.model_combo.clear()
             for label, value in options:
-                self.model_combo.addItem(label, value)
+                self.model_combo.addItem(t(label), value)
             if selected is not None:
                 index = self.model_combo.findData(selected)
                 if index >= 0:
@@ -973,16 +988,26 @@ class MainWindow(QWidget):
         if info is None:
             return ""
         speed, quality, anime, live, star = info
-        parts = [f"速度{speed}", f"画質{quality}", f"アニメ{anime}・実写{live}"]
+        parts = [
+            t("速度{speed}", speed=t(speed)),
+            t("画質{quality}", quality=t(quality)),
+            t("アニメ{anime}・実写{live}", anime=t(anime), live=t(live)),
+        ]
         if star:
-            parts.append(f"★{star}に推奨")
+            parts.append(t("★{star}に推奨", star=t(star)))
         return "／".join(parts)
 
     @staticmethod
     def _compose_hint_line(backend: UpscaleBackend, data: str) -> str:
         info = _MODEL_INFO.get((backend, data))
         speed = _SPEED_TEXT.get(info[0], "") if info else ""
-        return _MODEL_DESC.get(data, "") + speed + _BACKEND_NOTE.get(backend, "")
+        desc = _MODEL_DESC.get(data, "")
+        note = _BACKEND_NOTE.get(backend, "")
+        return (
+            (t(desc) if desc else "")
+            + (t(speed) if speed else "")
+            + (t(note) if note else "")
+        )
 
     def _update_model_info(self) -> None:
         """モデルコンボのバッジ（速度/画質/★推奨）と、選択中構成の説明行を更新する。"""
@@ -996,10 +1021,10 @@ class MainWindow(QWidget):
             data = self.model_combo.itemData(i)
             if data in (None, "__missing__"):
                 continue
-            base = _MODEL_LABELS.get(data, data)
+            base = t(_MODEL_LABELS.get(data, data))
             suffix = ""
             if show_unconverted and not npu_prepare.is_converted(str(data)):
-                suffix = "（未変換）"
+                suffix = t("（未変換）")
             info = _MODEL_INFO.get((backend, data))
             item = item_model.item(i)
             if info is None:
@@ -1008,7 +1033,11 @@ class MainWindow(QWidget):
                     item.setToolTip("")
                 continue
             speed, quality, _anime, _live, star = info
-            badge = f"速度{speed} 画質{quality}" + (f" ★{star}" if star else "")
+            badge = t(
+                "速度{speed} 画質{quality}",
+                speed=t(speed),
+                quality=t(quality),
+            ) + (t(" ★{star}", star=t(star)) if star else "")
             self.model_combo.setItemText(i, f"{base}{suffix}｜{badge}")
             if item is not None:
                 item.setToolTip(self._compose_model_hint(backend, data))
@@ -1022,7 +1051,7 @@ class MainWindow(QWidget):
 
         cur = self.model_combo.currentData()
         if cur in (None, "__missing__"):
-            self.model_hint.setText("拡大はしません。フレーム補間だけ実行できます。")
+            self.model_hint.setText(t("拡大はしません。フレーム補間だけ実行できます。"))
             return
         self.model_hint.setText(self._compose_hint_line(backend, cur))
 
@@ -1129,15 +1158,15 @@ class MainWindow(QWidget):
     def _on_output_changed(self, index: int) -> None:
         # index 1 = 「フォルダ選択…」
         if index == 1:
-            d = QFileDialog.getExistingDirectory(self, "出力先フォルダを選択")
+            d = QFileDialog.getExistingDirectory(self, t("出力先フォルダを選択"))
             if d:
                 self._output_dir = d
                 # 選択フォルダ名を項目テキストに反映
-                self.output_combo.setItemText(1, f"📁 {Path(d).name}")
+                self.output_combo.setItemText(1, t("📁 {name}", name=Path(d).name))
             else:
                 # キャンセル時は「元の場所」に戻す
                 self.output_combo.setCurrentIndex(0)
-                self.output_combo.setItemText(1, "フォルダ選択…")
+                self.output_combo.setItemText(1, t("フォルダ選択…"))
         # index 0 = 「元の場所」: 何もしない
 
     def _toggle_drawer(self) -> None:
@@ -1240,11 +1269,11 @@ class MainWindow(QWidget):
         if self._running:
             return
         if self._npu_converting:
-            self._flash_hint("NPU の変換中は処理を始められません")
+            self._flash_hint(t("NPU の変換中は処理を始められません"))
             return
         pending = self._pending_jobs()
         if not pending:
-            self._flash_hint("処理するファイルがありません。")
+            self._flash_hint(t("処理するファイルがありません。"))
             return
 
         # 開始前にファイルごとの設定を確認する（個別はそのファイル名で案内）
@@ -1258,11 +1287,13 @@ class MainWindow(QWidget):
             if not missing:
                 continue
             if individual:
-                self._flash_hint(f"{job.name}のモデルを選んでください。")
+                self._flash_hint(
+                    t("{name}のモデルを選んでください。", name=job.name)
+                )
             elif is_video:
-                self._flash_hint("動画のモデルかフレーム補間を選んでください。")
+                self._flash_hint(t("動画のモデルかフレーム補間を選んでください。"))
             else:
-                self._flash_hint("画像のモデルを選んでください。")
+                self._flash_hint(t("画像のモデルを選んでください。"))
             return
 
         # NPU 未変換の確認（ファイルごとの設定で判定。
@@ -1282,8 +1313,8 @@ class MainWindow(QWidget):
                 continue
             if npu_prepare.is_converted(str(job_settings.model)):
                 continue
-            label = _MODEL_LABELS.get(
-                str(job_settings.model), str(job_settings.model))
+            label = t(_MODEL_LABELS.get(
+                str(job_settings.model), str(job_settings.model)))
             self._flash_hint(npu_prepare.not_converted_message(label))
             return
 
@@ -1346,19 +1377,19 @@ class MainWindow(QWidget):
         if self._running:
             self._pause.set()
             self.pause_btn.setEnabled(False)
-            self.pause_btn.setText("停止中…")
+            self.pause_btn.setText(t("停止中…"))
             # 動画1本の途中では長時間効かないため、即時中止の手段を案内する
             self._flash_hint(
-                "現在のジョブ完了後に停止します。今すぐ中止するには行の × を押してください。"
+                t("現在のジョブ完了後に停止します。今すぐ中止するには行の × を押してください。")
             )
 
     def _set_running(self, running: bool) -> None:
         self._running = running
         self.start_btn.setEnabled(
             not running and not getattr(self, "_npu_converting", False))
-        self.start_btn.setText("処理中…" if running else "開始")
+        self.start_btn.setText(t("処理中…") if running else t("開始"))
         self.pause_btn.setEnabled(running)
-        self.pause_btn.setText("一時停止")
+        self.pause_btn.setText(t("一時停止"))
         # 実行中は入力系をロック（モデル/倍率/出力先/追加）
         for w in (self.backend_combo, self.model_combo, self.interpolation_combo, self.output_combo,
                   self.clear_btn, self.output_open_btn, self.settings_btn,
@@ -1380,24 +1411,37 @@ class MainWindow(QWidget):
     def _waiting_text(self, job: Job) -> str:
         """待機中の行に出す「何で処理されるか」の表示。"""
         model, scale, interpolation, individual = self._resolve_effective(job)
-        suffix = "（個別）" if individual else ""
+        suffix = t("（個別）") if individual else ""
         if model is not None:
-            base = f"{_MODEL_LABELS.get(model, model)}・{scale}x"
+            label = t(_MODEL_LABELS.get(model, model))
             if interpolation is not None:
-                base += "・補間あり"
-            return base + suffix
+                return t(
+                    "{model}・{scale}x・補間あり{suffix}",
+                    model=label,
+                    scale=scale,
+                    suffix=suffix,
+                )
+            return t(
+                "{model}・{scale}x{suffix}",
+                model=label,
+                scale=scale,
+                suffix=suffix,
+            )
         if interpolation is not None:
-            return f"補間のみ{suffix}"
-        return f"モデル未選択{suffix}"
+            return t("補間のみ{suffix}", suffix=suffix)
+        return t("モデル未選択{suffix}", suffix=suffix)
 
     def _done_text(self, job: Job) -> str:
         """完了した行に出す表示（使った設定で決まる）。"""
         settings = job.settings
         if settings is not None and settings.model is not None:
-            return f"完了・{_MODEL_LABELS.get(settings.model, settings.model)}"
+            return t(
+                "完了・{model}",
+                model=t(_MODEL_LABELS.get(settings.model, settings.model)),
+            )
         if settings is not None and settings.interpolation_model is not None:
-            return "完了・補間のみ"
-        return "完了"
+            return t("完了・補間のみ")
+        return t("完了")
 
     def _refresh_all_waiting(self) -> None:
         """待機中の行の表示を、いまの既定・個別・実行先に合わせる。"""
@@ -1487,7 +1531,7 @@ class MainWindow(QWidget):
             return
         job.status = JobStatus.ERROR
         job.error = message
-        job.message = f"エラー: {message}"
+        job.message = t("エラー: {message}", message=message)
         self.queue.refresh(job_id)
         self._update_retry_all()
 
@@ -1496,7 +1540,7 @@ class MainWindow(QWidget):
         if job is None:
             return
         job.status = JobStatus.CANCELED
-        job.message = "キャンセルされました"
+        job.message = t("キャンセルされました")
         self.queue.refresh(job_id)
         self._update_retry_all()
 
@@ -1516,7 +1560,7 @@ class MainWindow(QWidget):
             self.close()
             return
         if self._pause.is_set():
-            self._flash_hint("一時停止しました。「開始」で再開できます。")
+            self._flash_hint(t("一時停止しました。「開始」で再開できます。"))
             self._pause.clear()
         if self._closing:
             # 終了待ちだった → ワーカー停止が完了したのでウィンドウを閉じる
@@ -1532,7 +1576,7 @@ class MainWindow(QWidget):
             ev = self._cancel_events.get(job_id)
             if ev is not None:
                 ev.set()
-            job.message = "キャンセル中…"
+            job.message = t("キャンセル中…")
             self.queue.refresh(job_id)
             return
         # 未処理/完了済み → 行ごと削除
@@ -1567,7 +1611,7 @@ class MainWindow(QWidget):
     # -------------------------------------------------------------- 補助
     def _flash_hint(self, text: str) -> None:
         """開始ボタンの上に状況メッセージを出す（ウィンドウタイトルにも併記）。"""
-        self.setWindowTitle(f"ultraeasy-upscaler — {text}")
+        self.setWindowTitle(t("ultraeasy-upscaler — {text}", text=text))
         self.status_label.setText(text)
 
     def _open_output_folder(self) -> None:
@@ -1593,7 +1637,7 @@ class MainWindow(QWidget):
                 self.preview.cancel_trial()
             if converting and hasattr(self, "drawer"):
                 self.drawer.cancel_conversion()
-            self._flash_hint("終了処理中… 現在の処理を停止しています")
+            self._flash_hint(t("終了処理中… 現在の処理を停止しています"))
             event.ignore()
             return
         if hasattr(self, "preview"):

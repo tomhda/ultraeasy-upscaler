@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ..i18n import t
 from . import binaries
 from .jobs import ProgressCb
 from .settings import UpscaleSettings
@@ -44,11 +45,15 @@ def extract_frame(video_path: str, seconds: float, out_png: str) -> None:
             creationflags=_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(f"コマを取り出せませんでした: {exc}") from exc
+        raise RuntimeError(
+            t("コマを取り出せませんでした: {error}", error=exc)
+        ) from exc
     if done.returncode != 0 or not out.exists():
         tail = (done.stderr or "").strip().splitlines()[-1:]
         detail = tail[0] if tail else f"exit={done.returncode}"
-        raise RuntimeError(f"コマを取り出せませんでした: {detail}")
+        raise RuntimeError(
+            t("コマを取り出せませんでした: {error}", error=detail)
+        )
 
 
 def crop_image(src_png: str, rect: tuple[int, int, int, int], out_png: str) -> None:
@@ -69,7 +74,7 @@ def crop_image(src_png: str, rect: tuple[int, int, int, int], out_png: str) -> N
         x1 = min(max(0, x + w), width)
         y1 = min(max(0, y + h), height)
         if x1 <= x0 or y1 <= y0:
-            raise ValueError("範囲が画像の外です")
+            raise ValueError(t("範囲が画像の外です"))
         cropped = im.crop((x0, y0, x1, y1))
         cropped.save(out, "PNG")
 

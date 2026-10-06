@@ -454,7 +454,7 @@ def test_npu_section_texts(app, monkeypatch) -> None:
     anime = drawer.npu_rows[HELPER_MODEL_ANIME]
     assert anime["status"].text() == "未変換"
     assert anime["estimate"].text() == _estimate("HELPER_MODEL_ANIME")
-    assert anime["button"].text() == "変換する"
+    assert anime["button"].text() == "NPU 用に変換"
 
     span = drawer.npu_rows[HELPER_MODEL_SPAN]
     assert span["status"].text() == "未変換"
@@ -545,7 +545,7 @@ def test_conversion_failure(app, monkeypatch) -> None:
     assert _wait_until(lambda: not drawer.is_converting())
     assert anime["status"].text() == "失敗"
     assert anime["estimate"].text() == _estimate("HELPER_MODEL_ANIME")
-    assert anime["button"].text() == "変換する"
+    assert anime["button"].text() == "NPU 用に変換"
     assert anime["button"].isHidden() is False
     status = drawer.npu_status.text()
     assert status == "変換できませんでした: boom"
@@ -570,7 +570,7 @@ def test_conversion_cancel(app, monkeypatch) -> None:
     assert _wait_until(lambda: not drawer.is_converting())
     assert anime["status"].text() == "未変換"
     assert anime["estimate"].text() == _estimate("HELPER_MODEL_ANIME")
-    assert anime["button"].text() == "変換する"
+    assert anime["button"].text() == "NPU 用に変換"
     assert drawer.npu_status.text() == "中止しました"
 
 

@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from ..i18n import t
 from . import binaries, jobs, media
 from .jobs import ProgressCb
 from .settings import UpscaleSettings
@@ -34,13 +35,15 @@ def _conda_exe() -> str:
             return str(path)
 
     raise RuntimeError(
-        "conda が見つかりません。Miniforge / Ryzen AI 環境を確認してください。"
+        t("conda が見つかりません。Miniforge / Ryzen AI 環境を確認してください。")
     )
 
 
 def _check_npu_settings(settings: UpscaleSettings) -> None:
     if int(settings.scale) != 4:
-        raise ValueError("NPU backend は現在 x4 のみ対応です。倍率を 4x にしてください。")
+        raise ValueError(
+            t("NPU backend は現在 x4 のみ対応です。倍率を 4x にしてください。")
+        )
     # conda 起動（数秒）前に未対応モデルを弾く。BinaryError を ValueError として上げる
     try:
         binaries.npu_model_spec(settings.model)
@@ -116,7 +119,13 @@ def _run_worker(args: list[str], progress: ProgressCb, cancel=None) -> None:
 
     if ret != 0:
         tail = "\n".join(lines[-12:])
-        raise RuntimeError(f"NPU backend が失敗しました (exit={ret})\n{tail}")
+        raise RuntimeError(
+            t(
+                "NPU backend が失敗しました (exit={ret})\n{tail}",
+                ret=ret,
+                tail=tail,
+            )
+        )
 
 
 def _terminate(proc: subprocess.Popen) -> None:
@@ -151,7 +160,9 @@ def upscale_image(
     ], progress, cancel)
 
     if not out.exists():
-        raise RuntimeError(f"NPU出力ファイルが生成されませんでした: {out}")
+        raise RuntimeError(
+            t("NPU出力ファイルが生成されませんでした: {out}", out=out)
+        )
 
 
 def upscale_folder(
@@ -171,7 +182,7 @@ def upscale_folder(
         if p.is_file() and p.suffix.lower() in media.IMAGE_EXTS
     )
     if total == 0:
-        progress(1.0, "0/0 枚")
+        progress(1.0, t("0/0 枚"))
         return
 
     _run_worker([
@@ -186,4 +197,4 @@ def upscale_folder(
         1 for p in out.iterdir()
         if p.is_file() and p.suffix.lower() in media.IMAGE_EXTS
     )
-    progress(1.0, f"{done}/{total} 枚")
+    progress(1.0, t("{done}/{total} 枚", done=done, total=total))

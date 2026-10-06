@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.jobs import Job, JobKind, JobStatus
+from app.i18n import N_, t
 
 from . import theme
 from .icons import Icon, apply_icon_font, make_icon
@@ -30,19 +31,19 @@ _KIND_GLYPH = {
     JobKind.FOLDER: Icon.FOLDER,
 }
 _KIND_LABEL = {
-    JobKind.IMAGE: "画像",
-    JobKind.VIDEO: "動画",
-    JobKind.FOLDER: "フォルダ",
+    JobKind.IMAGE: N_("画像"),
+    JobKind.VIDEO: N_("動画"),
+    JobKind.FOLDER: N_("フォルダ"),
 }
 
 # 状態ごとの表示文言（メッセージが無い場合のフォールバック）
 _STATUS_TEXT = {
-    JobStatus.QUEUED: "待機中",
-    JobStatus.PROBING: "解析中…",
-    JobStatus.RUNNING: "処理中…",
-    JobStatus.DONE: "完了",
-    JobStatus.ERROR: "エラー",
-    JobStatus.CANCELED: "キャンセル",
+    JobStatus.QUEUED: N_("待機中"),
+    JobStatus.PROBING: N_("解析中…"),
+    JobStatus.RUNNING: N_("処理中…"),
+    JobStatus.DONE: N_("完了"),
+    JobStatus.ERROR: N_("エラー"),
+    JobStatus.CANCELED: N_("キャンセル"),
 }
 
 
@@ -103,7 +104,7 @@ class QueueRow(QFrame):
         self._retry.setCursor(Qt.CursorShape.PointingHandCursor)
         self._retry.setFixedSize(28, 28)
         self._retry.setIconSize(QSize(18, 18))
-        self._retry.setToolTip("やり直す")
+        self._retry.setToolTip(t("やり直す"))
         self._retry.clicked.connect(lambda: self.retryRequested.emit(self.job.id))
         self._apply_retry_icon()
         top.addWidget(self._retry, 0, Qt.AlignmentFlag.AlignTop)
@@ -113,7 +114,7 @@ class QueueRow(QFrame):
         self._close.setObjectName("rowClose")
         self._close.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close.setFixedSize(28, 28)
-        self._close.setToolTip("一覧から削除 / 処理中ならキャンセル")
+        self._close.setToolTip(t("一覧から削除 / 処理中ならキャンセル"))
         self._close.clicked.connect(lambda: self.removeRequested.emit(self.job.id))
         top.addWidget(self._close, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -168,7 +169,7 @@ class QueueRow(QFrame):
         self._thumb.setText(_KIND_GLYPH.get(self.job.kind, "?"))
 
     def _meta_text(self) -> str:
-        parts = [_KIND_LABEL.get(self.job.kind, "")]
+        parts = [t(_KIND_LABEL.get(self.job.kind, ""))]
         if self.job.width and self.job.height:
             parts.append(f"{self.job.width}x{self.job.height}")
         return "・".join(p for p in parts if p)
@@ -179,14 +180,15 @@ class QueueRow(QFrame):
             return ""
         backend = getattr(settings.backend, "value", str(settings.backend))
         if backend in {"winml_gpu", "npu_native"}:
-            upscale = "なし" if settings.model is None else f"{settings.model}（4x）"
+            upscale = t("なし") if settings.model is None else f"{settings.model}（4x）"
         else:
-            upscale = settings.model or "なし"
-        interpolation = settings.interpolation_model or "なし"
-        return (
-            f"AI実行先: {backend}\n"
-            f"アップスケール: {upscale}\n"
-            f"フレーム補間: {interpolation}"
+            upscale = settings.model or t("なし")
+        interpolation = settings.interpolation_model or t("なし")
+        return t(
+            "AI実行先: {backend}\nアップスケール: {upscale}\nフレーム補間: {interpolation}",
+            backend=backend,
+            upscale=upscale,
+            interpolation=interpolation,
         )
 
     def _elide(self) -> None:
@@ -211,12 +213,18 @@ class QueueRow(QFrame):
         self._bar.setVisible(busy)
         self._percent.setVisible(busy)
 
-        self._status_full = self.job.message or _STATUS_TEXT.get(self.job.status, "")
+        self._status_full = (
+            t(self.job.message)
+            if self.job.message
+            else t(_STATUS_TEXT.get(self.job.status, ""))
+        )
         self._elide()
 
         # 状態に応じたツールチップ（出力先・エラー詳細）
         if self.job.status == JobStatus.DONE and self.job.output_path:
-            self._status.setToolTip(f"出力先: {self.job.output_path}")
+            self._status.setToolTip(
+                t("出力先: {path}", path=self.job.output_path)
+            )
         elif self.job.status == JobStatus.ERROR and self.job.error:
             self._status.setToolTip(self.job.error)
         else:
@@ -248,7 +256,7 @@ class QueueRow(QFrame):
 
     def set_busy_icon(self, busy: bool) -> None:
         """処理中はツールチップを「キャンセル」寄りにする。"""
-        self._close.setToolTip("処理を中止" if busy else "一覧から削除")
+        self._close.setToolTip(t("処理を中止") if busy else t("一覧から削除"))
 
 
 class QueueView(QWidget):

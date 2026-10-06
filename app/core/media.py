@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from ..i18n import t
 from . import binaries
 from .jobs import JobKind
 
@@ -32,7 +33,7 @@ def classify(path: str) -> JobKind:
         return JobKind.IMAGE
     if ext in VIDEO_EXTS:
         return JobKind.VIDEO
-    raise ValueError(f"未対応の形式です: {p.name}")
+    raise ValueError(t("未対応の形式です: {name}", name=p.name))
 
 
 @dataclass

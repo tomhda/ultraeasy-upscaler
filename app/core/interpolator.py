@@ -12,6 +12,7 @@ from PIL import Image
 from . import binaries
 from .jobs import Cancelled, ProgressCb
 from .settings import UpscaleSettings
+from ..i18n import t
 from .video import FRAME_GLOB, FRAME_PATTERN
 
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -49,21 +50,24 @@ def interpolate_folder(
 ) -> tuple[int, float]:
     """input_dir の連番PNGを補間し、(生成枚数, 実効fps) を返す。"""
     if not settings.interpolation_model:
-        raise ValueError("フレーム補間モデルが選択されていません。")
+        raise ValueError(t("フレーム補間モデルが選択されていません。"))
     if source_fps <= 0:
-        raise ValueError("元動画のfpsを取得できません。")
+        raise ValueError(t("元動画のfpsを取得できません。"))
 
     source = Path(input_dir)
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     input_count = sum(1 for _ in source.glob(FRAME_GLOB))
     if input_count < 2:
-        raise ValueError("フレーム補間には2枚以上のフレームが必要です。")
+        raise ValueError(t("フレーム補間には2枚以上のフレームが必要です。"))
 
     requested_fps = settings.target_fps or (source_fps * 2.0)
     if requested_fps <= source_fps:
         raise ValueError(
-            f"補間後のfpsは元動画より大きい値にしてください（元: {source_fps:.3f}fps）。"
+            t(
+                "補間後のfpsは元動画より大きい値にしてください（元: {fps:.3f}fps）。",
+                fps=source_fps,
+            )
         )
     target_count = max(input_count + 1, round(input_count * requested_fps / source_fps))
     # 枚数の丸め後も元動画と尺を完全に一致させる。
@@ -110,7 +114,7 @@ def interpolate_folder(
         thread.start()
 
     if progress:
-        progress(0.0, "RIFEでフレーム補間中…")
+        progress(0.0, t("RIFEでフレーム補間中…"))
     try:
         while proc.poll() is None:
             if cancel is not None and cancel.is_set():
@@ -118,7 +122,7 @@ def interpolate_folder(
                 raise Cancelled()
             produced = sum(1 for _ in destination.glob(FRAME_GLOB))
             if progress:
-                progress(min(0.999, produced / target_count), "RIFEでフレーム補間中…")
+                progress(min(0.999, produced / target_count), t("RIFEでフレーム補間中…"))
             time.sleep(0.25)
         ret = proc.wait()
     finally:
@@ -129,13 +133,19 @@ def interpolate_folder(
         raise Cancelled()
     if ret != 0:
         tail = (stdout_lines + stderr_lines)[-20:]
-        raise RuntimeError("RIFEが失敗しました:\n" + "".join(tail).strip())
+        raise RuntimeError(
+            t("RIFEが失敗しました:\n{tail}", tail="".join(tail).strip())
+        )
 
     produced = sum(1 for _ in destination.glob(FRAME_GLOB))
     if produced != target_count:
         raise RuntimeError(
-            f"RIFEの生成枚数が一致しません（予定 {target_count} / 実際 {produced}）。"
+            t(
+                "RIFEの生成枚数が一致しません（予定 {planned} / 実際 {actual}）。",
+                planned=target_count,
+                actual=produced,
+            )
         )
     if progress:
-        progress(1.0, "フレーム補間完了")
+        progress(1.0, t("フレーム補間完了"))
     return produced, effective_fps

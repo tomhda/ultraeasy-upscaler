@@ -19,6 +19,7 @@ from typing import Optional
 import numpy as np
 from PIL import Image, ImageOps
 
+from ..i18n import t
 from . import binaries, jobs, media
 from .jobs import ProgressCb
 from .serve_client import HelperOutputInvalid, ServeClient, ServeClientError
@@ -187,7 +188,12 @@ def _resolve_model(backend: UpscaleBackend, model: str | ModelFamily, tile: int)
         filename = HELPER_MODEL_FILES[backend][model_key][tile]
     except KeyError as exc:
         raise HelperBackendUnavailable(
-            f"対応モデルがありません: backend={backend.value}, model={model_key}, tile={tile}"
+            t(
+                "対応モデルがありません: backend={backend}, model={model}, tile={tile}",
+                backend=backend.value,
+                model=model_key,
+                tile=tile,
+            )
         ) from exc
 
     root = models_dir()
@@ -202,8 +208,11 @@ def _resolve_model(backend: UpscaleBackend, model: str | ModelFamily, tile: int)
         if candidate.is_file():
             return candidate.resolve()
     raise HelperBackendUnavailable(
-        f"AIモデルが見つかりません: {filename}\n"
-        f"探索先: {', '.join(str(search_dir) for search_dir in search_dirs)}"
+        t(
+            "AIモデルが見つかりません: {filename}\n探索先: {dirs}",
+            filename=filename,
+            dirs=", ".join(str(search_dir) for search_dir in search_dirs),
+        )
     )
 
 
@@ -213,7 +222,13 @@ def _winml_helper() -> Path:
         candidate = Path(override).expanduser()
         if candidate.is_file():
             return candidate.resolve()
-        raise HelperBackendUnavailable(f"{WINML_HELPER_ENV} のファイルが見つかりません: {candidate}")
+        raise HelperBackendUnavailable(
+            t(
+                "{env} のファイルが見つかりません: {path}",
+                env=WINML_HELPER_ENV,
+                path=candidate,
+            )
+        )
 
     # 配布版（setup.ps1 が vendor/winml-sr/ へ展開したビルド済みヘルパー）を
     # 開発ビルドより先に探す。UEU_WINML_HELPER の明示指定はこの前段で優先される。
@@ -237,8 +252,11 @@ def _winml_helper() -> Path:
     if found:
         return Path(found).resolve()
     raise HelperBackendUnavailable(
-        "winml-sr.exeが見つかりません。tools/winml-srをビルドするか、"
-        f"{WINML_HELPER_ENV}を指定してください。"
+        t(
+            "winml-sr.exeが見つかりません。tools/winml-srをビルドするか、"
+            "{env}を指定してください。",
+            env=WINML_HELPER_ENV,
+        )
     )
 
 
@@ -246,14 +264,18 @@ def _npu_python() -> Path:
     default = Path.home() / "miniforge3" / "envs" / "ryzen-ai-1.8.0" / "python.exe"
     candidate = Path(os.environ.get(NPU_PYTHON_ENV, str(default))).expanduser()
     if not candidate.is_file():
-        raise HelperBackendUnavailable(f"NPU用Pythonが見つかりません: {candidate}")
+        raise HelperBackendUnavailable(
+            t("NPU用Pythonが見つかりません: {path}", path=candidate)
+        )
     return candidate.resolve()
 
 
 def _npu_script() -> Path:
     script = binaries.repo_root() / "tools" / "npu-serve" / "npu_serve.py"
     if not script.is_file():
-        raise HelperBackendUnavailable(f"NPUワーカーが見つかりません: {script}")
+        raise HelperBackendUnavailable(
+            t("NPUワーカーが見つかりません: {path}", path=script)
+        )
     return script.resolve()
 
 
@@ -262,9 +284,13 @@ def _swinir_python() -> Path:
     candidate = Path(os.environ.get(SWINIR_PYTHON_ENV, str(default))).expanduser()
     if not candidate.is_file():
         raise HelperBackendUnavailable(
-            "SwinIR用Pythonが見つかりません。"
-            "scripts\\setup_swinir.ps1を実行するか、"
-            f"{SWINIR_PYTHON_ENV}を指定してください: {candidate}"
+            t(
+                "SwinIR用Pythonが見つかりません。"
+                "scripts\\setup_swinir.ps1を実行するか、"
+                "{env}を指定してください: {path}",
+                env=SWINIR_PYTHON_ENV,
+                path=candidate,
+            )
         )
     return candidate.resolve()
 
@@ -272,7 +298,9 @@ def _swinir_python() -> Path:
 def _swinir_script() -> Path:
     script = binaries.repo_root() / "tools" / "swinir" / "worker.py"
     if not script.is_file():
-        raise HelperBackendUnavailable(f"SwinIRワーカーが見つかりません: {script}")
+        raise HelperBackendUnavailable(
+            t("SwinIRワーカーが見つかりません: {path}", path=script)
+        )
     return script.resolve()
 
 
@@ -281,9 +309,13 @@ def _swinir_model() -> Path:
     candidate = Path(os.environ.get(SWINIR_MODEL_ENV, str(default))).expanduser()
     if not candidate.is_file():
         raise HelperBackendUnavailable(
-            "SwinIR-Mモデルが見つかりません。"
-            "scripts\\setup_swinir.ps1を実行するか、"
-            f"{SWINIR_MODEL_ENV}を指定してください: {candidate}"
+            t(
+                "SwinIR-Mモデルが見つかりません。"
+                "scripts\\setup_swinir.ps1を実行するか、"
+                "{env}を指定してください: {path}",
+                env=SWINIR_MODEL_ENV,
+                path=candidate,
+            )
         )
     return candidate.resolve()
 
@@ -447,13 +479,17 @@ def _session_spec(
     settings: UpscaleSettings, width: int, height: int
 ) -> tuple[UpscaleBackend, int, Path]:
     if int(settings.scale) != 4:
-        raise HelperBackendUnavailable("新しいGPU/NPUバックエンドは4xモデル専用です。倍率を4xにしてください。")
+        raise HelperBackendUnavailable(
+            t("新しいGPU/NPUバックエンドは4xモデル専用です。倍率を4xにしてください。")
+        )
     requested = settings.backend
     backend = effective_backend(requested, width, height)
     model_key = _model_key(settings)
     if backend == UpscaleBackend.SWINIR_CUDA:
         if model_key != HELPER_MODEL_SWINIR:
-            raise HelperBackendUnavailable("CUDA版SwinIRはSwinIR-Mモデル専用です。")
+            raise HelperBackendUnavailable(
+                t("CUDA版SwinIRはSwinIR-Mモデル専用です。")
+            )
         return backend, 256, _swinir_model()
     if model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
         two_stage_pre = adcsr_two_stage_files() if adcsr_npu2_enabled() else None
@@ -489,14 +525,14 @@ def open_session(
         model_key = _model_key(settings)
         overlap = overlap_for_model(model_key)
         if backend == UpscaleBackend.SWINIR_CUDA:
-            progress(0.0, "SwinIR-MをCUDAへ読み込み中…")
+            progress(0.0, t("SwinIR-MをCUDAへ読み込み中…"))
         elif settings.backend == UpscaleBackend.NPU_NATIVE and backend == UpscaleBackend.WINML_GPU:
             if model_key == HELPER_MODEL_ADCSR:
-                progress(0.0, "AdcSRはNPU非対応のためGPUで実行…")
+                progress(0.0, t("AdcSRはNPU非対応のためGPUで実行…"))
             else:
-                progress(0.0, "短辺480px未満のためGPUへ自動切替…")
+                progress(0.0, t("短辺480px未満のためGPUへ自動切替…"))
         else:
-            progress(0.0, "AI準備中…")
+            progress(0.0, t("AI準備中…"))
 
         cache_hit = True
         if backend == UpscaleBackend.SWINIR_CUDA:
@@ -504,7 +540,9 @@ def open_session(
             script = _swinir_script()
             swinir_tile = int(settings.tile_size) if int(settings.tile_size) > 0 else 256
             if swinir_tile % 8:
-                raise HelperBackendUnavailable("SwinIRのタイルサイズは8の倍数にしてください。")
+                raise HelperBackendUnavailable(
+                t("SwinIRのタイルサイズは8の倍数にしてください。")
+            )
             swinir_overlap = min(32, swinir_tile // 2)
             swinir_device = (
                 f"cuda:{int(settings.gpu_id)}"
@@ -555,7 +593,11 @@ def open_session(
                 cache_hit = bool(compiled)
             elif model_key == HELPER_MODEL_ADCSR and backend == UpscaleBackend.NPU_NATIVE:
                 raise HelperBackendUnavailable(
-                    "AdcSR の NPU 2段モード用ファイル (front/back/manifest) が見つかりません")
+                    t(
+                        "AdcSR の NPU 2段モード用ファイル "
+                        "(front/back/manifest) が見つかりません"
+                    )
+                )
             else:
                 cache_hit = bool(compiled)
             tail_manifest: Path | None = None
@@ -597,9 +639,11 @@ def open_session(
                 timeout = 15 * 60.0 if cache_hit else 120 * 60.0
             if not cache_hit:
                 if two_stage is not None:
-                    progress(0.0, "NPU 前半を最適化中 1/2（初回のみ。次回はキャッシュを利用）")
+                    progress(
+                    0.0, t("NPU 前半を最適化中 1/2（初回のみ。次回はキャッシュを利用）")
+                )
                 else:
-                    progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回はキャッシュを利用）")
+                    progress(0.0, t("初回のみNPU最適化中（数分〜1時間・次回はキャッシュを利用）"))
 
         env = _helper_env()
         stage_state: dict[str, object] = {"tag": None}
@@ -608,14 +652,20 @@ def open_session(
         def _format_stage(tag: str, elapsed: float) -> str:
             mm_ss = f"{int(elapsed // 60):02d}:{int(elapsed % 60):02d}"
             if tag == "front-compile":
-                return f"NPU 前半を最適化中 1/2（経過 {mm_ss}。この検証機では約93分）"
+                return t(
+                    "NPU 前半を最適化中 1/2（経過 {elapsed}。この検証機では約93分）",
+                    elapsed=mm_ss,
+                )
             if tag == "back-compile":
-                return f"NPU 後半を最適化中 2/2（経過 {mm_ss}。この検証機では約30分）"
+                return t(
+                    "NPU 後半を最適化中 2/2（経過 {elapsed}。この検証機では約30分）",
+                    elapsed=mm_ss,
+                )
             if tag == "selftest":
-                return f"NPU 動作検査中（経過 {mm_ss}）"
+                return t("NPU 動作検査中（経過 {elapsed}）", elapsed=mm_ss)
             if tag == "ready":
-                return "NPU 準備完了"
-            return "AI準備中…"
+                return t("NPU 準備完了")
+            return t("AI準備中…")
 
         def _log_line(line: str) -> None:
             for tag in ("front-compile", "back-compile", "selftest", "ready"):
@@ -636,7 +686,7 @@ def open_session(
                 return
             last_second = second
             if backend == UpscaleBackend.SWINIR_CUDA:
-                progress(0.0, "SwinIR-MをCUDAへ読み込み中…")
+                progress(0.0, t("SwinIR-MをCUDAへ読み込み中…"))
             elif backend == UpscaleBackend.NPU_NATIVE and not cache_hit:
                 tag = stage_state["tag"]
                 if two_stage is not None:
@@ -645,9 +695,9 @@ def open_session(
                     else:
                         progress(0.0, _format_stage("front-compile", elapsed))
                 else:
-                    progress(0.0, "初回のみNPU最適化中（数分〜1時間・次回はキャッシュを利用）")
+                    progress(0.0, t("初回のみNPU最適化中（数分〜1時間・次回はキャッシュを利用）"))
             else:
-                progress(0.0, "AI準備中…")
+                progress(0.0, t("AI準備中…"))
 
         client.connect(timeout=timeout, progress=_waiting, cancel=cancel)
         return HelperSession(client, backend, model_path, cache_hit)
@@ -729,7 +779,7 @@ def _upscale_with_adcsr_gpu_retry(
             raise
         if _model_key(settings) != HELPER_MODEL_ADCSR:
             raise
-        progress(0.1, "NPU 2段で失敗したためGPUで再処理…")
+        progress(0.1, t("NPU 2段で失敗したためGPUで再処理…"))
         gpu_session = open_session(
             replace(settings, backend=UpscaleBackend.WINML_GPU),
             width, height, progress, cancel,
@@ -757,14 +807,14 @@ def upscale_image(
     try:
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
-        progress(0.1, "アップスケール中…")
+        progress(0.1, t("アップスケール中…"))
         output = _upscale_with_adcsr_gpu_retry(session, settings, width, height, image, progress, cancel)
         if cancel is not None and cancel.is_set():
             raise jobs.Cancelled()
         _save_rgb(output, Path(out_path), alpha=loaded.alpha, icc_profile=loaded.icc_profile)
     finally:
         session.close(force=cancel is not None and cancel.is_set())
-    progress(1.0, "完了")
+    progress(1.0, t("完了"))
 
 
 def upscale_folder(
@@ -784,7 +834,7 @@ def upscale_folder(
     ]
     total = len(images)
     if not images:
-        progress(1.0, "0/0 枚")
+        progress(1.0, t("0/0 枚"))
         return
 
     sessions: dict[tuple[UpscaleBackend, Path], HelperSession] = {}
@@ -803,7 +853,14 @@ def upscale_folder(
                 raise
             if _model_key(settings) != HELPER_MODEL_ADCSR:
                 raise
-            progress((index - 1) / total, f"{index}/{total} 枚 NPU 2段で失敗したためGPUで再処理…")
+            progress(
+                (index - 1) / total,
+                t(
+                    "{index}/{total} 枚 NPU 2段で失敗したためGPUで再処理…",
+                    index=index,
+                    total=total,
+                ),
+            )
             height0, width0 = image.shape[:2]
             if gpu_retry is None:
                 gpu_retry = open_session(
@@ -827,14 +884,22 @@ def upscale_folder(
                 session = open_session(
                     settings, width, height,
                     progress=lambda _f, message, i=index: progress(
-                        (i - 1) / total, f"{i}/{total} 枚 {message}"
+                        (i - 1) / total,
+                        t(
+                            "{i}/{total} 枚 {message}",
+                            i=i,
+                            total=total,
+                            message=message,
+                        ),
                     ),
                     cancel=cancel,
                 )
                 sessions[key] = session
             output = _upscale_one(session, image, index)
             _save_rgb(output, outputs[path], alpha=loaded.alpha, icc_profile=loaded.icc_profile)
-            progress(index / total, f"{index}/{total} 枚")
+            progress(
+                index / total, t("{index}/{total} 枚", index=index, total=total)
+            )
     finally:
         force = cancel is not None and cancel.is_set()
         for session in sessions.values():
