@@ -55,7 +55,7 @@ from .compare_view import TrialPanel
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
 from .queue_view import QueueView
-from .settings_drawer import ClearCheckBox, SettingsDrawer
+from .settings_drawer import _BACKEND_OPTIONS, ClearCheckBox, SettingsDrawer
 from . import theme
 from .theme import apply_theme
 from .worker import QueueWorker
@@ -525,7 +525,7 @@ class MainWindow(QWidget):
         head.addWidget(self.clear_btn)
         lay.addLayout(head)
 
-        self.queue = QueueView()
+        self.queue = QueueView(describe_settings=self._describe_settings)
         self.queue.removeRequested.connect(self._on_remove_requested)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1408,6 +1408,31 @@ class MainWindow(QWidget):
         self._update_retry_all()
 
     # ------------------------------------------------- 行の表示とやり直し
+    def _describe_settings(self, settings: UpscaleSettings) -> str:
+        """行の小さな説明に出す設定の内訳。内部の名前ではなく、画面の表示名で作る。"""
+        backend_value = getattr(settings.backend, "value", str(settings.backend))
+        backend_names = {value: label for label, value in _BACKEND_OPTIONS}
+        backend_label = backend_names.get(backend_value)
+        backend = t(backend_label) if backend_label else backend_value
+        if settings.model is None:
+            upscale = t("なし")
+        else:
+            model_label = _MODEL_LABELS.get(settings.model)
+            upscale = "{}・{}x".format(
+                t(model_label) if model_label else settings.model, settings.scale
+            )
+        interpolation = settings.interpolation_model
+        if interpolation is None:
+            interpolation = t("なし")
+        elif interpolation == "rife-v4.6":
+            interpolation = t("RIFE v4.6")
+        return t(
+            "AI実行先: {backend}\nアップスケール: {upscale}\nフレーム補間: {interpolation}",
+            backend=backend,
+            upscale=upscale,
+            interpolation=interpolation,
+        )
+
     def _waiting_text(self, job: Job) -> str:
         """待機中の行に出す「何で処理されるか」の表示。"""
         model, scale, interpolation, individual = self._resolve_effective(job)

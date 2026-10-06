@@ -209,6 +209,8 @@ _EXPECTED_NONLITERAL = Counter(
         ): 1,
         ("app/gui/main_window.py", "_MODEL_LABELS.get(key, key)"): 2,
         ("app/gui/main_window.py", "label"): 1,
+        ("app/gui/main_window.py", "backend_label"): 1,
+        ("app/gui/main_window.py", "model_label"): 1,
         ("app/gui/main_window.py", "speed"): 3,
         ("app/gui/main_window.py", "quality"): 2,
         ("app/gui/main_window.py", "anime"): 1,

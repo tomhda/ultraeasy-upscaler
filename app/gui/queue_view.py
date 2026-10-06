@@ -54,8 +54,10 @@ class QueueRow(QFrame):
     retryRequested = Signal(int)  # job_id
     clicked = Signal(int)  # job_id
 
-    def __init__(self, job: Job, parent=None) -> None:
+    def __init__(self, job: Job, parent=None, describe_settings=None) -> None:
         super().__init__(parent)
+        # 設定の内訳（実行先・モデル・補間）を表示名で作る関数。MainWindow が渡す。
+        self._describe_settings = describe_settings
         self.setObjectName("queueRow")
         self.job = job
         self._retry_locked = False
@@ -176,20 +178,9 @@ class QueueRow(QFrame):
 
     def _settings_text(self) -> str:
         settings = self.job.settings
-        if settings is None:
+        if settings is None or self._describe_settings is None:
             return ""
-        backend = getattr(settings.backend, "value", str(settings.backend))
-        if backend in {"winml_gpu", "npu_native"}:
-            upscale = t("なし") if settings.model is None else f"{settings.model}（4x）"
-        else:
-            upscale = settings.model or t("なし")
-        interpolation = settings.interpolation_model or t("なし")
-        return t(
-            "AI実行先: {backend}\nアップスケール: {upscale}\nフレーム補間: {interpolation}",
-            backend=backend,
-            upscale=upscale,
-            interpolation=interpolation,
-        )
+        return self._describe_settings(settings)
 
     def _elide(self) -> None:
         """名前と状態を、いまの行幅に収まるよう末尾省略で表示する。"""
@@ -266,8 +257,9 @@ class QueueView(QWidget):
     retryRequested = Signal(int)  # job_id
     selectionChanged = Signal(object)  # 選択中の job_id（無ければ None）
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, describe_settings=None) -> None:
         super().__init__(parent)
+        self._describe_settings = describe_settings
         self._rows: dict[int, QueueRow] = {}
         self._selected: int | None = None
         self._retry_locked = False
@@ -300,7 +292,7 @@ class QueueView(QWidget):
         """ジョブ行を追加（既存 id は再利用）。"""
         if job.id in self._rows:
             return self._rows[job.id]
-        row = QueueRow(job)
+        row = QueueRow(job, describe_settings=self._describe_settings)
         row.removeRequested.connect(self.removeRequested.emit)
         row.retryRequested.connect(self.retryRequested.emit)
         row.clicked.connect(self.select)

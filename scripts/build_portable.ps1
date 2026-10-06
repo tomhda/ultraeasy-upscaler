@@ -123,12 +123,14 @@ if ($WithHelper) {
 $notices = Join-Path $repo "scripts\portable-notices"
 Copy-Item -LiteralPath (Join-Path $repo "LICENSE") -Destination (Join-Path $app "LICENSE.txt") -Force
 Copy-Item -LiteralPath (Join-Path $notices "THIRD-PARTY-NOTICES.txt") -Destination $app -Force
+Copy-Item -LiteralPath (Join-Path $notices "THIRD-PARTY-NOTICES.en.txt") -Destination $app -Force
 $qtLicenses = Join-Path $app "licenses\PySide6"
 New-Item -ItemType Directory -Path $qtLicenses -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $notices "LGPL-3.0.txt") -Destination $qtLicenses -Force
 Copy-Item -LiteralPath (Join-Path $ffmpegRoot "LICENSE") -Destination (Join-Path $qtLicenses "GPL-3.0.txt") -Force
 
 Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination (Join-Path $app "README.md") -Force
+Copy-Item -LiteralPath (Join-Path $repo "README.en.md") -Destination (Join-Path $app "README.en.md") -Force
 @"
 ultraeasy-upscaler ポータブル版
 
@@ -144,6 +146,22 @@ NPU は標準では使いません。AMD Ryzen AI 搭載の PC で NPU を使う
 - AMD の Ryzen AI Software 1.8.0（AMD のサイトから入手して導入）
 - 別配布の NPU キット（このフォルダに上書きで展開）
 "@ | Set-Content -LiteralPath (Join-Path $app "はじめに.txt") -Encoding UTF8
+@"
+ultraeasy-upscaler portable build
+
+1. Double-click ultraeasy-upscaler.exe.
+2. Drag and drop images or videos onto the window.
+3. Choose a model on the right. Select Try to check the result on one frame first.
+4. Select Start.
+
+Do not move or delete the files inside this folder.
+The interface follows the Windows display language. You can change it under More settings > Display language.
+
+About the NPU
+The NPU is not used by default. To use the NPU on an AMD Ryzen AI PC, you need both of the following.
+- AMD Ryzen AI Software 1.8.0 (get it from AMD and install it)
+- The NPU kit, a separate download (extract it into this folder, overwriting files)
+"@ | Set-Content -LiteralPath (Join-Path $app "Getting started.txt") -Encoding UTF8
 
 & (Join-Path $app "ultraeasy-upscaler.exe") --portable-self-test
 if ($LASTEXITCODE -ne 0) {

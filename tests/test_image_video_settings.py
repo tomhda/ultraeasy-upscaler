@@ -456,3 +456,22 @@ def test_trial_uses_selected_file_settings(app, tmp_path) -> None:
     finally:
         win.close()
         app.processEvents()
+
+
+def test_row_tooltip_uses_display_names_not_internal_ids(app):
+    """行の小さな説明には、内部の名前（winml_gpu / animevideov3 など）を出さない。"""
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.add_paths([str(SAMPLE_IMAGE)])
+    app.processEvents()
+    job = win._jobs[win._order[0]]
+    job.settings = win.build_settings(job)
+    win.queue.refresh(job.id)
+
+    text = win.queue.row(job.id)._meta.toolTip()
+    assert text == "AI実行先: GPU（DirectML）\nアップスケール: Anime Video v3・4x\nフレーム補間: なし"
+    assert "winml_gpu" not in text and "animevideov3" not in text
+
+    win.close()
+    app.processEvents()

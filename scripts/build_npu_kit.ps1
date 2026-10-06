@@ -95,10 +95,11 @@ AMD Ryzen AI 搭載の PC で、NPU を使って処理するための追加フ�
 1. ultraeasy-upscaler を終了します。
 2. この zip の中身を、ultraeasy-upscaler.exe があるフォルダに上書きで展開します。
 3. ultraeasy-upscaler を起動し、右上の歯車から詳細設定を開きます。
-4. 「NPU の準備」で、使うモデルの「変換する」を押します。
+4. 「NPU の準備」で、使うモデルの「NPU 用に変換」を押します。
+   NPU ではモデルをそのままでは動かせないため、NPU 用に変換する作業です。
 5. 変換が終わったら、「AI実行先」で NPU を選びます。
 
-変換について
+NPU 用への変換について
 - 変換はモデルごとに最初の一度だけ必要です。画面に目安の時間が出ます。
 - 変換中も PC は使えます。CPU は 1 コアぶんしか使いません。
 - SwinIR-M は変換中にメモリを最大で約 25GB 使います（AdcSR は未計測）。
@@ -107,6 +108,35 @@ AMD Ryzen AI 搭載の PC で、NPU を使って処理するための追加フ�
 
 Ryzen AI Software を標準と違う場所に入れた場合は、環境変数 UEU_NPU_PYTHON に
 その python.exe の場所を指定してください。
+"@
+
+$usageTextEn = @"
+ultraeasy-upscaler NPU kit
+
+Extra files for processing on the NPU of an AMD Ryzen AI PC.
+
+What you need
+- The ultraeasy-upscaler portable build
+- AMD Ryzen AI Software 1.8.0 (get it from AMD and install it)
+- NPU driver 32.0.203.329 or later
+
+How to add it
+1. Close ultraeasy-upscaler.
+2. Extract the contents of this zip into the folder that contains ultraeasy-upscaler.exe, overwriting files.
+3. Start ultraeasy-upscaler and open More settings with the gear at the top right.
+4. Under NPU setup, select Convert for NPU on each model you will use.
+   The NPU cannot run a model as it is, so this converts the model for the NPU.
+5. When the conversion has finished, choose NPU under Run on.
+
+About converting for the NPU
+- Each model needs to be converted once. The screen shows an estimate of the time.
+- You can keep using the PC during a conversion. It uses only one CPU core.
+- Converting SwinIR-M uses up to about 25 GB of memory (AdcSR has not been measured).
+  On a PC with less than 32 GB of memory, close other apps first.
+- After you update the NPU driver or Ryzen AI Software, the conversion may need to be done again.
+
+If Ryzen AI Software is installed in a non-default location, set the environment variable
+UEU_NPU_PYTHON to the path of its python.exe.
 "@
 
 function New-NpuKit(
@@ -164,6 +194,9 @@ function New-NpuKit(
             [IO.File]::WriteAllText(
                 (Join-Path $stage "NPUキットの使い方.txt"),
                 $usageText, [Text.UTF8Encoding]::new($true))
+            [IO.File]::WriteAllText(
+                (Join-Path $stage "How to use the NPU kit.txt"),
+                $usageTextEn, [Text.UTF8Encoding]::new($true))
         }
 
         $level = [IO.Compression.CompressionLevel]::Optimal

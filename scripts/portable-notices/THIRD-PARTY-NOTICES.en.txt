@@ -1,0 +1,48 @@
+ultraeasy-upscaler portable build: licenses and sources of the bundled software
+
+ultraeasy-upscaler itself is under the MIT License (LICENSE.txt).
+This folder also contains the third-party software and models listed below, each under its own license.
+
+1. FFmpeg (vendor/ffmpeg/bin/ffmpeg.exe, ffprobe.exe)
+   - Version: see vendor/ffmpeg/README.txt (the full build from gyan.dev)
+   - License: GNU General Public License v3 (vendor/ffmpeg/LICENSE)
+   - Source code: the URL under "Source Code" in vendor/ffmpeg/README.txt, and https://www.gyan.dev/ffmpeg/builds/
+   - It is a separate program, run as a child process.
+
+2. Qt 6 / PySide6 / Shiboken6 (_internal/PySide6/, _internal/shiboken6/)
+   - License: GNU Lesser General Public License v3 and others (texts in licenses/PySide6/)
+   - Source code: https://download.qt.io/official_releases/QtForPython/ and https://code.qt.io/
+   - The Qt libraries are separate DLL files and can be replaced with a compatible build of the same version.
+
+3. Python runtime (_internal/)
+   - License: Python Software Foundation License Version 2
+   - https://www.python.org/
+
+4. PyInstaller bootloader (ultraeasy-upscaler.exe)
+   - License: GPL v2 or later with the bootloader exception (executables it produces may be distributed under any license)
+   - https://pyinstaller.org/
+
+5. Pillow and NumPy (_internal/)
+   - Pillow: MIT-CMU License (https://python-pillow.org/)
+   - NumPy: BSD 3-Clause License (https://numpy.org/)
+
+6. realesrgan-ncnn-vulkan and the Real-ESRGAN models (vendor/realesrgan/)
+   - realesrgan-ncnn-vulkan: MIT License (https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan)
+   - Models (realesr-animevideov3, realesr-general-x4v3, realesrgan-x4plus and others):
+     BSD 3-Clause License (https://github.com/xinntao/Real-ESRGAN; text in models/ai/LICENSE-BSD-3-Real-ESRGAN.txt)
+   - ncnn: BSD 3-Clause License (https://github.com/Tencent/ncnn)
+
+7. rife-ncnn-vulkan and the RIFE v4.6 model (vendor/rife/)
+   - rife-ncnn-vulkan: MIT License (vendor/rife/LICENSE, https://github.com/nihui/rife-ncnn-vulkan)
+   - RIFE models: MIT License (https://github.com/hzwer/Practical-RIFE)
+
+8. winml-sr and the Windows ML runtime (vendor/winml-sr/), only when the GPU helper is bundled
+   - winml-sr: MIT License (part of ultraeasy-upscaler)
+   - Microsoft Windows ML Runtime, ONNX Runtime, DirectML:
+     see vendor/winml-sr/license.txt, ThirdPartyNotices.txt and NOTICE-winml-sr.txt
+
+9. Super-resolution models (models/ai/), only when the GPU helper is bundled
+   - The author and license of each model are listed in models/ai/NOTICE-models-gpu-fp32.txt (in Japanese)
+     and in the License section of README.en.md.
+   - 4xNomosUni_span_multijpg is under CC BY 4.0 (Philip Hofmann / Phips). Keep the attribution.
+   - Real-ESRGAN (AMD compact) is under the Research-only RAIL-MS license and may be used for research only.
