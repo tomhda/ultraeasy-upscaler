@@ -2,7 +2,7 @@
 """Portable build: GUI + CLI exes sharing one onedir folder.
 
 Build with scripts/build_portable.ps1 (do not call PyInstaller by hand).
-MERGE makes the two exes share the same _internal so Qt etc. is stored once.
+Both exes go into one COLLECT, so they share the same _internal folder.
 Paths here are exe-relative at runtime: settings._app_root() and
 binaries.repo_root() both resolve to the exe folder, so the CLI exe finds
 models/ and vendor/ next to itself just like the GUI exe.
@@ -42,8 +42,6 @@ a_cli = Analysis(  # noqa: F821
     cipher=block_cipher,
     noarchive=False,
 )
-MERGE((a_gui, a_cli))  # noqa: F821
-
 pyz_gui = PYZ(a_gui.pure, a_gui.zipped_data, cipher=block_cipher)  # noqa: F821
 exe_gui = EXE(  # noqa: F821
     pyz_gui,

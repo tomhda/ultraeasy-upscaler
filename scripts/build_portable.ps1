@@ -132,6 +132,7 @@ Copy-Item -LiteralPath (Join-Path $ffmpegRoot "LICENSE") -Destination (Join-Path
 
 Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination (Join-Path $app "README.md") -Force
 Copy-Item -LiteralPath (Join-Path $repo "README.en.md") -Destination (Join-Path $app "README.en.md") -Force
+Copy-Item -LiteralPath (Join-Path $repo "AGENTS.md") -Destination (Join-Path $app "AGENTS.md") -Force
 @"
 ultraeasy-upscaler ポータブル版
 
