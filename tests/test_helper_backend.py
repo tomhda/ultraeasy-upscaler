@@ -497,6 +497,25 @@ def test_swinir_cuda_serve_uses_separate_python_worker(monkeypatch, tmp_path) ->
     assert _CapturingServeClient.last_connect_kwargs["timeout"] == 30 * 60.0
 
 
+def test_swinir_cuda_visibility_requires_nvidia_and_installed_assets(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(helper_backend.shutil, "which", lambda _name: None)
+    assert helper_backend.swinir_cuda_available() is False
+
+    monkeypatch.setattr(
+        helper_backend.shutil,
+        "which",
+        lambda name: str(tmp_path / "nvidia-smi.exe")
+        if name in {"nvidia-smi", "nvidia-smi.exe"}
+        else None,
+    )
+    monkeypatch.setattr(helper_backend, "_swinir_python", lambda: tmp_path / "python.exe")
+    monkeypatch.setattr(helper_backend, "_swinir_script", lambda: tmp_path / "worker.py")
+    monkeypatch.setattr(helper_backend, "_swinir_model", lambda: tmp_path / "model.pth")
+    assert helper_backend.swinir_cuda_available() is True
+
+
 def test_swinir_cuda_startup_timeout_can_be_extended(monkeypatch, tmp_path) -> None:
     python = tmp_path / "python.exe"
     model = tmp_path / "swinir.pth"

@@ -1,0 +1,21 @@
+﻿ultraeasy-upscaler FILM kit
+
+These files add the frame interpolation model FILM (Style).
+It runs on a GPU that supports DirectX 12.
+
+Install
+1. Close ultraeasy-upscaler.
+2. Extract the contents of this zip into the folder that contains ultraeasy-upscaler.exe, overwriting files.
+   (The vendor and models folders merge with the ones already there.)
+3. Start ultraeasy-upscaler. FILM (Style) is now available under "Frame interpolation model".
+
+Notes
+- It takes longer than RIFE v4.6. In return, it holds up better in scenes with large motion.
+- The output frame rate is limited to 2, 4, or 8 times the source (a fixed rate such as 60 fps can't be used).
+
+Remove
+- Delete the vendor\winml-film folder and the models\film folder.
+
+License
+- The model is based on FILM by Google Research and is under the Apache License 2.0.
+  The full text is in models\film\LICENSE-Apache-2.0-FILM.txt, and the source is in the NOTICE file in the same folder.

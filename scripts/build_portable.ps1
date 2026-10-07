@@ -55,6 +55,9 @@ $realesrganSamples = @("input.jpg", "input2.jpg", "onepiece_demo.mp4")
 Get-ChildItem -LiteralPath $realesrganSource | Where-Object { $realesrganSamples -notcontains $_.Name } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $realesrganOut -Recurse -Force }
 
+# FILM キット（vendor/winml-film/、models/film/）は本体 zip に入れない。
+# 別配布の ultraeasy-upscaler-film-kit.zip（scripts/build_film_kit.ps1）で配る。
+# FILM のライセンス（LICENSE-Apache-2.0-FILM.txt）も本体側には入れず、FILM キットに入れる。
 $rifeBase = Get-ChildItem -LiteralPath (Join-Path $repo "vendor\rife") -Recurse `
     -Filter "rife-ncnn-vulkan.exe" | Select-Object -First 1 -ExpandProperty DirectoryName
 if (-not $rifeBase -or -not (Test-Path -LiteralPath (Join-Path $rifeBase "rife-v4.6"))) {

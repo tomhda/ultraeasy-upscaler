@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ..i18n import t
-from . import interpolator, media, upscaler, video
+from . import binaries, interpolator, media, upscaler, video
 from .jobs import Cancelled, Job, JobKind, ProgressCb
 from .settings import (
     OutputLocation,
@@ -138,6 +138,10 @@ def _process_video(job, settings, progress, cancel) -> Path:
         progress(0.01, t("動画を解析中…"))
         info = media.probe(str(job.input_path))
         fps = info.fps or job.fps or 30.0
+        if settings.interpolation_model == binaries.FILM_MODEL:
+            # 対応外の fps はフレームを取り出す前に落とす。
+            from . import film
+            film.resolve_factor(settings, fps)
 
         # PyTorch CUDA版SwinIRは、長時間ジョブを再開できるチャンク経路へ
         # 明示的に分岐する。既存のDirectML/NPU rawパイプは変更しない。
@@ -166,8 +170,8 @@ def _process_video(job, settings, progress, cancel) -> Path:
                 progress(1.0, t("完了"))
                 return out
 
-        # RIFEはフレームファイルを前提にするため、補間が有効なジョブでは
-        # 必ず従来のPNG経路を使う。RIFEなしの新AIヘルパーだけrawパイプへ進む。
+        # 補間モデルはフレームファイルを前提にするため、補間が有効なジョブでは
+        # PNG経路を使う。補間なしの新AIヘルパーだけrawパイプへ進む。
         active_settings = settings
         if (
             settings.upscale_enabled
@@ -216,12 +220,16 @@ def _process_video(job, settings, progress, cancel) -> Path:
         def _run_interpolation(start: float, end: float) -> None:
             nonlocal current_frames, output_fps
             interp_frames.mkdir()
-            progress(start, t("RIFEでフレーム補間中…"))
+            if settings.interpolation_model == binaries.FILM_MODEL:
+                interpolation_message = t("FILM (Style) でフレーム補間中…")
+            else:
+                interpolation_message = t("RIFEでフレーム補間中…")
+            progress(start, interpolation_message)
             _count, output_fps = interpolator.interpolate_folder(
                 str(current_frames), str(interp_frames), settings, fps,
                 progress=lambda f, m: progress(
                     start + (end - start) * f,
-                    m or t("RIFEでフレーム補間中…"),
+                    m or interpolation_message,
                 ),
                 cancel=cancel,
             )
@@ -249,7 +257,7 @@ def _process_video(job, settings, progress, cancel) -> Path:
 
         if settings.upscale_enabled and settings.interpolation_enabled:
             # 既定はアプコン→補間: 重いESRGANの対象を補間前の元フレーム数に
-            # 抑えられるため合計時間が短い。拡大後の高解像度フレームをRIFEに
+            # 抑えられるため合計時間が短い。拡大後の高解像度フレームを補間器に
             # 渡すとVRAM/RAM消費が増えるため、省メモリ順（補間→アプコン）も
             # processing_order で選択できる。
             if settings.processing_order == ProcessingOrder.INTERPOLATE_FIRST:

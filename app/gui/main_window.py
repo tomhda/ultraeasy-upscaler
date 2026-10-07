@@ -52,7 +52,7 @@ from app.core.settings import (
 
 from app.i18n import N_, t
 
-from .compare_view import TrialPanel
+from .compare_view import StatusLabel, TrialPanel
 from .drop_zone import DropZone
 from .icons import Icon, apply_icon_font, make_icon
 from .queue_view import QueueView
@@ -394,18 +394,26 @@ class MainWindow(QWidget):
 
     @staticmethod
     def _populate_interpolation_combo(combo: QComboBox) -> None:
-        """フレーム補間コンボの選択肢を入れる（ヘッダーと右列で同じ）。"""
+        """フレーム補間コンボの選択肢を入れる（ヘッダーと右列で同じ）。
+
+        FILM が使えないときは「FILM (Style)（未導入）」を選べない項目で出し、
+        詳細設定の追加キットへ案内する。
+        """
         combo.addItem(t("なし（補間しない）"), None)
-        for model in binaries.available_interpolation_models():
-            if model == "rife-v4.6":
-                combo.addItem(t("RIFE v4.6"), model)
-            else:
-                combo.addItem(model, model)
-        if combo.count() == 1:
-            combo.addItem(t("モデル未検出"), "__missing__")
-            item = combo.model().item(1)
+        models = binaries.available_interpolation_models()
+        if "rife-v4.6" in models:
+            combo.addItem(t("RIFE v4.6"), "rife-v4.6")
+        if binaries.FILM_MODEL in models:
+            combo.addItem(t("FILM (Style)"), binaries.FILM_MODEL)
+        else:
+            combo.addItem(
+                t("{name}（未導入）", name=t("FILM (Style)")),
+                binaries.FILM_MODEL,
+            )
+            item = combo.model().item(combo.count() - 1)
             if item is not None:
                 item.setEnabled(False)
+                item.setToolTip(t("詳細設定の「追加キット」からダウンロードできます"))
 
     def _field(self, label: str, widget: QWidget) -> QVBoxLayout:
         box = QVBoxLayout()
@@ -518,6 +526,12 @@ class MainWindow(QWidget):
         self._interp_wrap.setLayout(interp_layout)
         col.addWidget(self._interp_wrap)
 
+        # フレーム補間モデルの説明（補間を選んでいるときだけ出す）
+        self.interpolation_hint = QLabel("")
+        self.interpolation_hint.setObjectName("hint")
+        self.interpolation_hint.setWordWrap(True)
+        col.addWidget(self.interpolation_hint)
+
         # クイック確認の組（TrialPanel が持ち、右列に差し込む）
         col.addWidget(self.preview.quick_box)
 
@@ -548,7 +562,7 @@ class MainWindow(QWidget):
         self._output_dir: str | None = None
         col.addStretch(1)
 
-        self.status_label = QLabel("")
+        self.status_label = StatusLabel("")
         self.status_label.setObjectName("hint")
         self.status_label.setWordWrap(True)
         outer.addWidget(self.status_label)
@@ -855,6 +869,7 @@ class MainWindow(QWidget):
                 self.model_hint.setVisible(False)
                 self._scale_wrap.setVisible(False)
                 self._interp_wrap.setVisible(False)
+                self.interpolation_hint.setVisible(False)
                 self.preview.quick_box.setVisible(False)
                 self._override_box.setVisible(False)
             else:
@@ -868,6 +883,8 @@ class MainWindow(QWidget):
                 self._interp_wrap.setVisible(is_video)
                 self.preview.quick_box.setVisible(True)
                 model, scale, interp, _individual = self._resolve_effective(job)
+                # 補間の説明は動画で補間を選んでいるときだけ出す。
+                self.interpolation_hint.setVisible(bool(is_video and interp))
                 self._set_combo_data(self.model_combo, model)
                 for s, btn in self._scale_btns.items():
                     btn.setChecked(s == scale)
@@ -1064,6 +1081,15 @@ class MainWindow(QWidget):
             button.setEnabled(supported and not self._running)
         self._update_all_model_info()
 
+    def _film_selected(self) -> bool:
+        """一括か個別のどれかで FILM (Style) が選ばれているか。"""
+        if self._norm_choice(self._video_interpolation) == binaries.FILM_MODEL:
+            return True
+        return any(
+            self._norm_choice(override.get("interpolation")) == binaries.FILM_MODEL
+            for override in self._overrides.values()
+        )
+
     def _refresh_interpolation_enabled(self) -> None:
         """詳細設定の補間後fpsは、一括か個別のどちらかで補間を使うとき有効。"""
         enabled = self._video_interpolation not in (None, "__missing__")
@@ -1074,6 +1100,7 @@ class MainWindow(QWidget):
                     break
         try:
             self.drawer.set_interpolation_enabled(bool(enabled))
+            self.drawer.set_film_selected(self._film_selected())
         except RuntimeError:
             pass
 
@@ -1255,6 +1282,15 @@ class MainWindow(QWidget):
         desc = _MODEL_HINT.get(data, "")
         return t(desc) if desc else ""
 
+    @staticmethod
+    def _compose_interp_hint(data: object) -> str:
+        """フレーム補間モデルの説明を 1 行で返す。"""
+        if data == "rife-v4.6":
+            return t("高速")
+        if data == binaries.FILM_MODEL:
+            return t("低速・高品質")
+        return ""
+
     def _update_combo_badges(self, combo: QComboBox) -> None:
         """1つのモデルコンボにバッジと未変換印・ツールチップを付ける。"""
         backend = self._selected_backend()
@@ -1325,9 +1361,21 @@ class MainWindow(QWidget):
         except RuntimeError:
             pass
 
+        # ヘッダーの補間プルダウンには説明をツールチップで出す。
+        try:
+            self.global_interpolation_combo.setToolTip(
+                self._compose_interp_hint(
+                    self.global_interpolation_combo.currentData()
+                )
+            )
+        except RuntimeError:
+            pass
+
         job = self._selected_job()
         if job is None:
             self.model_hint.setText("")
+            if hasattr(self, "interpolation_hint"):
+                self.interpolation_hint.setText("")
             return
         try:
             cur = self.model_combo.currentData()
@@ -1335,8 +1383,14 @@ class MainWindow(QWidget):
             return
         if cur in (None, "__missing__"):
             self.model_hint.setText(t("拡大はしません。フレーム補間だけ実行できます。"))
-            return
-        self.model_hint.setText(self._compose_hint_line(backend, cur))
+        else:
+            self.model_hint.setText(self._compose_hint_line(backend, cur))
+        try:
+            self.interpolation_hint.setText(
+                self._compose_interp_hint(self.interpolation_combo.currentData())
+            )
+        except RuntimeError:
+            pass
 
     def _update_model_info(self) -> None:
         """互換のための別名（実体は _update_all_model_info）。"""
@@ -1532,6 +1586,7 @@ class MainWindow(QWidget):
         self._drawer_open = show
         if show:
             self.drawer.refresh_npu_rows()
+            self.drawer.refresh_kit_rows()
         self._sync_workspace()
         self.settings_btn.setProperty("active", show)
         self.settings_btn.style().unpolish(self.settings_btn)
@@ -1793,6 +1848,8 @@ class MainWindow(QWidget):
             interpolation = t("なし")
         elif interpolation == "rife-v4.6":
             interpolation = t("RIFE v4.6")
+        elif interpolation == binaries.FILM_MODEL:
+            interpolation = t("FILM (Style)")
         return t(
             "AI実行先: {backend}\nアップスケール: {upscale}\nフレーム補間: {interpolation}",
             backend=backend,

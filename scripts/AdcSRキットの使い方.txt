@@ -1,0 +1,21 @@
+﻿ultraeasy-upscaler AdcSR キット（GPU 用）
+
+拡大モデル AdcSR を GPU で使えるようにする追加ファイルです。
+AdcSR は静止画専用です。動画には使えません。
+
+入れ方
+1. ultraeasy-upscaler を終了します。
+2. この zip の中身を、ultraeasy-upscaler.exe のあるフォルダに上書きで展開します。
+   （models フォルダが、既にあるものと合わさります）
+3. ultraeasy-upscaler を起動します。「画像の拡大モデル」で AdcSR を選べるようになります。
+
+使うときの注意
+- 処理にとても時間がかかります（Radeon 860M で 854×480 の画像 1 枚に約 108 秒）。
+- 絵を描き足すモデルなので、元の画像にない細部が加わります。
+
+外し方
+- models\ai フォルダの adcsr_nchw_128x128_fp32.onnx を削除します。
+
+ライセンス
+- AdcSR は Apache License 2.0 です。元になっている Stable Diffusion の利用条件も適用されます。
+  全文と出どころは models\ai フォルダの LICENSE と NOTICE にあります。使う前に確認してください。

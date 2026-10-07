@@ -256,9 +256,11 @@ class UpscaleSettings:
     video_quality: int = 18                          # 画質(CRF/QP 相当, 小さいほど高画質)
 
     # --- フレーム補間 ---
-    # None = 補間しない。target_fps=None のままモデルを選ぶと元fpsの2倍。
+    # None = 補間しない。target_fps=None のとき補間後の fps は
+    # 元動画 × interpolation_factor（RIFE も FILM も同じ）。
     interpolation_model: str | None = None
     target_fps: float | None = None
+    interpolation_factor: int = 2  # 補間の倍率: 2 / 4 / 8
     # 両方有効時の実行順。重いESRGANを補間前の元フレーム数に抑えられる
     # UPSCALE_FIRST が既定。高解像度出力でメモリが厳しい場合は
     # INTERPOLATE_FIRST を選ぶ。
@@ -275,8 +277,15 @@ class UpscaleSettings:
         if self.model is not None:
             parts.append(f"x{self.scale}")
         if self.interpolation_model is not None:
-            model = self.interpolation_model.replace("rife-", "RIFE-")
-            fps = f"{self.target_fps:g}fps" if self.target_fps else "2xfps"
+            # binaries.FILM_MODEL（"film-style"）は表示名にする。
+            model = (
+                "FILM-Style" if self.interpolation_model == "film-style"
+                else self.interpolation_model.replace("rife-", "RIFE-")
+            )
+            fps = (
+                f"{self.target_fps:g}fps" if self.target_fps
+                else f"{self.interpolation_factor}xfps"
+            )
             parts.extend((model, fps))
         return "_" + "_".join(parts) if parts else "_processed"
 

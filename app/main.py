@@ -33,6 +33,16 @@ def portable_self_test() -> int:
 
         if not npu_prepare.npu_models():
             return 5
+    # FILM キットを置いてあるときだけ、ヘルパーとモデルが解決できること。
+    # 置いていなければ何もしない（起動はしない）。
+    film_helper = binaries.repo_root() / "vendor" / "winml-film" / "winml-film.exe"
+    film_model = binaries.repo_root() / "models" / "film" / "film_style_fp32.onnx"
+    if film_helper.is_file() or film_model.is_file():
+        try:
+            binaries.film_helper_exe()
+            binaries.film_model_path()
+        except binaries.BinaryError:
+            return 6
     return 0
 
 

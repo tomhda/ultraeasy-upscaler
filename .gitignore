@@ -11,9 +11,12 @@ __pycache__/
 /ultraeasy-upscaler-portable-*.zip
 /tools/winml-sr/bin/
 /tools/winml-sr/obj/
+/tools/winml-film/bin/
+/tools/winml-film/obj/
 /vendor/amd-npu-1.8/
 /vendor/amd-npu/modelcachekey_*/
 /models/ai/
+/models/film/
 *.log
 .DS_Store
 Thumbs.db
@@ -27,6 +30,9 @@ Thumbs.db
 # エージェント向けローカル規約（公開しない・各マシンに手動配置）
 AGENTS.md
 /vendor/winml-sr/
+/vendor/winml-film/
 
 # NPU キットの配布物（scripts/build_npu_kit.ps1 が作る）
 ultraeasy-upscaler-npu-kit*.zip
+ultraeasy-upscaler-film-kit.zip
+ultraeasy-upscaler-adcsr-kit.zip

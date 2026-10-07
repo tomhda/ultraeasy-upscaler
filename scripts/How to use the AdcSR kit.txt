@@ -1,0 +1,21 @@
+﻿ultraeasy-upscaler AdcSR kit (for GPU)
+
+These files add the upscaling model AdcSR for use on a GPU.
+AdcSR is for still images only. It can't be used for videos.
+
+Install
+1. Close ultraeasy-upscaler.
+2. Extract the contents of this zip into the folder that contains ultraeasy-upscaler.exe, overwriting files.
+   (The models folder merges with the one already there.)
+3. Start ultraeasy-upscaler. AdcSR is now available under "Image model".
+
+Notes
+- It is very slow (about 108 seconds for one 854x480 image on a Radeon 860M).
+- It is a generative model, so it adds detail that is not in the original image.
+
+Remove
+- Delete adcsr_nchw_128x128_fp32.onnx from the models\ai folder.
+
+License
+- AdcSR is under the Apache License 2.0. The terms of use of Stable Diffusion, which it is built on, also apply.
+  The full texts and the source are in the LICENSE and NOTICE files in the models\ai folder. Check them before use.

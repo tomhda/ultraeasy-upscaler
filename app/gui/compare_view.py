@@ -17,6 +17,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -705,8 +706,12 @@ class _TrialWorker(QObject):
 _TrialKey = tuple[str, float, tuple[int, int, int, int] | None, str, str, int]
 
 
-class _StatusLabel(QLabel):
+class StatusLabel(QLabel):
     """文言が空の間は場所を取らない状況行（右列の高さを節約する）。"""
+
+    def __init__(self, text: str = "", parent=None) -> None:
+        super().__init__(text, parent)
+        self.setVisible(bool(text))
 
     def setText(self, text: str) -> None:  # noqa: N802
         super().setText(text)
@@ -795,9 +800,10 @@ class TrialPanel(QWidget):
 
         self.quick_help = HelpIcon(t(self.QUICK_HELP))
         self.range_btn = QPushButton(t("範囲を選択してクイック確認"))
+        self.range_btn.setObjectName("quickSecondary")
         self.range_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.range_btn.clicked.connect(self._on_range_button)
-        self.status_label = _StatusLabel("")
+        self.status_label = StatusLabel("")
         self.status_label.setObjectName("hint")
         self.status_label.setWordWrap(True)
         self.quick_box = QWidget()
@@ -805,13 +811,16 @@ class TrialPanel(QWidget):
         quick = QVBoxLayout(self.quick_box)
         quick.setContentsMargins(0, 0, 0, 0)
         quick.setSpacing(8)
-        quick_row = QHBoxLayout()
-        quick_row.setContentsMargins(0, 0, 0, 0)
-        quick_row.setSpacing(6)
-        quick_row.addWidget(self.trial_btn, 1)
-        quick_row.addWidget(self.quick_help)
-        quick.addLayout(quick_row)
-        quick.addWidget(self.range_btn)
+        # 2 つのボタンを同じ幅・同じ高さにそろえ、? はその右に置く
+        quick_grid = QGridLayout()
+        quick_grid.setContentsMargins(0, 0, 0, 0)
+        quick_grid.setHorizontalSpacing(6)
+        quick_grid.setVerticalSpacing(8)
+        quick_grid.addWidget(self.trial_btn, 0, 0)
+        quick_grid.addWidget(self.quick_help, 0, 1)
+        quick_grid.addWidget(self.range_btn, 1, 0)
+        quick_grid.setColumnStretch(0, 1)
+        quick.addLayout(quick_grid)
         quick.addWidget(self.status_label)
 
         self.slider.valueChanged.connect(self._on_slider_moved)

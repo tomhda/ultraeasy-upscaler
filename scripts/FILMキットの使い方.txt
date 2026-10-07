@@ -1,0 +1,21 @@
+﻿ultraeasy-upscaler FILM キット
+
+フレーム補間モデル FILM (Style) を使えるようにする追加ファイルです。
+DirectX 12 に対応した GPU で動きます。
+
+入れ方
+1. ultraeasy-upscaler を終了します。
+2. この zip の中身を、ultraeasy-upscaler.exe のあるフォルダに上書きで展開します。
+   （vendor フォルダと models フォルダが、既にあるものと合わさります）
+3. ultraeasy-upscaler を起動します。「フレーム補間モデル」で FILM (Style) を選べるようになります。
+
+使うときの注意
+- RIFE v4.6 より時間がかかります。そのぶん、大きく動く場面でも破綻しにくい補間です。
+- 補間後のフレームレートは、元の動画の 2 倍・4 倍・8 倍に限られます（60 fps などの指定はできません）。
+
+外し方
+- vendor\winml-film フォルダと models\film フォルダを削除します。
+
+ライセンス
+- モデルは Google Research の FILM を元にしたもので、Apache License 2.0 です。
+  全文は models\film\LICENSE-Apache-2.0-FILM.txt、出どころは同じフォルダの NOTICE にあります。

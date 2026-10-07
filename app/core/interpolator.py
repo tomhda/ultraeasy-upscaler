@@ -1,4 +1,4 @@
-"""RIFE NCNN/Vulkan による連番PNGのフレーム補間。"""
+"""連番 PNG のフレーム補間モデルを選択して実行する。"""
 from __future__ import annotations
 
 import subprocess
@@ -40,6 +40,13 @@ def _is_uhd(frames_dir: Path) -> bool:
         return False
 
 
+def requested_fps(settings: UpscaleSettings, source_fps: float) -> float:
+    """補間後の fps を求める。指定が無ければ元動画の倍率分（RIFE も FILM も同じ）。"""
+    if settings.target_fps is not None:
+        return float(settings.target_fps)
+    return source_fps * int(settings.interpolation_factor)
+
+
 def interpolate_folder(
     input_dir: str,
     output_dir: str,
@@ -51,6 +58,12 @@ def interpolate_folder(
     """input_dir の連番PNGを補間し、(生成枚数, 実効fps) を返す。"""
     if not settings.interpolation_model:
         raise ValueError(t("フレーム補間モデルが選択されていません。"))
+    if settings.interpolation_model == binaries.FILM_MODEL:
+        from . import film
+        return film.interpolate_folder(
+            input_dir, output_dir, settings, source_fps,
+            progress=progress, cancel=cancel,
+        )
     if source_fps <= 0:
         raise ValueError(t("元動画のfpsを取得できません。"))
 
@@ -61,15 +74,15 @@ def interpolate_folder(
     if input_count < 2:
         raise ValueError(t("フレーム補間には2枚以上のフレームが必要です。"))
 
-    requested_fps = settings.target_fps or (source_fps * 2.0)
-    if requested_fps <= source_fps:
+    requested = requested_fps(settings, source_fps)
+    if requested <= source_fps:
         raise ValueError(
             t(
                 "補間後のfpsは元動画より大きい値にしてください（元: {fps:.3f}fps）。",
                 fps=source_fps,
             )
         )
-    target_count = max(input_count + 1, round(input_count * requested_fps / source_fps))
+    target_count = max(input_count + 1, round(input_count * requested / source_fps))
     # 枚数の丸め後も元動画と尺を完全に一致させる。
     effective_fps = source_fps * target_count / input_count
 

@@ -408,6 +408,11 @@ QPushButton#accent {{
 QPushButton#accent:hover {{
     background-color: {p.accent_hi};
 }}
+QPushButton#quickSecondary {{
+    min-height: 26px;
+    padding: 6px 18px;
+    font-size: 15px;
+}}
 QPushButton#accent:disabled {{
     background-color: {p.accent_disabled};
     color: {p.text_mute};

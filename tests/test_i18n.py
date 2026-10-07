@@ -224,6 +224,7 @@ _EXPECTED_NONLITERAL = Counter(
         ("app/gui/settings_drawer.py", "label"): 2,
         ("app/gui/settings_drawer.py", "text"): 1,
         ("app/gui/settings_drawer.py", "help_text"): 2,
+        ("app/gui/settings_drawer.py", "kit.name_key"): 1,
     }
 )
 

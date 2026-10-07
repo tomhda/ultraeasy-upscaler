@@ -320,6 +320,19 @@ def _swinir_model() -> Path:
     return candidate.resolve()
 
 
+def swinir_cuda_available() -> bool:
+    """NVIDIA用SwinIR実行先をUIへ出せる状態かを軽量に判定する。"""
+    if not (shutil.which("nvidia-smi") or shutil.which("nvidia-smi.exe")):
+        return False
+    try:
+        _swinir_python()
+        _swinir_script()
+        _swinir_model()
+    except HelperBackendUnavailable:
+        return False
+    return True
+
+
 def _swinir_startup_timeout() -> float:
     """CUDA初期化が遅い環境向けに、起動待ちを秒単位で上書き可能にする。"""
     raw = os.environ.get(SWINIR_STARTUP_TIMEOUT_ENV)

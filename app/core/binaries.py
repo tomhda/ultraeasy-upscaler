@@ -153,15 +153,63 @@ def rife_models_dir() -> Path:
     return Path(rife_exe()).parent
 
 
+FILM_MODEL = "film-style"
+
+
+def film_helper_exe() -> str:
+    """FILM/Windows ML 補間ヘルパーを探す（起動はしない）。"""
+    override = os.environ.get("UEU_FILM_HELPER")
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_file():
+            return str(candidate)
+        raise BinaryError(
+            t("FILM (Style) の実行ファイルが見つかりません: {path}", path=candidate)
+        )
+    root = repo_root()
+    candidates = [root / "vendor" / "winml-film" / "winml-film.exe"]
+    candidates.extend((root / "tools" / "winml-film" / "bin").glob(
+        "Release/net*/win-x64/winml-film.exe"
+    ))
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise BinaryError(
+        t("FILM (Style) の実行ファイルが見つかりません。FILM キットを追加してください。")
+    )
+
+
+def film_model_path() -> Path:
+    """配布版 ONNX または明示指定された FILM モデルを返す（起動はしない）。"""
+    override = os.environ.get("UEU_FILM_MODEL")
+    path = (Path(override).expanduser() if override else
+            repo_root() / "models" / "film" / "film_style_fp32.onnx")
+    if not path.is_file():
+        raise BinaryError(
+            t("FILM (Style) のモデルが見つかりません: {path}", path=path)
+        )
+    return path
+
+
 @lru_cache(maxsize=None)
 def available_interpolation_models() -> list[str]:
-    """利用可能なRIFEモデルを列挙する（初期対応はv4.6）。"""
+    """利用可能な補間モデルを列挙する。"""
+    models: list[str] = []
     try:
         base = rife_models_dir()
     except BinaryError:
-        return []
-    supported = ("rife-v4.6",)
-    return [name for name in supported if (base / name).is_dir()]
+        pass
+    else:
+        if (base / "rife-v4.6").is_dir():
+            models.append("rife-v4.6")
+    try:
+        film_helper_exe()
+        film_model_path()
+    except BinaryError:
+        pass
+    else:
+        models.append(FILM_MODEL)
+    return models
 
 
 def interpolation_model_dir(model: str) -> Path:

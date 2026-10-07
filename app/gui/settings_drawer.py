@@ -4,8 +4,8 @@ from __future__ import annotations
 import threading
 import time
 
-from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPen
+from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QPaintEvent, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import helper_backend, npu_prepare
+from app.core import addon_kits, helper_backend, npu_prepare
 from app.core import user_settings
 from app.core.jobs import Cancelled
 from app.core.settings import (
@@ -42,11 +42,36 @@ _VIDEO_QUALITY_OPTIONS = [
     (N_("標準"), 23),
     (N_("軽量（容量小）"), 28),
 ]
+# 「補間後のfps」の選択肢。値はキーで持ち、実値は _FPS_CHOICES で引く
+# （タプルをそのまま値にすると findData が等しい値を探せないため）。
+_FPS_CHOICES: dict[str, tuple[float | None, int]] = {
+    "x2": (None, 2),
+    "x4": (None, 4),
+    "x8": (None, 8),
+    "fps60": (60.0, 2),
+    "fps120": (120.0, 2),
+}
+# FILM 選択中に選べなくする固定 fps のキー。
+_FPS_FIXED_KEYS = ("fps60", "fps120")
 _TARGET_FPS_OPTIONS = [
-    (N_("元動画の2倍"), None),
-    ("60 fps", 60.0),
-    ("120 fps", 120.0),
+    (N_("元動画の2倍"), "x2"),
+    (N_("元動画の4倍"), "x4"),
+    (N_("元動画の8倍"), "x8"),
+    ("60 fps", "fps60"),
+    ("120 fps", "fps120"),
 ]
+
+
+def _fps_key_for(target: float | None, factor: int) -> str:
+    """設定値に対応する選択肢のキー（無ければ元動画の 2 倍）。"""
+    for key, (choice_target, choice_factor) in _FPS_CHOICES.items():
+        if choice_target is None and target is None:
+            if int(choice_factor) == int(factor):
+                return key
+        elif choice_target is not None and target is not None:
+            if float(choice_target) == float(target):
+                return key
+    return "x2"
 _PROCESSING_ORDER_OPTIONS = [
     (N_("アプコン → 補間（速い）"), ProcessingOrder.UPSCALE_FIRST.value),
     (N_("補間 → アプコン（省メモリ）"), ProcessingOrder.INTERPOLATE_FIRST.value),
@@ -70,6 +95,19 @@ _BACKEND_OPTIONS = [
     (N_("SwinIR-M（CUDA・超低速）"), UpscaleBackend.SWINIR_CUDA.value),
     (N_("Vulkan"), UpscaleBackend.VULKAN.value),
 ]
+
+
+def available_backend_options() -> list[tuple[str, str]]:
+    """表示する AI 実行先の一覧。
+
+    NPU はキットがある PC だけ、SwinIR CUDA は実行環境が揃う PC だけ出す。
+    """
+    return [
+        (label, value) for label, value in _BACKEND_OPTIONS
+        if (value != UpscaleBackend.NPU_NATIVE.value or npu_prepare.npu_available())
+        and (value != UpscaleBackend.SWINIR_CUDA.value
+             or helper_backend.swinir_cuda_available())
+    ]
 _LANGUAGE_OPTIONS = [
     (N_("Windows の設定に合わせる"), "auto"),
     (N_("日本語"), "ja"),
@@ -333,12 +371,7 @@ class SettingsDrawer(QFrame):
         grid.setColumnStretch(3, 1)
 
         # --- AI実行先 / 画像の保存形式 ---
-        # NPU キットが無い PC では NPU の選択肢を出さない。
-        backend_options = [
-            (label, value) for label, value in _BACKEND_OPTIONS
-            if value != UpscaleBackend.NPU_NATIVE.value or npu_prepare.npu_available()
-        ]
-        self.backend = self._combo_with_data(backend_options)
+        self.backend = self._combo_with_data(available_backend_options())
         grid.addWidget(self._label(N_("AI実行先"), _HELP["backend"]), 0, 0)
         grid.addWidget(self.backend, 0, 1)
 
@@ -375,9 +408,10 @@ class SettingsDrawer(QFrame):
         grid.addWidget(self._label(N_("出力フォルダ名"), _HELP["subfolder"]), 3, 0)
         grid.addWidget(self.subfolder_name, 3, 1)
 
-        # --- フレーム補間後のfps ---
+        # --- フレーム補間後のfps（細かく選ぶときだけ出す） ---
         self.target_fps = self._combo_with_data(_TARGET_FPS_OPTIONS)
-        grid.addWidget(self._label(N_("補間後のfps"), _HELP["target_fps"]), 3, 2)
+        self.target_fps_label = self._label(N_("補間後のfps"), _HELP["target_fps"])
+        grid.addWidget(self.target_fps_label, 3, 2)
         grid.addWidget(self.target_fps, 3, 3)
 
         # --- 処理の順番（アプコン×補間 併用時） ---
@@ -417,10 +451,52 @@ class SettingsDrawer(QFrame):
         toggles.addWidget(self._check_row(self.keep_audio, _HELP["keep_audio"]), 0, 1)
         toggles.addWidget(self._check_row(self.tta_mode, _HELP["tta"]), 1, 0)
         toggles.addWidget(self._check_row(self.create_subfolder, _HELP["create_folder"]), 1, 1)
+        # 補間の倍率を細かく選ぶ（切っている間は元動画の 2 倍。保存しない）。
+        self.detail_fps_check = ClearCheckBox(N_("補間の倍率を細かく選ぶ"))
+        toggles.addWidget(
+            self._check_row(
+                self.detail_fps_check,
+                N_("入れると「補間後のfps」を選べるようになります。"
+                   "切っている間は、元動画の 2 倍になります。"),
+            ),
+            2, 0, 1, 2,
+        )
+        self.detail_fps_check.toggled.connect(self._on_detail_fps_toggled)
         toggle_wrap = QWidget()
         toggle_wrap.setObjectName("toggleWrap")
         toggle_wrap.setLayout(toggles)
         root.addWidget(toggle_wrap)
+
+        # --- 追加キット（NPU の準備の上に置く） ---
+        self.kit_section = QWidget()
+        self.kit_section.setObjectName("toggleWrap")
+        kit_section = QVBoxLayout(self.kit_section)
+        kit_section.setContentsMargins(0, 8, 0, 0)
+        kit_section.setSpacing(8)
+        kit_line = QFrame()
+        kit_line.setObjectName("separator")
+        kit_line.setFixedHeight(1)
+        kit_section.addWidget(kit_line)
+        kit_heading = QLabel(t("追加キット"))
+        kit_heading.setObjectName("sectionTitle")
+        kit_section.addWidget(kit_heading)
+        kit_desc = QLabel(
+            t(
+                "ダウンロードした zip を、ultraeasy-upscaler.exe のあるフォルダに"
+                "展開してください。次回の起動から使えます。"
+            )
+        )
+        kit_desc.setObjectName("hint")
+        kit_desc.setWordWrap(True)
+        kit_section.addWidget(kit_desc)
+        self.kit_grid = QGridLayout()
+        self.kit_grid.setHorizontalSpacing(12)
+        self.kit_grid.setVerticalSpacing(6)
+        self.kit_grid.setColumnStretch(4, 1)  # ボタンは伸ばさず、余りは右へ
+        kit_section.addLayout(self.kit_grid)
+        self.kit_rows: dict[str, dict[str, QWidget]] = {}
+        root.addWidget(self.kit_section)
+        self._rebuild_kit_rows()
 
         # --- NPU の準備（キットが無い PC では欄ごと出さない） ---
         self.npu_section = QWidget()
@@ -472,6 +548,9 @@ class SettingsDrawer(QFrame):
             )
 
         self.load_defaults()
+        # 補間の倍率は既定で切（保存しない）。「補間後のfps」の欄は出さない。
+        self.detail_fps_check.setChecked(False)
+        self._sync_detail_fps_row()
 
     # --- 表示言語（切り替えは次回の起動から有効） ---
     def _load_language_combo(self) -> None:
@@ -502,7 +581,9 @@ class SettingsDrawer(QFrame):
         self._set_combo_value(self.video_quality, s.video_quality)
         self._set_combo_value(self.tile_size, s.tile_size)
         self._set_combo_value(self.gpu_id, s.gpu_id)
-        self._set_combo_value(self.target_fps, s.target_fps)
+        self._set_combo_value(
+            self.target_fps, _fps_key_for(s.target_fps, s.interpolation_factor)
+        )
         self._set_combo_value(self.processing_order, s.processing_order.value)
         self.subfolder_name.setText(s.subfolder_name)
         self.hw_encode.setChecked(s.hw_encode)
@@ -524,8 +605,14 @@ class SettingsDrawer(QFrame):
         s.video_quality = int(self.video_quality.currentData())
         s.tile_size = int(self.tile_size.currentData())
         s.gpu_id = int(self.gpu_id.currentData())
-        target = self.target_fps.currentData()
-        s.target_fps = float(target) if target is not None else None
+        if self.detail_fps_check.isChecked():
+            target, factor = _FPS_CHOICES.get(self.target_fps.currentData(), (None, 2))
+            s.target_fps = float(target) if target is not None else None
+            s.interpolation_factor = int(factor)
+        else:
+            # 切っている間は常に元動画の 2 倍。
+            s.target_fps = None
+            s.interpolation_factor = 2
         s.processing_order = ProcessingOrder(self.processing_order.currentData())
         name = self.subfolder_name.text().strip() or "upscaled"
         s.subfolder_name = name
@@ -538,6 +625,76 @@ class SettingsDrawer(QFrame):
         self.target_fps.setEnabled(enabled)
         # 順番は補間とアプコンの併用時のみ意味を持つ
         self.processing_order.setEnabled(enabled)
+
+    def _on_detail_fps_toggled(self, checked: bool) -> None:
+        """細かく選ぶを切ったら元動画の 2 倍に戻す。"""
+        if not checked:
+            self._set_combo_value(self.target_fps, "x2")
+        self._sync_detail_fps_row()
+
+    def _sync_detail_fps_row(self) -> None:
+        """「補間後のfps」の欄は細かく選ぶときだけ出す。"""
+        show = self.detail_fps_check.isChecked()
+        self.target_fps_label.setVisible(show)
+        self.target_fps.setVisible(show)
+
+    def set_film_selected(self, film: bool) -> None:
+        """FILM 選択中は 60/120fps を選べなくする（倍数だけに対応するため）。"""
+        for i in range(self.target_fps.count()):
+            if self.target_fps.itemData(i) not in _FPS_FIXED_KEYS:
+                continue
+            item = self.target_fps.model().item(i)
+            if item is None:
+                continue
+            item.setEnabled(not film)
+            item.setToolTip(
+                t("FILM (Style) は元動画の倍数だけに対応します") if film else ""
+            )
+        if film and self.target_fps.currentData() in _FPS_FIXED_KEYS:
+            self._set_combo_value(self.target_fps, "x2")
+
+    # ------------------------------------------------------- 追加キット
+    def _rebuild_kit_rows(self) -> None:
+        """追加キットの 4 行を作り直す（判定はファイルの有無だけ）。"""
+        while self.kit_grid.count():
+            item = self.kit_grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.kit_rows.clear()
+        for row, kit in enumerate(addon_kits.addon_kits()):
+            name_label = QLabel(t(kit.name_key))
+            name_label.setObjectName("fieldLabel")
+            size_label = QLabel(kit.size)
+            size_label.setObjectName("hint")
+            status_label = QLabel(
+                t("導入済み") if kit.installed else t("未導入")
+            )
+            status_label.setObjectName("hint")
+            button = QPushButton(t("ダウンロード"))
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(
+                lambda _=False, filename=kit.filename: self._on_kit_button(filename)
+            )
+            self.kit_grid.addWidget(name_label, row, 0)
+            self.kit_grid.addWidget(size_label, row, 1)
+            self.kit_grid.addWidget(status_label, row, 2)
+            self.kit_grid.addWidget(button, row, 3)
+            self.kit_rows[kit.key] = {
+                "name": name_label,
+                "size": size_label,
+                "status": status_label,
+                "button": button,
+            }
+
+    def refresh_kit_rows(self) -> None:
+        """詳細設定を開いたときに導入状態を判定し直す。"""
+        self._rebuild_kit_rows()
+
+    @staticmethod
+    def _on_kit_button(filename: str) -> None:
+        """既定のブラウザで配布ページを開く（入手と展開は利用者が行う）。"""
+        QDesktopServices.openUrl(QUrl(addon_kits.kit_download_url(filename)))
 
     # ------------------------------------------------------- NPU の準備
     def _rebuild_npu_rows(self) -> None:

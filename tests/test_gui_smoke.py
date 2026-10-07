@@ -393,9 +393,11 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
         app.processEvents()
 
 
-def test_swinir_cuda_backend_only_offers_swinir_and_warns_about_speed(app, tmp_path):
+def test_swinir_cuda_backend_only_offers_swinir_and_warns_about_speed(app, monkeypatch, tmp_path):
     import shutil as _shutil
 
+    from app.core import helper_backend
+    monkeypatch.setattr(helper_backend, "swinir_cuda_available", lambda: True)
     from app.core.settings import HELPER_MODEL_SWINIR, UpscaleBackend
     from app.gui.main_window import MainWindow
 
@@ -425,6 +427,21 @@ def test_swinir_cuda_backend_only_offers_swinir_and_warns_about_speed(app, tmp_p
         assert win._scale_btns[4].isEnabled() is True
         assert win.model_hint.text() == "実写の静止画向け・高精細・遅い"
         assert win.drawer.backend.findData(UpscaleBackend.SWINIR_CUDA.value) >= 0
+    finally:
+        win.close()
+        app.processEvents()
+
+
+def test_swinir_cuda_backend_is_hidden_without_runtime(app, monkeypatch):
+    from app.core import helper_backend
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    monkeypatch.setattr(helper_backend, "swinir_cuda_available", lambda: False)
+    win = MainWindow()
+    try:
+        assert win.backend_combo.findData(UpscaleBackend.SWINIR_CUDA.value) == -1
+        assert win.drawer.backend.findData(UpscaleBackend.SWINIR_CUDA.value) == -1
     finally:
         win.close()
         app.processEvents()

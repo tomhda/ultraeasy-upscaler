@@ -113,6 +113,16 @@ EN: dict[str, str | None] = {
     'なし（補間しない）': 'None (no interpolation)',
     # フレーム補間コンボの選択肢（rife-v4.6用）
     'RIFE v4.6': 'RIFE v4.6',
+    # フレーム補間コンボの選択肢（FILM用。表示名は訳さない）
+    'FILM (Style)': 'FILM (Style)',
+    # FILM未導入の項目。{name}=補間モデルの表示名（例: FILM (Style)）
+    '{name}（未導入）': '{name} (not installed)',
+    # FILM未導入の項目のツールチップ
+    '詳細設定の「追加キット」からダウンロードできます': 'You can download it from "Add-on kits" in the settings',
+    # フレーム補間モデルの説明行（右列・ヘッダーのツールチップ）
+    '高速': 'Fast',
+    # フレーム補間モデルの説明行（右列・ヘッダーのツールチップ）
+    '低速・高品質': 'Slow · High quality',
     # モデル・補間コンボの無効な選択肢（2箇所で同じ文言）
     'モデル未検出': 'No model found',
     # 右列の項目名（動画側のみ表示）
@@ -290,6 +300,12 @@ EN: dict[str, str | None] = {
     '補間後のfps': 'Interpolated frame rate',
     # 補間後fpsの選択肢
     '元動画の2倍': 'Twice the source',
+    # 補間後fpsの選択肢
+    '元動画の4倍': '4 times the source',
+    # 補間後fpsの選択肢
+    '元動画の8倍': '8 times the source',
+    # FILM選択中に選べないfps項目のツールチップ
+    'FILM (Style) は元動画の倍数だけに対応します': 'FILM (Style) supports only multiples of the source frame rate',
     # 詳細設定の項目名
     '処理の順番': 'Order of processing',
     # 処理順の選択肢
@@ -304,6 +320,8 @@ EN: dict[str, str | None] = {
     '高品質モード (TTA)': 'High-quality mode (TTA)',
     # 詳細設定のチェックボックス
     '出力フォルダを作る': 'Create an output folder',
+    # 詳細設定のチェックボックス
+    '補間の倍率を細かく選ぶ': 'Choose the interpolation rate in detail',
     # --- 詳細設定: ヘルプ
     # 出力先のヘルプ
     '処理したファイルの保存先です。「元の場所」は元のファイルと同じ場所、「フォルダ選択…」は指定したフォルダに保存します。': 'Where processed files are saved. "Same folder as the source" saves next to the original file, and "Choose a folder…" saves to the folder you pick.',
@@ -329,10 +347,29 @@ EN: dict[str, str | None] = {
     'TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。': 'TTA processes the same picture several times, flipped and so on, and combines the results. It can look slightly better but is much slower.',
     # 出力フォルダ作成のヘルプ
     'チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。': 'When on, the output goes into a folder with the given name. When off, it is saved directly next to the source file.',
+    # 補間倍率チェックボックスのヘルプ
+    '入れると「補間後のfps」を選べるようになります。切っている間は、元動画の 2 倍になります。': 'Turn this on to choose "Interpolated frame rate". While it is off, the frame rate is twice the source.',
     # 補間後fpsのヘルプ
     'フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。': "How smooth the video is after frame interpolation. Twice the source is the usual choice. A frame rate that isn't higher than the source can't be processed.",
     # 処理順のヘルプ
     'アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。': 'The order used when both upscaling and frame interpolation run. Upscale → interpolate is faster and is the usual choice. Choose Interpolate → upscale only when a high-resolution result runs out of memory.',
+    # --- 追加キット
+    # 詳細設定内の見出し
+    '追加キット': 'Add-on kits',
+    # 追加キットの説明文
+    'ダウンロードした zip を、ultraeasy-upscaler.exe のあるフォルダに展開してください。次回の起動から使えます。': 'Extract the downloaded zip into the folder that contains ultraeasy-upscaler.exe. It becomes available the next time the app starts.',
+    # 追加キットの行の名前
+    'NPU キット': 'NPU kit',
+    # 追加キットの行の名前
+    'AdcSR（GPU 用）': 'AdcSR (for GPU)',
+    # 追加キットの行の名前
+    'AdcSR（NPU 用）': 'AdcSR (for NPU)',
+    # 追加キットの行の状態（未導入）
+    '未導入': 'Not installed',
+    # 追加キットの行の状態（導入済み）
+    '導入済み': 'Installed',
+    # 追加キットの行のボタン
+    'ダウンロード': 'Download',
     # --- NPU の準備
     # 詳細設定内の見出し／未変換案内の文中の名称（2箇所で同じ文言）
     'NPU の準備': 'NPU setup',
@@ -428,6 +465,8 @@ EN: dict[str, str | None] = {
     'フレーム抽出完了': 'Frames extracted',
     # 補間の進捗（複数箇所で同じ文言）
     'RIFEでフレーム補間中…': 'Interpolating frames with RIFE…',
+    # FILM補間の進捗（複数箇所で同じ文言）
+    'FILM (Style) でフレーム補間中…': 'Interpolating frames with FILM (Style)…',
     # 補間の完了時
     'フレーム補間完了': 'Frame interpolation finished',
     # 動画フレーム拡大の開始時
@@ -516,6 +555,12 @@ EN: dict[str, str | None] = {
     'フレーム補間には2枚以上のフレームが必要です。': 'Frame interpolation needs at least two frames.',
     # 補間設定の内部エラー文。{fps}=元動画のfps（例: 29.970）
     '補間後のfpsは元動画より大きい値にしてください（元: {fps:.3f}fps）。': 'The frame rate after interpolation must be higher than the source ({fps:.3f} fps).',
+    # FILM補間のfps制約。{source}=元動画のfps、{requested}=指定fps（例: 24.000）
+    'FILM (Style) は元動画の 2 倍・4 倍・8 倍の fps だけに対応します（元: {source}fps / 指定: {requested}fps）。': 'FILM (Style) supports only 2, 4, or 8 times the source frame rate (source: {source} fps, requested: {requested} fps).',
+    # FILM補間実行の失敗時。{detail}=実行ログ末尾
+    'FILM (Style) の処理に失敗しました:\n{detail}': 'FILM (Style) failed:\n{detail}',
+    # FILM補間結果の検証時。{expected}=予定枚数、{actual}=実際
+    'FILM (Style) が作ったフレームの数が合いません（予定 {expected} / 実際 {actual}）。': 'FILM (Style) produced a different number of frames than expected (expected {expected}, got {actual}).',
     # 補間実行の失敗時。{tail}=実行ログ末尾
     'RIFEが失敗しました:\n{tail}': 'RIFE failed:\n{tail}',
     # 補間結果の検証時。{planned}=予定枚数、{actual}=実際
@@ -581,6 +626,12 @@ EN: dict[str, str | None] = {
     'realesrgan-ncnn-vulkan.exe が見つかりません: {exe}\nvendor/realesrgan/ に展開してください。': 'realesrgan-ncnn-vulkan.exe was not found: {exe}\nExtract it into vendor/realesrgan/.',
     # RIFE実行ファイル不在時。{base}=探した場所
     'rife-ncnn-vulkan.exe が見つかりません: {base}\nモデル取得スクリプトを実行してください。': 'rife-ncnn-vulkan.exe was not found: {base}\nRun the script that downloads the models.',
+    # FILM実行ファイル不在時（キット未導入）
+    'FILM (Style) の実行ファイルが見つかりません。FILM キットを追加してください。': 'The FILM (Style) program was not found. Add the FILM kit.',
+    # FILM実行ファイル不在時。{path}=探した場所
+    'FILM (Style) の実行ファイルが見つかりません: {path}': 'The FILM (Style) program was not found: {path}',
+    # FILMモデル不在時。{path}=探した場所
+    'FILM (Style) のモデルが見つかりません: {path}': 'The FILM (Style) model was not found: {path}',
     # RIFEモデル不在時。{path}=探した場所
     'フレーム補間モデルが見つかりません: {path}': 'The frame interpolation model was not found: {path}',
     # 旧NPU経路のモデル不在時。{name}=モデル名、{model}=探した場所
