@@ -352,7 +352,7 @@ EN: dict[str, str | None] = {
     # 補間後fpsのヘルプ
     'フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。': "How smooth the video is after frame interpolation. Twice the source is the usual choice. A frame rate that isn't higher than the source can't be processed.",
     # 処理順のヘルプ
-    'アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。': 'The order used when both upscaling and frame interpolation run. Upscale → interpolate is faster and is the usual choice. Choose Interpolate → upscale only when a high-resolution result runs out of memory.',
+    'アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。FILM (Style) は、メモリを抑えるため常に「補間 → アプコン」の順で処理します。': 'The order used when both upscaling and frame interpolation run. Upscale → interpolate is faster and is the usual choice. Choose Interpolate → upscale only when a high-resolution result runs out of memory. FILM (Style) always uses Interpolate → upscale, to keep memory use down.',
     # --- 追加キット
     # 詳細設定内の見出し
     '追加キット': 'Add-on kits',

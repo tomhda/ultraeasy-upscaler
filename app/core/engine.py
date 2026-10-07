@@ -260,7 +260,13 @@ def _process_video(job, settings, progress, cancel) -> Path:
             # 抑えられるため合計時間が短い。拡大後の高解像度フレームを補間器に
             # 渡すとVRAM/RAM消費が増えるため、省メモリ順（補間→アプコン）も
             # processing_order で選択できる。
-            if settings.processing_order == ProcessingOrder.INTERPOLATE_FIRST:
+            # FILM は拡大後の大きな絵を渡すとメモリが足りなくなるので、
+            # 設定にかかわらず元の大きさのうちに補間する。
+            interpolate_first = (
+                settings.processing_order == ProcessingOrder.INTERPOLATE_FIRST
+                or settings.interpolation_model == binaries.FILM_MODEL
+            )
+            if interpolate_first:
                 _run_interpolation(0.20, 0.45)
                 _run_upscale(0.45, 0.80)
             else:

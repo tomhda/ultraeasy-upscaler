@@ -353,14 +353,14 @@ def _run_both_stages(monkeypatch, tmp_path: Path, **settings_kwargs) -> list[str
     monkeypatch.setattr(upscaler, "upscale_folder", fake_upscale)
     monkeypatch.setattr(video, "reassemble", fake_reassemble)
 
-    settings = UpscaleSettings(
-        model="realesr-animevideov3",
-        interpolation_model="rife-v4.6",
-        output_location=engine.OutputLocation.CUSTOM,
-        output_dir=str(tmp_path),
-        create_subfolder=False,
+    settings = UpscaleSettings(**{
+        "model": "realesr-animevideov3",
+        "interpolation_model": "rife-v4.6",
+        "output_location": engine.OutputLocation.CUSTOM,
+        "output_dir": str(tmp_path),
+        "create_subfolder": False,
         **settings_kwargs,
-    )
+    })
     engine.process_job(job, settings)
     return calls
 
@@ -375,6 +375,12 @@ def test_video_can_interpolate_before_upscaling(monkeypatch, tmp_path: Path) -> 
         monkeypatch, tmp_path,
         processing_order=ProcessingOrder.INTERPOLATE_FIRST,
     )
+    assert calls == ["interpolate:src", "upscale:interp", "reassemble:up"]
+
+
+def test_video_film_always_interpolates_before_upscaling(monkeypatch, tmp_path: Path) -> None:
+    # FILM は拡大後の大きな絵だとメモリが足りないので、設定が既定（アプコン→補間）でも先に補間する。
+    calls = _run_both_stages(monkeypatch, tmp_path, interpolation_model="film-style")
     assert calls == ["interpolate:src", "upscale:interp", "reassemble:up"]
 
 
