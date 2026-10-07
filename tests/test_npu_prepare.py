@@ -688,8 +688,6 @@ def test_start_blocked_for_per_file_unconverted_model(
         assert ok is True
         job = next(iter(win._jobs.values()))
         win.queue.select(job.id)
-        win._set_settings_tab("image")
-        win._per_file_check.setChecked(True)
         app.processEvents()
         win.model_combo.setCurrentIndex(
             win.model_combo.findData(HELPER_MODEL_ADCSR))
@@ -718,7 +716,7 @@ def test_converting_blocks_start_and_trial(app, monkeypatch) -> None:
         assert win.status_label.text() == "NPU の変換中は処理を始められません"
         assert win._running is False
         assert win.preview.trial_btn.isEnabled() is False
-        assert win.preview.status_label.text() == "NPU の変換中は試せません"
+        assert win.preview.status_label.text() == "NPU の変換中はクイック確認できません"
         win._on_npu_converting_changed(False)
         app.processEvents()
         assert win.start_btn.isEnabled() is True
@@ -765,7 +763,7 @@ def test_trial_allowed_when_falling_back_to_gpu(app, monkeypatch) -> None:
         monkeypatch.setattr(upscaler, "upscale_image", fake)
         win.preview.trial_btn.click()
         assert _wait_until(
-            lambda: win.preview.right_combo.count() > 1, timeout=20.0)
+            lambda: len(win.preview._matching_keys()) > 0, timeout=20.0)
         assert win.preview.status_label.text() != (
             "Anime Video v3は NPU 用の変換がまだです。"
             "詳細設定の「NPU の準備」で変換してください。")

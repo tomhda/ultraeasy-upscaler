@@ -127,67 +127,83 @@ def test_queue_progress_bars_align_for_different_file_names(app, tmp_path):
     app.processEvents()
 
 
-def test_build_settings_maps_widgets(app):
+def test_build_settings_maps_widgets(app, tmp_path):
     """ウィジェット値が UpscaleSettings に反映される。"""
+    import shutil as _shutil
+
     from app.core.settings import OutputLocation, UpscaleBackend
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
 
-    # Vulkanでは従来モデルの倍率を選べる。
-    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
-    assert vulkan >= 0
-    win.backend_combo.setCurrentIndex(vulkan)
-    app.processEvents()
+        # Vulkanでは従来モデルの倍率を選べる。
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        assert vulkan >= 0
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
 
-    # 倍率 2x を選択
-    win._set_scale(2)
-    # 詳細設定の一部を変更
-    win.drawer.tta_mode.setChecked(True)
-    win.drawer.image_format.setCurrentText("webp")
+        # 倍率 2x を選択（右列で選んだファイルの個別になる）
+        win._set_scale(2)
+        # 詳細設定の一部を変更
+        win.drawer.tta_mode.setChecked(True)
+        win.drawer.image_format.setCurrentText("webp")
 
-    s = win.build_settings()
-    assert s.scale == 2
-    assert s.backend == UpscaleBackend.VULKAN
-    assert s.tta_mode is True
-    assert s.image_format == "webp"
-    assert s.output_location == OutputLocation.SAME  # 既定は「元の場所」
+        s = win.build_settings()
+        assert s.scale == 2
+        assert s.backend == UpscaleBackend.VULKAN
+        assert s.tta_mode is True
+        assert s.image_format == "webp"
+        assert s.output_location == OutputLocation.SAME  # 既定は「元の場所」
+    finally:
+        win.close()
+        app.processEvents()
 
-    win.close()
-    app.processEvents()
 
-
-def test_upscale_and_interpolation_models_are_independent(app):
+def test_upscale_and_interpolation_models_are_independent(app, tmp_path):
+    """拡大モデル「なし」と補間は独立し、補間の有無でfps欄が切り替わる。"""
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
+    try:
+        src = tmp_path / "clip.mp4"
+        src.write_bytes(b"not a real video")
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
+        job = next(iter(win._jobs.values()))
 
-    from app.core.settings import UpscaleBackend
-    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
-    win.backend_combo.setCurrentIndex(vulkan)
-    app.processEvents()
-    win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
-    rife_index = win.interpolation_combo.findData("rife-v4.6")
-    assert rife_index >= 0
-    win.interpolation_combo.setCurrentIndex(rife_index)
-    app.processEvents()
+        from app.core.settings import UpscaleBackend
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
+        win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
+        rife_index = win.interpolation_combo.findData("rife-v4.6")
+        assert rife_index >= 0
+        win.interpolation_combo.setCurrentIndex(rife_index)
+        app.processEvents()
 
-    settings = win.build_settings()
-    assert settings.model is None
-    assert settings.interpolation_model == "rife-v4.6"
-    assert all(not button.isEnabled() for button in win._scale_btns.values())
-    assert win.drawer.target_fps.isEnabled() is True
+        settings = win.build_settings(job)
+        assert settings.model is None
+        assert settings.interpolation_model == "rife-v4.6"
+        assert all(not button.isEnabled() for button in win._scale_btns.values())
+        assert win.drawer.target_fps.isEnabled() is True
 
-    win.interpolation_combo.setCurrentIndex(0)
-    app.processEvents()
-    settings = win.build_settings()
-    assert settings.interpolation_model is None
-    assert win.drawer.target_fps.isEnabled() is False
-
-    win.close()
-    app.processEvents()
+        win.interpolation_combo.setCurrentIndex(0)
+        app.processEvents()
+        settings = win.build_settings(job)
+        assert settings.interpolation_model is None
+        assert win.drawer.target_fps.isEnabled() is False
+    finally:
+        win.close()
+        app.processEvents()
 
 
 def test_helper_model_none_is_available_and_saved_as_upscale_off(app):
@@ -204,48 +220,52 @@ def test_helper_model_none_is_available_and_saved_as_upscale_off(app):
 
     win = MainWindow()
     app.processEvents()
+    try:
+        # ヘッダーの画像一括に新AIモデルが並ぶ
+        assert win.image_model_combo.findData(None) == 0
+        assert win.image_model_combo.itemText(0) == "なし（拡大しない）"
+        assert [win.image_model_combo.itemData(i) for i in range(win.image_model_combo.count())] == [
+            None,
+            HELPER_MODEL_ANIME,
+            HELPER_MODEL_SPAN,
+            HELPER_MODEL_AMD_RRDB,
+            HELPER_MODEL_SWINIR,
+            HELPER_MODEL_ADCSR,
+        ]
 
-    assert win.model_combo.findData(None) == 0
-    assert win.model_combo.itemText(0) == "なし（拡大しない）"
-    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
-        None,
-        HELPER_MODEL_ANIME,
-        HELPER_MODEL_SPAN,
-        HELPER_MODEL_AMD_RRDB,
-        HELPER_MODEL_SWINIR,
-        HELPER_MODEL_ADCSR,
-    ]
+        win.image_model_combo.setCurrentIndex(0)
+        rife_index = win.global_interpolation_combo.findData("rife-v4.6")
+        assert rife_index >= 0
+        win.global_interpolation_combo.setCurrentIndex(rife_index)
+        app.processEvents()
 
-    win.model_combo.setCurrentIndex(0)
-    rife_index = win.interpolation_combo.findData("rife-v4.6")
-    assert rife_index >= 0
-    win.interpolation_combo.setCurrentIndex(rife_index)
-    app.processEvents()
+        settings = win.build_settings()
+        assert settings.backend == UpscaleBackend.WINML_GPU
+        assert settings.model is None
+        assert settings.interpolation_model == "rife-v4.6"
+        assert settings.upscale_enabled is False
+        assert settings.interpolation_enabled is True
 
-    settings = win.build_settings()
-    assert settings.backend == UpscaleBackend.WINML_GPU
-    assert settings.model is None
-    assert settings.interpolation_model == "rife-v4.6"
-    assert settings.upscale_enabled is False
-    assert settings.interpolation_enabled is True
-    assert win.model_combo.isEnabled() is True
-    assert all(not button.isEnabled() for button in win._scale_btns.values())
+        ok, _ = win.add_path(str(SAMPLE_IMAGE))
+        assert ok is True
+        app.processEvents()
+        # 一括「なし」に右列が追従する
+        assert win.model_combo.currentData() is None
+        assert win.model_combo.isEnabled() is True
+        assert all(not button.isEnabled() for button in win._scale_btns.values())
+        win._apply_current_settings(win._pending_jobs())
+        job = next(iter(win._jobs.values()))
+        assert job.settings is not None
+        assert job.settings.model is None
+        assert job.settings.interpolation_model == "rife-v4.6"
 
-    ok, _ = win.add_path(str(SAMPLE_IMAGE))
-    assert ok is True
-    win._apply_current_settings(win._pending_jobs())
-    job = next(iter(win._jobs.values()))
-    assert job.settings is not None
-    assert job.settings.model is None
-    assert job.settings.interpolation_model == "rife-v4.6"
-
-    # 「なし」から新AIモデルへ戻せることも確認する。
-    win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_ANIME))
-    app.processEvents()
-    assert win.build_settings().model == HELPER_MODEL_ANIME
-
-    win.close()
-    app.processEvents()
+        # 「なし」から新AIモデルへ戻せることも確認する（右列で個別になる）。
+        win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_ANIME))
+        app.processEvents()
+        assert win.build_settings().model == HELPER_MODEL_ANIME
+    finally:
+        win.close()
+        app.processEvents()
 
 
 def test_job_settings_apply_at_start_not_at_add(app):
@@ -255,38 +275,45 @@ def test_job_settings_apply_at_start_not_at_add(app):
 
     win = MainWindow()
     app.processEvents()
-    from app.core.settings import UpscaleBackend
-    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
-    win.backend_combo.setCurrentIndex(vulkan)
-    app.processEvents()
-    win.model_combo.setCurrentIndex(0)  # なし（拡大しない）
-    rife_index = win.interpolation_combo.findData("rife-v4.6")
-    assert rife_index >= 0
-    win.interpolation_combo.setCurrentIndex(rife_index)
+    try:
+        from app.core.settings import UpscaleBackend
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
+        # 一括を「なし」＋補間ありに
+        win.image_model_combo.setCurrentIndex(0)  # なし（拡大しない）
+        win.video_model_combo.setCurrentIndex(0)
+        rife_index = win.global_interpolation_combo.findData("rife-v4.6")
+        assert rife_index >= 0
+        win.global_interpolation_combo.setCurrentIndex(rife_index)
+        app.processEvents()
 
-    ok, _ = win.add_path(str(SAMPLE_IMAGE))
-    assert ok
-    job = next(iter(win._jobs.values()))
-    # 追加時点では固定されない
-    assert job.settings is None
+        ok, _ = win.add_path(str(SAMPLE_IMAGE))
+        assert ok
+        job = next(iter(win._jobs.values()))
+        # 追加時点では固定されない
+        assert job.settings is None
 
-    # 追加後にUIを変更 → 開始時の適用でその値になる
-    model_index = win.model_combo.findData(DEFAULT_MODEL)
-    assert model_index >= 0
-    win.model_combo.setCurrentIndex(model_index)
-    win.interpolation_combo.setCurrentIndex(0)
-    app.processEvents()
+        # 追加後に一括を変更 → 開始時の適用でその値になる
+        model_index = win.image_model_combo.findData(DEFAULT_MODEL)
+        assert model_index >= 0
+        win.image_model_combo.setCurrentIndex(model_index)
+        win.global_interpolation_combo.setCurrentIndex(0)
+        app.processEvents()
 
-    win._apply_current_settings(win._pending_jobs())
-    assert job.settings is not None
-    assert job.settings.model == DEFAULT_MODEL
-    assert job.settings.interpolation_model is None
-    win.close()
-    app.processEvents()
+        win._apply_current_settings(win._pending_jobs())
+        assert job.settings is not None
+        assert job.settings.model == DEFAULT_MODEL
+        assert job.settings.interpolation_model is None
+    finally:
+        win.close()
+        app.processEvents()
 
 
 def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch, tmp_path):
     """新AIの具体的3モデルがVulkan資産の有無にかかわらず選択できる。"""
+    import shutil as _shutil
+
     from app.core import binaries
     from app.core.settings import (
         HELPER_MODEL_AMD_RRDB,
@@ -307,81 +334,100 @@ def test_backend_combo_maps_new_helpers_and_limits_scale_to_4x(app, monkeypatch,
     monkeypatch.setattr(binaries, "available_models", no_vulkan_models)
     win = MainWindow()
     app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
 
-    assert available_calls == []
-    npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
-    assert npu >= 0
-    win.backend_combo.setCurrentIndex(npu)
-    app.processEvents()
+        assert available_calls == []
+        npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
+        assert npu >= 0
+        win.backend_combo.setCurrentIndex(npu)
+        app.processEvents()
 
-    s = win.build_settings()
-    assert s.backend == UpscaleBackend.NPU_NATIVE
-    assert win._scale_btns[2].isEnabled() is False
-    assert win._scale_btns[4].isEnabled() is True
-    assert win.model_combo.isEnabled() is True
-    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
-        None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
-        HELPER_MODEL_SWINIR,
-        HELPER_MODEL_ADCSR,
-    ]
-    assert win.model_combo.itemText(1).startswith("Anime Video v3")
-    assert win.model_combo.itemText(2).startswith("4xNomosUni SPAN")
-    assert win.model_combo.itemText(3).startswith("Real-ESRGAN（AMD縮小版）")
-    assert all(
-        text not in "\n".join(
-            win.model_combo.itemText(i) for i in range(win.model_combo.count())
+        s = win.build_settings()
+        assert s.backend == UpscaleBackend.NPU_NATIVE
+        assert win._scale_btns[2].isEnabled() is False
+        assert win._scale_btns[4].isEnabled() is True
+        assert win.image_model_combo.isEnabled() is True
+        assert [win.image_model_combo.itemData(i) for i in range(win.image_model_combo.count())] == [
+            None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
+            HELPER_MODEL_SWINIR,
+            HELPER_MODEL_ADCSR,
+        ]
+        assert [win.video_model_combo.itemData(i) for i in range(win.video_model_combo.count())] == [
+            None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
+            HELPER_MODEL_SWINIR,
+        ]
+        assert win.image_model_combo.itemText(1).startswith("Anime Video v3")
+        assert win.image_model_combo.itemText(2).startswith("4xNomosUni SPAN")
+        assert win.image_model_combo.itemText(3).startswith("Real-ESRGAN（AMD縮小版）")
+        assert all(
+            text not in "\n".join(
+                win.image_model_combo.itemText(i) for i in range(win.image_model_combo.count())
+            )
+            for text in ("実写（質感重視）", "実写（くっきり）")
         )
-        for text in ("実写（質感重視）", "実写（くっきり）")
-    )
 
-    photo_idx = win.model_combo.findData(HELPER_MODEL_SPAN)
-    win.model_combo.setCurrentIndex(photo_idx)
-    assert win.build_settings().model == HELPER_MODEL_SPAN
+        photo_idx = win.image_model_combo.findData(HELPER_MODEL_SPAN)
+        win.image_model_combo.setCurrentIndex(photo_idx)
+        assert win.build_settings().model == HELPER_MODEL_SPAN
 
-    auto_idx = win.backend_combo.findData("auto")
-    win.backend_combo.setCurrentIndex(auto_idx)
-    app.processEvents()
-    assert win.model_combo.isEnabled() is True
-    assert win.model_combo.count() == 6
-    assert win.build_settings().backend == UpscaleBackend.WINML_GPU
+        auto_idx = win.backend_combo.findData("auto")
+        win.backend_combo.setCurrentIndex(auto_idx)
+        app.processEvents()
+        assert win.image_model_combo.isEnabled() is True
+        assert win.image_model_combo.count() == 6
+        assert win.build_settings().backend == UpscaleBackend.WINML_GPU
 
-    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
-    win.backend_combo.setCurrentIndex(vulkan)
-    app.processEvents()
-    assert available_calls == [True]
-    assert win.model_combo.count() == 2
-    assert win.model_combo.itemData(0) is None
-
-    win.close()
-    app.processEvents()
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
+        assert available_calls == [True]
+        assert win.image_model_combo.count() == 2
+        assert win.image_model_combo.itemData(0) is None
+    finally:
+        win.close()
+        app.processEvents()
 
 
-def test_swinir_cuda_backend_only_offers_swinir_and_warns_about_speed(app):
+def test_swinir_cuda_backend_only_offers_swinir_and_warns_about_speed(app, tmp_path):
+    import shutil as _shutil
+
     from app.core.settings import HELPER_MODEL_SWINIR, UpscaleBackend
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
-    index = win.backend_combo.findData(UpscaleBackend.SWINIR_CUDA.value)
-    assert index >= 0
-    win.backend_combo.setCurrentIndex(index)
-    app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
 
-    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
-        None,
-        HELPER_MODEL_SWINIR,
-    ]
-    settings = win.build_settings()
-    assert settings.backend == UpscaleBackend.SWINIR_CUDA
-    assert settings.model == HELPER_MODEL_SWINIR
-    assert settings.scale == 4
-    assert win._scale_btns[2].isEnabled() is False
-    assert win._scale_btns[4].isEnabled() is True
-    assert "超低速" in win.model_hint.text()
-    assert win.drawer.backend.findData(UpscaleBackend.SWINIR_CUDA.value) >= 0
+        index = win.backend_combo.findData(UpscaleBackend.SWINIR_CUDA.value)
+        assert index >= 0
+        win.backend_combo.setCurrentIndex(index)
+        app.processEvents()
 
-    win.close()
-    app.processEvents()
+        assert [win.image_model_combo.itemData(i) for i in range(win.image_model_combo.count())] == [
+            None,
+            HELPER_MODEL_SWINIR,
+        ]
+        settings = win.build_settings()
+        assert settings.backend == UpscaleBackend.SWINIR_CUDA
+        assert settings.model == HELPER_MODEL_SWINIR
+        assert settings.scale == 4
+        assert win._scale_btns[2].isEnabled() is False
+        assert win._scale_btns[4].isEnabled() is True
+        assert win.model_hint.text() == "実写の静止画向け・高精細・遅い"
+        assert win.drawer.backend.findData(UpscaleBackend.SWINIR_CUDA.value) >= 0
+    finally:
+        win.close()
+        app.processEvents()
 
 
 def test_model_combo_filters_legacy_npu_api_is_removed_from_gui(app):
@@ -396,28 +442,36 @@ def test_model_combo_filters_legacy_npu_api_is_removed_from_gui(app):
     app.processEvents()
 
 
-def test_backend_combo_maps_to_npu_native_and_locks_scale(app):
+def test_backend_combo_maps_to_npu_native_and_locks_scale(app, tmp_path):
     """NPU_NATIVE選択は設定へ反映され、倍率は4xに固定される。"""
+    import shutil as _shutil
+
     from app.core.settings import UpscaleBackend
     from app.gui.main_window import MainWindow
 
     win = MainWindow()
     app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
 
-    idx = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
-    assert idx >= 0
-    win.backend_combo.setCurrentIndex(idx)
-    app.processEvents()
+        idx = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
+        assert idx >= 0
+        win.backend_combo.setCurrentIndex(idx)
+        app.processEvents()
 
-    assert win.model_combo.isEnabled() is True
-    s = win.build_settings()
-    assert s.backend == UpscaleBackend.NPU_NATIVE
-    assert s.scale == 4
-    assert win._scale_btns[2].isEnabled() is False
-    assert win._scale_btns[4].isEnabled() is True
-
-    win.close()
-    app.processEvents()
+        assert win.image_model_combo.isEnabled() is True
+        s = win.build_settings()
+        assert s.backend == UpscaleBackend.NPU_NATIVE
+        assert s.scale == 4
+        assert win._scale_btns[2].isEnabled() is False
+        assert win._scale_btns[4].isEnabled() is True
+    finally:
+        win.close()
+        app.processEvents()
 
 
 def test_settings_drawer_explains_specialized_terms(app):
@@ -480,8 +534,10 @@ def test_settings_drawer_explains_specialized_terms(app):
     app.processEvents()
 
 
-def test_model_picker_shows_speed_quality_info(app):
-    """モデルコンボにバッジ、下段に選択構成の実測ベース説明が出る。"""
+def test_model_picker_shows_speed_quality_info(app, tmp_path):
+    """モデルコンボにバッジ、説明行に 1 行の説明が出る。"""
+    import shutil as _shutil
+
     from app.core.settings import (
         HELPER_MODEL_AMD_RRDB,
         HELPER_MODEL_ANIME,
@@ -494,60 +550,68 @@ def test_model_picker_shows_speed_quality_info(app):
 
     win = MainWindow()
     app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
 
-    # 自動（GPU優先）では実モデル名の新AIモデルを表示する。
-    assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
-        None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
-        HELPER_MODEL_SWINIR,
-        HELPER_MODEL_ADCSR,
-    ]
-    assert win.model_combo.itemText(1).startswith("Anime Video v3")
-    assert "速度◎" in win.model_combo.itemText(1)
-    assert win.model_hint.text().startswith("アニメ向け")
-    assert "処理は速いです" in win.model_hint.text()
-    assert "実写には向きません" in win.model_hint.text()
+        # 自動（GPU優先）では実モデル名の新AIモデルを表示する。
+        # ヘッダー（画像一括）と右列（選んだファイル）で同じ並びになる。
+        assert [win.image_model_combo.itemData(i) for i in range(win.image_model_combo.count())] == [
+            None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
+            HELPER_MODEL_SWINIR,
+            HELPER_MODEL_ADCSR,
+        ]
+        assert [win.model_combo.itemData(i) for i in range(win.model_combo.count())] == [
+            None, HELPER_MODEL_ANIME, HELPER_MODEL_SPAN, HELPER_MODEL_AMD_RRDB,
+            HELPER_MODEL_SWINIR,
+            HELPER_MODEL_ADCSR,
+        ]
+        assert win.image_model_combo.itemText(1).startswith("Anime Video v3")
+        assert "速度◎" in win.image_model_combo.itemText(1)
+        # 開いた一覧の印は今のまま残る。
+        assert win.model_hint.text() == "アニメ向け・速い"
 
-    # SPAN/AMD縮小版も同じ実モデル名＋特性説明の仕組みで選べる。
-    win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_SPAN))
-    app.processEvents()
-    assert win.model_combo.currentText().startswith("4xNomosUni SPAN")
-    assert win.model_hint.text().startswith("実写向け")
-    win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_AMD_RRDB))
-    app.processEvents()
-    assert win.model_combo.currentText().startswith("Real-ESRGAN（AMD縮小版）")
-    assert "処理は速いです" not in win.model_hint.text()
-    assert "少し時間がかかります" in win.model_hint.text()
+        # SPAN/AMD縮小版も同じ実モデル名の仕組みで選べる。
+        # 右列で変えると個別になるが、説明行の内容は同じ規則で出る。
+        win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_SPAN))
+        app.processEvents()
+        assert win.model_combo.currentText().startswith("4xNomosUni SPAN")
+        assert win.model_hint.text() == "実写向け・速い"
+        win.model_combo.setCurrentIndex(win.model_combo.findData(HELPER_MODEL_AMD_RRDB))
+        app.processEvents()
+        assert win.model_combo.currentText().startswith("Real-ESRGAN（AMD縮小版）")
+        assert win.model_hint.text() == "実写向け・くっきり・やや遅い"
 
-    # Vulkanでは旧モデルのバッジと説明を表示する。
-    vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
-    win.backend_combo.setCurrentIndex(vulkan)
-    app.processEvents()
-    idx = win.model_combo.findData("realesrgan-x4plus")
-    assert idx >= 0
-    assert "速" in win.model_combo.itemText(idx)
-    gpu_hint = win.model_hint.text()
-    assert gpu_hint.startswith("実写向け")
-    assert "他の作業が重くなります" in gpu_hint
+        # Vulkanでは旧モデルのバッジは残るが、説明は 1 行になる。
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
+        idx = win.image_model_combo.findData("realesrgan-x4plus")
+        assert idx >= 0
+        assert "速" in win.image_model_combo.itemText(idx)
+        assert win.model_hint.text() == "実写向け・高画質・遅い"
 
-    # NPU_NATIVEに切替 → 同じ実モデル名でNPU実測の説明へ更新する。
-    npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
-    win.backend_combo.setCurrentIndex(npu)
-    app.processEvents()
-    assert win.model_hint.text() != gpu_hint
-    assert "GPUを空けたまま" in win.model_hint.text()
-    assert win.model_combo.currentText().startswith("Anime Video v3")
-    assert "速さはふつうです" in win.model_hint.text()
+        # NPU_NATIVEに切替 → 説明は実行先によらず同じ 1 行。
+        npu = win.backend_combo.findData(UpscaleBackend.NPU_NATIVE.value)
+        win.backend_combo.setCurrentIndex(npu)
+        app.processEvents()
+        assert win.model_combo.currentText().startswith("Anime Video v3")
+        assert win.model_hint.text() == "アニメ向け・速い"
 
-    # モデル「なし」では補間のみの案内
-    win.backend_combo.setCurrentIndex(
-        win.backend_combo.findData(UpscaleBackend.VULKAN.value))
-    app.processEvents()
-    win.model_combo.setCurrentIndex(0)
-    app.processEvents()
-    assert "フレーム補間だけ" in win.model_hint.text()
-
-    win.close()
-    app.processEvents()
+        # モデル「なし」では補間のみの案内
+        win.backend_combo.setCurrentIndex(
+            win.backend_combo.findData(UpscaleBackend.VULKAN.value))
+        app.processEvents()
+        win.image_model_combo.setCurrentIndex(0)
+        win.video_model_combo.setCurrentIndex(0)
+        app.processEvents()
+        assert "フレーム補間だけ" in win.model_hint.text()
+    finally:
+        win.close()
+        app.processEvents()
 
 
 def test_workspace_switches_between_drop_zone_media_and_details(app):
@@ -642,3 +706,172 @@ def test_dropping_anywhere_on_the_window_adds_files(app):
 
     win.close()
     app.processEvents()
+
+
+def test_media_header_buttons_are_icon_only(app):
+    """見出しの 2 ボタンは文字なし・ツールチップ付き。削除だけ別の見た目。"""
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    try:
+        assert win.retry_all_btn.text() == ""
+        assert win.clear_btn.text() == ""
+        assert win.retry_all_btn.toolTip() == "すべてやり直す"
+        assert win.clear_btn.toolTip() == "すべて削除"
+        assert win.clear_btn.objectName() != win.retry_all_btn.objectName()
+        assert win.clear_btn.objectName() == "dangerIcon"
+    finally:
+        win.close()
+        app.processEvents()
+
+
+def test_header_has_no_output_button(app):
+    """ヘッダーに「出力先を開く」が無い。"""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    try:
+        assert not hasattr(win, "output_open_btn")
+        texts = [w.text() for w in win.findChildren(QPushButton)]
+        assert "出力先を開く" not in texts
+    finally:
+        win.close()
+        app.processEvents()
+
+
+def test_completed_row_has_output_button(app, tmp_path):
+    """完了した行にだけ保存先ボタンが出て、押すとフォルダを開こうとする。"""
+    import shutil as _shutil
+
+    from app.core.jobs import JobStatus
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        out = tmp_path / "pic_upscaled.png"
+        out.write_bytes(b"fake")
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
+        job = next(iter(win._jobs.values()))
+        row = win.queue.row(job.id)
+        assert row is not None
+        # 未完了の行には出ない。
+        assert row._folder.isVisible() is False
+
+        job.status = JobStatus.DONE
+        job.output_path = out
+        job.message = win._done_text(job)
+        win.queue.refresh(job.id)
+        app.processEvents()
+        assert row._folder.isVisible() is True
+        assert row._folder.toolTip() == "保存先を開く"
+
+        launched: list = []
+        win._launch_explorer = launched.append  # type: ignore[method-assign]
+        row._folder.click()
+        app.processEvents()
+        # 出力ファイルが残っていればそれを選んだ状態で開く。
+        assert launched == [["explorer", "/select,", str(out)]]
+
+        # 出力ファイルが消えていればフォルダだけ開く。
+        out.unlink()
+        launched.clear()
+        row._folder.click()
+        app.processEvents()
+        assert launched == [["explorer", str(tmp_path)]]
+
+        # 実行中でも押せる。
+        win._set_running(True)
+        app.processEvents()
+        assert row._folder.isEnabled() is True
+        win._set_running(False)
+        app.processEvents()
+    finally:
+        win.close()
+        app.processEvents()
+
+
+def test_model_hints_are_single_line_ja_and_en(app, tmp_path):
+    """各モデルの説明が表の 1 行になる（日本語・英語）。"""
+    import shutil as _shutil
+
+    from app import i18n
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
+
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
+
+        table = {
+            "realesr-animevideov3": ("アニメ向け・速い", "For anime · Fast"),
+            "realesr-general-x4v3": (
+                "実写・アニメ兼用・ノイズ除去強め",
+                "For live action and anime · Strong denoising",
+            ),
+            "realesr-general-wdn-x4v3": (
+                "実写向け・ノイズ除去弱め",
+                "For live action · Light denoising",
+            ),
+            "realesrgan-x4plus": (
+                "実写向け・高画質・遅い",
+                "For live action · High quality · Slow",
+            ),
+            "realesrgan-x4plus-anime": (
+                "アニメ向け・高画質・遅い",
+                "For anime · High quality · Slow",
+            ),
+        }
+        for key, (ja, en) in table.items():
+            idx = win.model_combo.findData(key)
+            if idx < 0:
+                continue
+            win.model_combo.setCurrentIndex(idx)
+            app.processEvents()
+            assert win.model_hint.text() == ja, key
+
+        i18n.set_language("en")
+        try:
+            win.preview._rebuild_tags()
+            win.preview.refresh()
+            app.processEvents()
+            for key, (ja, en) in table.items():
+                idx = win.model_combo.findData(key)
+                if idx < 0:
+                    continue
+                win.model_combo.setCurrentIndex(idx)
+                app.processEvents()
+                win._update_all_model_info()
+                assert win.model_hint.text() == en, key
+            # クイック確認の文言も英語になる。
+            assert win.preview.trial_btn.text() == "Quick check"
+            assert win.preview.view.left_label() == "Original"
+        finally:
+            i18n.set_language("ja")
+            win._update_all_model_info()
+            win.preview.refresh()
+            app.processEvents()
+    finally:
+        win.close()
+        app.processEvents()

@@ -245,6 +245,52 @@ QLabel#previewCaption {{
     padding: 3px 9px;
     font-size: 13px;
 }}
+QPushButton#previewCaption {{
+    color: #f3f5f7;
+    background-color: rgba(15, 19, 24, 200);
+    border: none;
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-size: 13px;
+    text-align: left;
+}}
+QPushButton#previewCaption:disabled {{
+    color: #f3f5f7;
+    background-color: rgba(15, 19, 24, 200);
+    border: none;
+}}
+QPushButton#previewCaption:hover {{
+    background-color: rgba(15, 19, 24, 230);
+}}
+QPushButton#previewTool {{
+    background-color: {p.button};
+    border: 1px solid {p.border};
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    min-height: 0;
+}}
+QPushButton#previewTool:hover {{
+    border-color: {p.border_light};
+    background-color: {p.button_hover};
+}}
+QPushButton#dangerIcon {{
+    background-color: transparent;
+    border: 1px solid {p.danger};
+    border-radius: 8px;
+    min-width: 38px;
+    max-width: 38px;
+    min-height: 38px;
+    max-height: 38px;
+    padding: 0;
+}}
+QPushButton#dangerIcon:hover {{
+    background-color: {p.button_hover};
+}}
+QPushButton#dangerIcon:disabled {{
+    border-color: {p.border};
+    background-color: transparent;
+}}
 
 QFrame#controlPanel {{
     background-color: {p.panel};
@@ -255,6 +301,15 @@ QLabel#fieldLabel {{
     color: {p.text};
     font-size: 15px;
     font-weight: 700;
+}}
+QLabel#headerLabel {{
+    color: {p.text_soft};
+    font-size: 12px;
+}}
+QComboBox#headerCombo {{
+    min-height: 24px;
+    padding: 2px 10px;
+    font-size: 14px;
 }}
 QWidget#fieldLabelWrap, QWidget#checkRow, QWidget#scaleWrap {{
     background-color: transparent;
@@ -388,7 +443,7 @@ QComboBox:hover {{
 }}
 QComboBox::drop-down {{
     border: none;
-    width: 28px;
+    width: 12px;
 }}
 QComboBox QAbstractItemView {{
     background-color: {p.input};
@@ -481,6 +536,16 @@ QPushButton#rowRetry {{
     padding: 0;
 }}
 QPushButton#rowRetry:hover {{
+    color: {p.text};
+}}
+QPushButton#rowFolder {{
+    background-color: transparent;
+    border: none;
+    color: {p.text_dim};
+    font-size: 16px;
+    padding: 0;
+}}
+QPushButton#rowFolder:hover {{
     color: {p.text};
 }}
 

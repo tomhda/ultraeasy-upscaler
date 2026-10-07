@@ -52,6 +52,7 @@ class QueueRow(QFrame):
 
     removeRequested = Signal(int)  # job_id
     retryRequested = Signal(int)  # job_id
+    outputRequested = Signal(int)  # job_id
     clicked = Signal(int)  # job_id
 
     def __init__(self, job: Job, parent=None, describe_settings=None) -> None:
@@ -65,6 +66,7 @@ class QueueRow(QFrame):
         self._build()
         self.refresh()
         theme.notifier.changed.connect(self._apply_retry_icon)
+        theme.notifier.changed.connect(self._apply_folder_icon)
 
     def _build(self) -> None:
         outer = QVBoxLayout(self)
@@ -99,6 +101,17 @@ class QueueRow(QFrame):
         self._meta.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         text_col.addWidget(self._meta)
         top.addLayout(text_col, 1)
+
+        # 保存先を開く（完了した行だけ出す。読むだけなので実行中も押せる）
+        self._folder = QPushButton()
+        self._folder.setObjectName("rowFolder")
+        self._folder.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._folder.setFixedSize(28, 28)
+        self._folder.setIconSize(QSize(18, 18))
+        self._folder.setToolTip(t("保存先を開く"))
+        self._folder.clicked.connect(lambda: self.outputRequested.emit(self.job.id))
+        self._apply_folder_icon()
+        top.addWidget(self._folder, 0, Qt.AlignmentFlag.AlignTop)
 
         # やり直し（完了・エラー・キャンセルのときだけ出す）
         self._retry = QPushButton()
@@ -230,6 +243,10 @@ class QueueRow(QFrame):
         )
         self._retry.setVisible(terminal)
         self._retry.setEnabled(terminal and not self._retry_locked)
+        # 保存先を開くは完了した行だけに出す。読むだけなので実行中も押せる
+        done = self.job.status == JobStatus.DONE
+        self._folder.setVisible(done)
+        self._folder.setEnabled(done)
 
     def _apply_retry_icon(self) -> None:
         """やり直しボタンを現在の配色で描き直す（QSS では色を変えられないため）。"""
@@ -237,6 +254,15 @@ class QueueRow(QFrame):
             return
         try:
             self._retry.setIcon(make_icon(Icon.RETRY, 18, theme.current().text_dim))
+        except RuntimeError:
+            pass
+
+    def _apply_folder_icon(self) -> None:
+        """保存先ボタンを現在の配色で描き直す（QSS では色を変えられないため）。"""
+        if not hasattr(self, "_folder"):
+            return
+        try:
+            self._folder.setIcon(make_icon(Icon.FOLDER, 18, theme.current().text_dim))
         except RuntimeError:
             pass
 
@@ -255,6 +281,7 @@ class QueueView(QWidget):
 
     removeRequested = Signal(int)  # job_id
     retryRequested = Signal(int)  # job_id
+    outputRequested = Signal(int)  # job_id
     selectionChanged = Signal(object)  # 選択中の job_id（無ければ None）
 
     def __init__(self, parent=None, describe_settings=None) -> None:
@@ -295,6 +322,7 @@ class QueueView(QWidget):
         row = QueueRow(job, describe_settings=self._describe_settings)
         row.removeRequested.connect(self.removeRequested.emit)
         row.retryRequested.connect(self.retryRequested.emit)
+        row.outputRequested.connect(self.outputRequested.emit)
         row.clicked.connect(self.select)
         row.set_retry_locked(self._retry_locked)
         # stretch の手前に挿入

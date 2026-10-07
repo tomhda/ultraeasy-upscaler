@@ -12,12 +12,14 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QThread, Signal, Slot
-from PySide6.QtGui import QColor, QImage, QImageReader, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QColor, QImage, QImageReader, QPainter, QPen, QPixmap, QPolygonF,
+)
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -29,10 +31,13 @@ from app.core import helper_backend, npu_prepare
 from app.core import trial as trial_core
 from app.core.jobs import Job, JobKind
 from app.core.settings import UpscaleBackend, UpscaleSettings
-from app.i18n import t
+from app.i18n import N_, t
+
+from .icons import Icon, make_icon
 
 # 境界線の掴み判定の片側幅（ピクセル）。細すぎると掴めないため余裕を持つ。
 _DIVIDER_GRAB = 7
+_HANDLE_RADIUS = 15  # 分割線の中央に出す、つまめる丸の半径
 # 境界線が端に張り付かないよう可動域を制限する。
 _SPLIT_MIN = 0.04
 _SPLIT_MAX = 0.96
@@ -142,13 +147,35 @@ class CompareView(QFrame):
         self._message.setObjectName("previewMessage")
         self._message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._message.setWordWrap(True)
-        self._left_tag = QLabel("", self)
+        # 画像の上の札（押して切り替えるボタン）。選べるものが 2 つ以上ある
+        # ときだけ押せて、文末に下向きの小さな印を付ける。
+        self._left_tag = QPushButton("", self)
         self._left_tag.setObjectName("previewCaption")
-        self._right_tag = QLabel("", self)
+        self._left_tag.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._left_tag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._right_tag = QPushButton("", self)
         self._right_tag.setObjectName("previewCaption")
+        self._right_tag.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._right_tag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._left_menu: QMenu | None = None
+        self._right_menu: QMenu | None = None
         self._left_tag.setVisible(False)
         self._right_tag.setVisible(False)
         self._message.setVisible(False)
+        # 画像の右下に重ねる小さなボタン 2 つ（不透明で下の絵と混ざらない）。
+        self.fit_btn = QPushButton("", self)
+        self.fit_btn.setObjectName("previewTool")
+        self.fit_btn.setIcon(make_icon(Icon.FIT, 16, "#f3f5f7"))
+        self.fit_btn.setToolTip(t("全体表示"))
+        self.fit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.fit_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.fit_btn.clicked.connect(self.fit_view)
+        self.actual_btn = QPushButton("1:1", self)
+        self.actual_btn.setObjectName("previewTool")
+        self.actual_btn.setToolTip(t("等倍"))
+        self.actual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.actual_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.actual_btn.clicked.connect(self.actual_pixels)
 
     # ---------------------------------------------------------- 設定と状態
     def set_images(
@@ -169,7 +196,7 @@ class CompareView(QFrame):
             self._right_pm = None
         self._left_label = left_label
         self._right_label = right_label
-        # 同じ画が両側に来たら1枚表示にする（比較相手が処理前だけのとき）。
+        # 同じ画が両側に来たら1枚表示にする（比較相手が元の画像だけのとき）。
         if self._has_two() and self._left is not None and self._right is not None:
             if self._left.cacheKey() == self._right.cacheKey():
                 self._right = None
@@ -185,7 +212,7 @@ class CompareView(QFrame):
                 <= max(old.width(), base.width())
             )
             if same_shape and not self._fit_on_resize:
-                # 同じ画の解像度違い（処理前 → 4 倍後など）に切り替わっただけなら、
+                # 同じ画の解像度違い（元の画像 → 4 倍後など）に切り替わっただけなら、
                 # 拡大して見ていた場所をそのまま保つ。
                 self._scale *= old.width() / base.width()
             elif not base.isEmpty():
@@ -214,12 +241,40 @@ class CompareView(QFrame):
         self.update()
 
     def left_label(self) -> str:
-        """左タグの文言（テスト用）。"""
-        return self._left_tag.text()
+        """左タグの文言（テスト用。印を除いた表示名）。"""
+        return self._left_label
 
     def right_label(self) -> str:
-        """右タグの文言（テスト用）。"""
-        return self._right_tag.text()
+        """右タグの文言（テスト用。印を除いた表示名）。"""
+        return self._right_label
+
+    @property
+    def left_tag(self) -> QPushButton:
+        """左上の札ボタン（メニュー操作用）。"""
+        return self._left_tag
+
+    @property
+    def right_tag(self) -> QPushButton:
+        """右上の札ボタン（メニュー操作用）。"""
+        return self._right_tag
+
+    def set_left_menu(self, menu: QMenu | None) -> None:
+        """左札のメニューを差し替える（選べるものが 1 つなら None）。"""
+        self._left_menu = menu
+        if menu is not None:
+            self._left_tag.setMenu(menu)
+        else:
+            self._left_tag.setMenu(None)
+        self._refresh_tags()
+
+    def set_right_menu(self, menu: QMenu | None) -> None:
+        """右札のメニューを差し替える（選べるものが 1 つなら None）。"""
+        self._right_menu = menu
+        if menu is not None:
+            self._right_tag.setMenu(menu)
+        else:
+            self._right_tag.setMenu(None)
+        self._refresh_tags()
 
     def message_text(self) -> str:
         """中央文言（テスト用）。"""
@@ -332,14 +387,61 @@ class CompareView(QFrame):
         viewport = self.contentsRect()
         return viewport.left() + self._split * viewport.width()
 
+    def _handle_center(self) -> QPointF:
+        viewport = self.contentsRect()
+        return QPointF(self._divider_x(), viewport.center().y())
+
+    def _on_divider(self, pos: QPointF) -> bool:
+        """分割線か、その中央の丸の上にいるか。"""
+        if not self._has_two():
+            return False
+        if abs(pos.x() - self._divider_x()) <= _DIVIDER_GRAB:
+            return True
+        c = self._handle_center()
+        return (pos.x() - c.x()) ** 2 + (pos.y() - c.y()) ** 2 <= _HANDLE_RADIUS ** 2
+
+    @staticmethod
+    def _paint_handle(painter: QPainter, c: QPointF) -> None:
+        """線だけでは動かせると気づきにくいので、左右の矢印が入った丸を付ける。"""
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(QPen(QColor(0, 0, 0, 90), 1))
+        painter.setBrush(QColor(_DIVIDER_COLOR))
+        painter.drawEllipse(c, _HANDLE_RADIUS, _HANDLE_RADIUS)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#1b1f27"))
+        for sign in (-1, 1):
+            tip = c.x() + sign * 10
+            base = c.x() + sign * 4
+            painter.drawPolygon(QPolygonF([
+                QPointF(tip, c.y()),
+                QPointF(base, c.y() - 5.5),
+                QPointF(base, c.y() + 5.5),
+            ]))
+
     def _refresh_tags(self) -> None:
         has_any = self._left is not None or self._right is not None
         two = self._has_two()
+        left_menu = self._left_menu if self._left_menu is not None and len(self._left_menu.actions()) >= 2 else None
+        right_menu = self._right_menu if self._right_menu is not None and len(self._right_menu.actions()) >= 2 else None
+        # 選べるものが 2 つ以上ある側だけ印を付けて押せるようにする。
         self._left_tag.setText(self._left_label)
         self._right_tag.setText(self._right_label)
+        self._left_tag.setEnabled(left_menu is not None)
+        self._right_tag.setEnabled(right_menu is not None)
+        self._left_tag.setCursor(
+            Qt.CursorShape.PointingHandCursor if left_menu is not None
+            else Qt.CursorShape.ArrowCursor
+        )
+        self._right_tag.setCursor(
+            Qt.CursorShape.PointingHandCursor if right_menu is not None
+            else Qt.CursorShape.ArrowCursor
+        )
         self._left_tag.setVisible(has_any and bool(self._left_label))
         # 1枚表示のときは右タグを出さない（境界線も出さない）。
         self._right_tag.setVisible(two and bool(self._right_label))
+        has_image = not self._base_size().isEmpty()
+        self.fit_btn.setVisible(has_image)
+        self.actual_btn.setVisible(has_image)
         self._layout_children()
 
     def _layout_children(self) -> None:
@@ -351,6 +453,22 @@ class CompareView(QFrame):
         self._right_tag.move(
             rect.right() - 12 - self._right_tag.width(), rect.top() + 8
         )
+        # 右下の隅に重ねる小さなボタン 2 つ（等倍の左に全体表示）。
+        self.actual_btn.adjustSize()
+        self.fit_btn.adjustSize()
+        margin = 12
+        gap = 8
+        actual_w = self.actual_btn.width()
+        actual_h = self.actual_btn.height()
+        fit_w = self.fit_btn.width()
+        fit_h = self.fit_btn.height()
+        row_h = max(actual_h, fit_h)
+        base_y = rect.bottom() - margin - row_h
+        self.actual_btn.move(rect.right() - margin - actual_w, base_y + (row_h - actual_h) // 2)
+        self.fit_btn.move(
+            rect.right() - margin - actual_w - gap - fit_w,
+            base_y + (row_h - fit_h) // 2,
+        )
 
     # ---------------------------------------------------------- 描画
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -361,7 +479,7 @@ class CompareView(QFrame):
         dest = self._dest_rect()
         painter = QPainter(self)
         # 等倍を超えて拡大したときだけ補間なしで描く（画素を見るため）。
-        # 等倍までは滑らかに描く。解像度の低い処理前の画が、等倍表示で
+        # 等倍までは滑らかに描く。解像度の低い元の画像の画が、等倍表示で
         # 実際より粗く見えてしまうのを避ける。
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform,
                               self._scale <= 1.0 + 1e-6)
@@ -392,6 +510,7 @@ class CompareView(QFrame):
                 QPointF(divider_x, viewport.top()),
                 QPointF(divider_x, viewport.bottom()),
             )
+            self._paint_handle(painter, self._handle_center())
             painter.restore()
         if self._selection is not None:
             x, y, w, h = self._selection
@@ -432,7 +551,7 @@ class CompareView(QFrame):
             self._selection = (int(anchor.x()), int(anchor.y()), 0, 0)
             self.update()
             return
-        if self._has_two() and abs(pos.x() - self._divider_x()) <= _DIVIDER_GRAB:
+        if self._on_divider(pos):
             self._drag_mode = "split"
             self._drag_pos = pos
             self._drag_split = self._split
@@ -442,9 +561,16 @@ class CompareView(QFrame):
         self._drag_offset = QPointF(self._offset)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if self._drag_mode is None or self._base_size().isEmpty():
-            return
         pos = event.position()
+        if self._drag_mode is None:
+            # 押す前から、つまめる場所ではカーソルを左右の矢印にする
+            if not self._selection_mode and self._on_divider(pos):
+                self.setCursor(Qt.CursorShape.SplitHCursor)
+            elif not self._selection_mode:
+                self.unsetCursor()
+            return
+        if self._base_size().isEmpty():
+            return
         if self._drag_mode == "select" and self._sel_anchor is not None:
             base = self._base_size()
             cur = self._widget_to_base(pos)
@@ -579,15 +705,32 @@ class _TrialWorker(QObject):
 _TrialKey = tuple[str, float, tuple[int, int, int, int] | None, str, str, int]
 
 
-class TrialPanel(QWidget):
-    """中央列: 比較ビューとその下の操作部。
+class _StatusLabel(QLabel):
+    """文言が空の間は場所を取らない状況行（右列の高さを節約する）。"""
 
+    def setText(self, text: str) -> None:  # noqa: N802
+        super().setText(text)
+        self.setVisible(bool(text))
+
+
+class TrialPanel(QWidget):
+    """中央列: 比較ビューと動画の位置行。クイック確認の組も持つ。
+
+    中央のレイアウトには画と動画のスライダーだけ置く。クイック確認の
+    ボタンと状況行は `quick_box` にまとめ、MainWindow が右列に差し込む。
     MainWindow は `show_job`・`set_main_running`・`discard_file` だけ呼ぶ。
-    試し設定は押した時点の、そのファイル用の `build_settings` 値を使う。
+    確認の設定は押した時点の、そのファイル用の `build_settings` 値を使う。
     """
 
     trial_running_changed = Signal(bool)
     _frame_ready = Signal(int, QImage, str)
+
+    # クイック確認の「?」の説明文（改行も仕様どおり）。
+    QUICK_HELP = N_(
+        "仕上がり確認のため、1 枚だけ拡大処理を行い、元の画像と比較できます。\n"
+        "動画は、画像下のスライダーで拡大するフレームを選択できます。\n"
+        "「範囲を選択してクイック確認」を使うと、その 1 枚のさらに一部分だけに処理を限定できます。"
+    )
 
     def __init__(self, build_settings, model_label, parent=None) -> None:
         super().__init__(parent)
@@ -612,6 +755,8 @@ class TrialPanel(QWidget):
         self._trial_cancel: threading.Event | None = None
         self._trial_key: _TrialKey | None = None
         self._status_hold = ""
+        self._left_key: _TrialKey | None = None
+        self._right_key: _TrialKey | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -621,6 +766,7 @@ class TrialPanel(QWidget):
         root.addWidget(self.view, 1)
 
         # 動画のときだけ出す行: 位置スライダーと時刻表示。
+        # 画像のとき中央の下段には何も出さない。
         self.video_row = QWidget()
         video_lay = QHBoxLayout(self.video_row)
         video_lay.setContentsMargins(0, 0, 0, 0)
@@ -635,66 +781,44 @@ class TrialPanel(QWidget):
         video_lay.addWidget(self.time_label)
         root.addWidget(self.video_row)
 
-        # ボタン行: 試す・範囲選択・右寄せで全体表示/等倍。
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        self.trial_btn = QPushButton(t("試す"))
+        # 全体表示・等倍は画像の右下に重ねる（CompareView が持つ）。
+        # テストから使う属性名はここに残す。
+        self.fit_btn = self.view.fit_btn
+        self.actual_btn = self.view.actual_btn
+
+        # クイック確認の組（右列に差し込む。ファイル選択時のみ表示）。
+        self.trial_btn = QPushButton(t("クイック確認"))
         self.trial_btn.setObjectName("accent")
         self.trial_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.trial_btn.clicked.connect(self._on_trial_button)
-        btn_row.addWidget(self.trial_btn)
-        self.range_btn = QPushButton(t("範囲を選ぶ"))
+        from .settings_drawer import HelpIcon
+
+        self.quick_help = HelpIcon(t(self.QUICK_HELP))
+        self.range_btn = QPushButton(t("範囲を選択してクイック確認"))
         self.range_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.range_btn.clicked.connect(self._on_range_button)
-        btn_row.addWidget(self.range_btn)
-        btn_row.addStretch(1)
-        self.fit_btn = QPushButton(t("全体表示"))
-        self.fit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.fit_btn.clicked.connect(self.view.fit_view)
-        btn_row.addWidget(self.fit_btn)
-        self.actual_btn = QPushButton(t("等倍"))
-        self.actual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.actual_btn.clicked.connect(self.view.actual_pixels)
-        btn_row.addWidget(self.actual_btn)
-        btn_wrap = QWidget()
-        btn_wrap.setLayout(btn_row)
-        root.addWidget(btn_wrap)
-
-        # 比べる相手の行: 左・右のコンボ2つ。
-        cmp_row = QHBoxLayout()
-        cmp_row.setSpacing(8)
-        self.left_title = QLabel(t("左"))
-        self.left_title.setObjectName("hint")
-        cmp_row.addWidget(self.left_title)
-        self.left_combo = QComboBox()
-        self.left_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        cmp_row.addWidget(self.left_combo, 1)
-        self.right_title = QLabel(t("右"))
-        self.right_title.setObjectName("hint")
-        cmp_row.addWidget(self.right_title)
-        self.right_combo = QComboBox()
-        self.right_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        cmp_row.addWidget(self.right_combo, 1)
-        cmp_wrap = QWidget()
-        cmp_wrap.setLayout(cmp_row)
-        root.addWidget(cmp_wrap)
-
-        self.status_label = QLabel("")
+        self.status_label = _StatusLabel("")
         self.status_label.setObjectName("hint")
         self.status_label.setWordWrap(True)
-        root.addWidget(self.status_label)
+        self.quick_box = QWidget()
+        self.quick_box.setObjectName("scaleWrap")  # 背景を持たない包み
+        quick = QVBoxLayout(self.quick_box)
+        quick.setContentsMargins(0, 0, 0, 0)
+        quick.setSpacing(8)
+        quick_row = QHBoxLayout()
+        quick_row.setContentsMargins(0, 0, 0, 0)
+        quick_row.setSpacing(6)
+        quick_row.addWidget(self.trial_btn, 1)
+        quick_row.addWidget(self.quick_help)
+        quick.addLayout(quick_row)
+        quick.addWidget(self.range_btn)
+        quick.addWidget(self.status_label)
 
         self.slider.valueChanged.connect(self._on_slider_moved)
         self.slider.sliderReleased.connect(self._on_slider_released)
-        self.left_combo.currentIndexChanged.connect(self._on_combo_changed)
-        self.right_combo.currentIndexChanged.connect(self._on_combo_changed)
         self.view.selectionChanged.connect(self._on_view_selection)
         self._frame_ready.connect(self._on_frame_ready)
-        self._rebuild_combos()
+        self._rebuild_tags()
         self.refresh()
 
     # ---------------------------------------------------------- ファイル切替
@@ -711,7 +835,7 @@ class TrialPanel(QWidget):
             self._rect = None
             self.view.clear()
             self.view.set_message(t("左の一覧からファイルを選ぶと、ここに表示します。"))
-            self._rebuild_combos()
+            self._rebuild_tags()
             self.refresh()
             return
         saved = self._file_state.get(str(job.input_path))
@@ -734,7 +858,7 @@ class TrialPanel(QWidget):
             self._rect = saved.get("rect") if saved else None
         self.view.set_selection_mode(False)
         self.view.set_message("")
-        self._rebuild_combos(restore=saved)
+        self._rebuild_tags(restore=saved)
         self.refresh()
         self._load_source_async()
 
@@ -745,8 +869,8 @@ class TrialPanel(QWidget):
         self._file_state[str(self._job.input_path)] = {
             "seconds": self._seconds,
             "rect": self._rect,
-            "left": self.left_combo.currentData(),
-            "right": self.right_combo.currentData(),
+            "left": self._left_key,
+            "right": self._right_key,
         }
 
     def _video_duration(self, job: Job) -> float | None:
@@ -851,12 +975,12 @@ class TrialPanel(QWidget):
             return
         self._seconds = self.slider.value() / 10.0
         self._status_hold = ""
-        self._rebuild_combos()
+        self._rebuild_tags()
         self.refresh()
         self._load_source_async()
 
     def _on_view_selection(self, rect: object) -> None:
-        """比較ビューでのドラッグ結果を試しの範囲にする。"""
+        """比較ビューでのドラッグ結果を試しの範囲にする。囲み終えたらすぐ始める。"""
         if not self.view.is_selection_mode():
             return
         base = self.view._base_size()
@@ -880,9 +1004,11 @@ class TrialPanel(QWidget):
         self.view.set_selection_mode(False)
         self.view.set_selection(None)
         self._status_hold = ""
-        self._rebuild_combos()
+        self._rebuild_tags()
         self.refresh()
         self._update_view()
+        # もう一度押させず、そのまま確認を始める。
+        self._on_trial_button()
 
     def _on_range_button(self) -> None:
         if self.is_trial_running() or self._main_running:
@@ -892,7 +1018,7 @@ class TrialPanel(QWidget):
             self.view.set_selection_mode(False)
             self.view.set_selection(None)
             self._status_hold = ""
-            self._rebuild_combos()
+            self._rebuild_tags()
             self.refresh()
             self._update_view()
             return
@@ -900,6 +1026,7 @@ class TrialPanel(QWidget):
             self.view.set_selection_mode(False)
             self.view.set_selection(None)
             self.refresh()
+            self._update_view()
             return
         if self._job is None or self._job.kind == JobKind.FOLDER:
             return
@@ -922,37 +1049,25 @@ class TrialPanel(QWidget):
             and key in self._results
         ]
 
-    def _rebuild_combos(self, restore: dict | None = None) -> None:
-        left_prev = self.left_combo.currentData()
-        right_prev = self.right_combo.currentData()
+    def _rebuild_tags(self, restore: dict | None = None) -> None:
+        """札の選択を今の結果に合わせる（左右コンボと同じ規則）。"""
+        left_prev = self._left_key
+        right_prev = self._right_key
         if restore is not None:
             left_prev = restore.get("left")
             right_prev = restore.get("right")
         matches = self._matching_keys()
-        left_block = self.left_combo.blockSignals(True)
-        right_block = self.right_combo.blockSignals(True)
-        try:
-            self.left_combo.clear()
-            self.right_combo.clear()
-            self.left_combo.addItem(t("処理前"), None)
-            self.right_combo.addItem(t("処理前"), None)
-            for key in matches:
-                label = self._results[key]["label"]
-                self.left_combo.addItem(label, key)
-                self.right_combo.addItem(label, key)
-            if self._left_key_valid(left_prev, matches):
-                self._set_combo(self.left_combo, left_prev)
-            else:
-                self.left_combo.setCurrentIndex(0)
-            if self._right_key_valid(right_prev, matches):
-                self._set_combo(self.right_combo, right_prev)
-            elif matches:
-                self._set_combo(self.right_combo, matches[-1])
-            else:
-                self.right_combo.setCurrentIndex(0)
-        finally:
-            self.left_combo.blockSignals(left_block)
-            self.right_combo.blockSignals(right_block)
+        if self._left_key_valid(left_prev, matches):
+            self._left_key = left_prev  # type: ignore[assignment]
+        else:
+            self._left_key = None
+        if self._right_key_valid(right_prev, matches):
+            self._right_key = right_prev  # type: ignore[assignment]
+        elif matches:
+            self._right_key = matches[-1]
+        else:
+            self._right_key = None
+        self._update_view()
 
     @staticmethod
     def _left_key_valid(value: object, matches: list) -> bool:
@@ -966,21 +1081,43 @@ class TrialPanel(QWidget):
             return True
         return value in matches
 
-    @staticmethod
-    def _set_combo(combo: QComboBox, value: object) -> None:
-        index = combo.findData(value)
-        if index >= 0:
-            combo.setCurrentIndex(index)
+    def _menu_for_side(self, side: str) -> QMenu | None:
+        """その側の札メニュー（選べるものが 2 つ以上あるときだけ作る）。"""
+        matches = self._matching_keys()
+        if not matches:
+            return None
+        current = self._left_key if side == "left" else self._right_key
+        menu = QMenu(self.view)
+        original = menu.addAction(t("元の画像"))
+        original.setCheckable(True)
+        original.setChecked(current is None)
+        original.triggered.connect(lambda _=False: self._on_tag_selected(side, None))
+        for key in matches:
+            label = self._results[key]["label"]
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(key == current)
+            action.triggered.connect(
+                lambda _=False, k=key: self._on_tag_selected(side, k)
+            )
+        return menu
 
-    def _on_combo_changed(self, _index: int) -> None:
+    def _on_tag_selected(self, side: str, key: _TrialKey | None) -> None:
+        """札メニューでの切り替え。"""
+        if side == "left":
+            self._left_key = key
+        else:
+            self._right_key = key
+        self._save_file_state()
         self._update_view()
+        self.refresh()
 
     def _resolve_side(self, key: object) -> tuple[QImage | None, str]:
         if key is None:
-            return self._display_source(), t("処理前")
+            return self._display_source(), t("元の画像")
         entry = self._results.get(key)  # type: ignore[arg-type]
         if entry is None:
-            return self._display_source(), t("処理前")
+            return self._display_source(), t("元の画像")
         image = entry.get("qimage")
         if image is None or image.isNull():
             try:
@@ -988,7 +1125,7 @@ class TrialPanel(QWidget):
             except Exception:
                 loaded = QImage()
             if loaded.isNull():
-                return self._display_source(), t("処理前")
+                return self._display_source(), t("元の画像")
             entry["qimage"] = loaded
             image = loaded
         return image, str(entry["label"])
@@ -1014,31 +1151,30 @@ class TrialPanel(QWidget):
             self.view.set_message(t("読み込み中…"))
             return
         self.view.set_message("")
-        left_image, left_label = self._resolve_side(self.left_combo.currentData())
-        right_image, right_label = self._resolve_side(self.right_combo.currentData())
+        left_image, left_label = self._resolve_side(self._left_key)
+        right_image, right_label = self._resolve_side(self._right_key)
         self.view.set_images(left_image, left_label, right_image, right_label)
+        self.view.set_left_menu(self._menu_for_side("left"))
+        self.view.set_right_menu(self._menu_for_side("right"))
         self.view.set_selection(None)
+        if self.view.is_selection_mode():
+            # 範囲選択中は画像の上に案内を出す。
+            self.view.set_message(t("確認したい部分をドラッグで囲んでください"))
 
     # ---------------------------------------------------------- 文言と有効化
     def refresh(self) -> None:
         """ボタン文言・表示/無効・状況行を現在の状態に合わせる。"""
         job = self._job
         running = self.is_trial_running()
-        selecting = self.view.is_selection_mode()
+        # 画像と動画で文言は同じにする。確認中だけ中止になる。
         if running:
             self.trial_btn.setText(t("中止"))
-        elif self._rect is not None:
-            self.trial_btn.setText(t("この範囲を試す"))
-        elif job is not None and job.kind == JobKind.VIDEO:
-            self.trial_btn.setText(t("このコマを試す"))
         else:
-            self.trial_btn.setText(t("試す"))
+            self.trial_btn.setText(t("クイック確認"))
         if self._rect is not None:
             self.range_btn.setText(t("範囲を解除"))
-        elif selecting:
-            self.range_btn.setText(t("画の上をドラッグして範囲を選んでください"))
         else:
-            self.range_btn.setText(t("範囲を選ぶ"))
+            self.range_btn.setText(t("範囲を選択してクイック確認"))
 
         is_video = job is not None and job.kind == JobKind.VIDEO
         self.video_row.setVisible(is_video)
@@ -1071,8 +1207,6 @@ class TrialPanel(QWidget):
         editable = not running and not self._main_running
         self.range_btn.setEnabled(editable and can_pick)
         self.slider.setEnabled(editable)
-        self.left_combo.setEnabled(editable)
-        self.right_combo.setEnabled(editable)
         has_image = self._source_image is not None
         self.fit_btn.setEnabled(has_image)
         self.actual_btn.setEnabled(has_image)
@@ -1082,15 +1216,15 @@ class TrialPanel(QWidget):
         if self._status_hold:
             self.status_label.setText(self._status_hold)
         elif self._npu_converting:
-            self.status_label.setText(t("NPU の変換中は試せません"))
+            self.status_label.setText(t("NPU の変換中はクイック確認できません"))
         elif self._main_running:
-            self.status_label.setText(t("処理中は試せません"))
+            self.status_label.setText(t("処理中はクイック確認できません"))
         elif job is not None and job.kind == JobKind.FOLDER:
             self.status_label.setText(
-                t("フォルダは試せません。中の画像を 1 枚追加すると試せます。")
+                t("フォルダはクイック確認できません。中の画像を 1 枚追加すると確認できます。")
             )
         elif model_missing:
-            self.status_label.setText(t("モデルを選ぶと試せます"))
+            self.status_label.setText(t("拡大モデルを選ぶとクイック確認できます"))
         else:
             self.status_label.setText("")
 
@@ -1105,12 +1239,12 @@ class TrialPanel(QWidget):
             return None
 
     def set_main_running(self, running: bool) -> None:
-        """本処理の実行状態を反映する（試すボタンの無効化と状況行のため）。"""
+        """本処理の実行状態を反映する（確認ボタンの無効化と状況行のため）。"""
         self._main_running = bool(running)
         self.refresh()
 
     def set_npu_converting(self, converting: bool) -> None:
-        """NPU 変換の実行状態を反映する（試すボタンの無効化と状況行のため）。"""
+        """NPU 変換の実行状態を反映する（確認ボタンの無効化と状況行のため）。"""
         self._npu_converting = bool(converting)
         self.refresh()
 
@@ -1156,7 +1290,8 @@ class TrialPanel(QWidget):
         hit = self._results.get(key)
         if hit is not None and Path(str(hit["path"])).exists():
             self._status_hold = ""
-            self._set_combo(self.right_combo, key)
+            self._right_key = key
+            self._save_file_state()
             self._update_view()
             self.refresh()
             return
@@ -1230,7 +1365,7 @@ class TrialPanel(QWidget):
         self._trial_cancel = cancel
         self._trial_key = key
         self._trial_thread = thread
-        self.status_label.setText(t("試しています…"))
+        self.status_label.setText(t("確認中…"))
         self.refresh()
         try:
             self.trial_running_changed.emit(True)
@@ -1245,9 +1380,9 @@ class TrialPanel(QWidget):
         try:
             pct = int(round(max(0.0, min(1.0, float(frac))) * 100))
         except (TypeError, ValueError):
-            self.status_label.setText(t("試しています…"))
+            self.status_label.setText(t("確認中…"))
             return
-        self.status_label.setText(t("試しています… {pct}%", pct=pct))
+        self.status_label.setText(t("確認中… {pct}%", pct=pct))
 
     @Slot(str)
     def _on_trial_succeeded(self, out_path: str) -> None:
@@ -1268,9 +1403,9 @@ class TrialPanel(QWidget):
         self._stop_trial_thread()
         if current is not None and current[:3] == key[:3]:
             self._status_hold = ""
-            self._rebuild_combos()
-            self._set_combo(self.right_combo, key)
-            self._update_view()
+            self._right_key = key
+            self._save_file_state()
+            self._rebuild_tags()
         self.refresh()
 
     @Slot(str)
@@ -1362,7 +1497,7 @@ class TrialPanel(QWidget):
         self._file_state.pop(file_str, None)
         if self._job is not None and str(self._job.input_path) == file_str:
             self._status_hold = ""
-        self._rebuild_combos()
+        self._rebuild_tags()
         self.refresh()
 
     def discard_all(self) -> None:
@@ -1385,7 +1520,7 @@ class TrialPanel(QWidget):
         self._temp_by_file.clear()
         self._file_state.clear()
         self._status_hold = ""
-        self._rebuild_combos()
+        self._rebuild_tags()
         self.refresh()
 
     def cancel_trial(self) -> None:

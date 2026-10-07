@@ -22,28 +22,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_t_returns_source_in_japanese():
     set_language("ja")
-    assert t("試す") == "試す"
-    assert t("試しています… {pct}%", pct=45) == "試しています… 45%"
+    assert t("クイック確認") == "クイック確認"
+    assert t("確認中… {pct}%", pct=45) == "確認中… 45%"
     assert N_("画像") == "画像"
 
 
 def test_t_falls_back_to_source_when_untranslated(monkeypatch):
     from app.locale import en as en_module
 
-    monkeypatch.setitem(en_module.EN, "試す", None)
-    monkeypatch.delitem(en_module.EN, "試しています… {pct}%")
+    monkeypatch.setitem(en_module.EN, "クイック確認", None)
+    monkeypatch.delitem(en_module.EN, "確認中… {pct}%")
     set_language("en")
-    assert t("試す") == "試す"
-    assert t("試しています… {pct}%", pct=45) == "試しています… 45%"
+    assert t("クイック確認") == "クイック確認"
+    assert t("確認中… {pct}%", pct=45) == "確認中… 45%"
 
 
 def test_t_returns_translation_when_present(monkeypatch):
     from app.locale import en as en_module
 
-    monkeypatch.setitem(en_module.EN, "試す", "Try it")
+    monkeypatch.setitem(en_module.EN, "クイック確認", "Quick check it")
     set_language("en")
-    assert t("試す") == "Try it"
-    assert t("試しています… {pct}%", pct=45) == "Trying… 45%"
+    assert t("クイック確認") == "Quick check it"
+    assert t("確認中… {pct}%", pct=45) == "Checking… 45%"
 
 
 def test_set_language_rejects_unknown():
@@ -197,6 +197,7 @@ def test_all_en_keys_are_used():
 # 新しい箇所を足したらここ（と REPORT5.md の一覧）も更新する。
 _EXPECTED_NONLITERAL = Counter(
     {
+        ("app/gui/compare_view.py", "self.QUICK_HELP"): 1,
         ("app/gui/main_window.py", "_MODEL_LABELS.get(data, data)"): 1,
         (
             "app/gui/main_window.py",
@@ -211,13 +212,12 @@ _EXPECTED_NONLITERAL = Counter(
         ("app/gui/main_window.py", "label"): 1,
         ("app/gui/main_window.py", "backend_label"): 1,
         ("app/gui/main_window.py", "model_label"): 1,
-        ("app/gui/main_window.py", "speed"): 3,
+        ("app/gui/main_window.py", "speed"): 2,
         ("app/gui/main_window.py", "quality"): 2,
         ("app/gui/main_window.py", "anime"): 1,
         ("app/gui/main_window.py", "live"): 1,
         ("app/gui/main_window.py", "star"): 2,
         ("app/gui/main_window.py", "desc"): 1,
-        ("app/gui/main_window.py", "note"): 1,
         ("app/gui/queue_view.py", "_KIND_LABEL.get(self.job.kind, '')"): 1,
         ("app/gui/queue_view.py", "self.job.message"): 1,
         ("app/gui/queue_view.py", "_STATUS_TEXT.get(self.job.status, '')"): 1,
@@ -309,6 +309,7 @@ def test_language_row_restores_saved():
 
 def test_main_window_boots_in_english():
     from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QLabel
 
     from app.gui.main_window import MainWindow
 
@@ -322,10 +323,19 @@ def test_main_window_boots_in_english():
         assert win.windowTitle().startswith("ultraeasy-upscaler")
         assert win.start_btn.text() == "Start"
         assert win.pause_btn.text() == "Pause"
-        assert win.model_combo.itemText(0) == "None (no upscaling)"
+        assert win.image_model_combo.itemText(0) == "None (no upscaling)"
         # 印（◎など）は英語では言葉になる
-        assert "Speed: High" in win.model_combo.itemText(1)
-        assert win.model_hint.text().startswith("For anime.")
+        assert "Speed: High" in win.image_model_combo.itemText(1)
+        assert "Speed: High" in win.video_model_combo.itemText(1)
+        # ヘッダー見出しと右列の新しいボタンが英語になる
+        headers = [w.text() for w in win.findChildren(QLabel)]
+        assert "Image model" in headers
+        assert "Video model" in headers
+        assert win._override_hint.text() == "This file uses its own settings."
+        assert win.reset_override_btn.text() == "Use the settings at the top"
+        assert win._no_file_hint.text() == (
+            "Select a file to change the settings for that file only."
+        )
         assert win.drawer.language_combo.count() == 3
     finally:
         # 閉じないと試し用の一時フォルダが残る

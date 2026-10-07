@@ -15,6 +15,7 @@ class Icon:
     SETTINGS = "\ue713"
     VIDEO = "\ue714"
     DELETE = "\ue74d"
+    FIT = "\ue9a6"
     FOLDER = "\ue8b7"
     IMAGE = "\ue8b9"
     PAUSE = "\ue769"

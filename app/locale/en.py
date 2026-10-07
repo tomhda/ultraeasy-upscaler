@@ -20,10 +20,12 @@ EN: dict[str, str | None] = {
     # 表示言語を変えたとき項目の下に出る1行
     '次回の起動から切り替わります。': 'The change takes effect the next time the app starts.',
     # --- メイン画面: ヘッダ
-    # ヘッダ右のボタン
-    '出力先を開く': 'Open output folder',
     # 歯車ボタンのツールチップ／詳細設定の見出し（2箇所で同じ文言）
     '詳細設定': 'More settings',
+    # ヘッダの一括設定の見出し
+    '画像の拡大モデル': 'Image model',
+    # ヘッダの一括設定の見出し
+    '動画の拡大モデル': 'Video model',
     # --- メイン画面: 左列（メディア一覧・ドロップ）
     # 左列の見出し
     'メディア': 'Media',
@@ -39,31 +41,25 @@ EN: dict[str, str | None] = {
     'ここにドロップ、またはクリックで追加': 'Drop here, or click to add',
     # 複数追加時の状況行。{added}=追加数、{skipped}=スキップ数、{names}=先頭3件の名、{more}=「…」か空
     '{added} 件追加 / {skipped} 件は未対応のためスキップ: {names}{more}': 'Added {added}. Skipped {skipped} unsupported: {names}{more}',
-    # --- メイン画面: 中央（試し・比較）
-    # 試すボタン（画像・範囲なし）
-    '試す': 'Try',
-    # 試すボタン（範囲あり）
-    'この範囲を試す': 'Try this area',
-    # 試すボタン（動画・範囲なし）
-    'このコマを試す': 'Try this frame',
-    # 試しの実行中の試すボタン／NPU変換の実行中のボタン（2箇所で同じ文言）
-    '中止': 'Cancel',
+    # --- メイン画面: 中央（クイック確認・比較）
+    # クイック確認ボタン（画像・動画で同じ）
+    'クイック確認': 'Quick check',
     # 範囲ボタン（通常）
-    '範囲を選ぶ': 'Select area',
+    '範囲を選択してクイック確認': 'Quick check on a selected area',
     # 範囲ボタン（範囲あり）
     '範囲を解除': 'Clear area',
-    # 範囲ボタン（選択モード中）
-    '画の上をドラッグして範囲を選んでください': 'Drag on the picture to select an area',
-    # 比較ビューの表示ボタン
+    # 範囲選択中の画像上の案内
+    '確認したい部分をドラッグで囲んでください': 'Drag over the part you want to check',
+    # クイック確認の「?」の説明文（3 行。改行も原文どおり）
+    '仕上がり確認のため、1 枚だけ拡大処理を行い、元の画像と比較できます。\n動画は、画像下のスライダーで拡大するフレームを選択できます。\n「範囲を選択してクイック確認」を使うと、その 1 枚のさらに一部分だけに処理を限定できます。': 'Enlarges just one image so you can compare it with the original before the full run.\nFor a video, choose the frame to enlarge with the slider under the picture.\n"Quick check on a selected area" limits the processing to part of that one image.',
+    # 確認の実行中のクイック確認ボタン／NPU変換の実行中のボタン（2箇所で同じ文言）
+    '中止': 'Cancel',
+    # 比較ビューの表示ボタンのツールチップ（画像に重ねる小ボタン）
     '全体表示': 'Fit',
-    # 比較ビューの表示ボタン
+    # 比較ビューの表示ボタンのツールチップ（画像に重ねる小ボタン）
     '等倍': '100%',
-    # 比べる相手の行の見出し
-    '左': 'Left',
-    # 比べる相手の行の見出し
-    '右': 'Right',
-    # 左右コンボの「処理前」／画のタグ（複数箇所で同じ文言）
-    '処理前': 'Original',
+    # 画の札（未確認・比較の左）
+    '元の画像': 'Original',
     # ファイル未選択の中央文言
     '左の一覧からファイルを選ぶと、ここに表示します。': 'Select a file in the list on the left to show it here.',
     # 読み込み失敗の中央文言
@@ -72,37 +68,45 @@ EN: dict[str, str | None] = {
     'フォルダの中身はここには表示されません。': "The contents of a folder aren't shown here.",
     # 元画像の読み込み中の中央文言／旧NPUフォルダ処理の画像読み込みの進捗
     '読み込み中…': 'Loading…',
-    # 試しの実行中の状況行
-    '試しています…': 'Trying…',
-    # 試しの進捗の状況行。{pct}=0〜100の整数
-    '試しています… {pct}%': 'Trying… {pct}%',
-    # 試しの失敗の状況行。{message}=整形済みエラー文
+    # 確認の実行中の状況行
+    '確認中…': 'Checking…',
+    # 確認の進捗の状況行。{pct}=0〜100の整数
+    '確認中… {pct}%': 'Checking… {pct}%',
+    # 確認の失敗の状況行。{message}=整形済みエラー文
     '試せませんでした: {message}': "Couldn't try it: {message}",
     # 試し・NPU変換の中止の状況行（2箇所で同じ文言）
     '中止しました': 'Canceled',
-    # 変換中の試しの状況行
-    'NPU の変換中は試せません': "You can't try while a model is being converted for the NPU",
-    # 本処理中の試しの状況行
-    '処理中は試せません': "You can't try while files are being processed",
-    # フォルダ選択の試しの状況行
-    'フォルダは試せません。中の画像を 1 枚追加すると試せます。': "A folder can't be tried. Add one of its images to try it.",
-    # モデル未選択の試しの状況行
-    'モデルを選ぶと試せます': 'Choose a model to try it',
+    # 変換中の確認の状況行
+    'NPU の変換中はクイック確認できません': "Quick check isn't available while a model is being converted for the NPU",
+    # 本処理中の確認の状況行
+    '処理中はクイック確認できません': "Quick check isn't available while processing",
+    # フォルダ選択の確認の状況行
+    'フォルダはクイック確認できません。中の画像を 1 枚追加すると確認できます。': "Folders can't be quick-checked. Add one of the images inside to check it.",
+    # モデル未選択の確認の状況行
+    '拡大モデルを選ぶとクイック確認できます': 'Choose an upscaling model to use quick check',
     # エラー文が空のときの代替表示
     '不明なエラー': 'Unknown error',
     # --- メイン画面: 右列（設定と開始）
     # 右列の見出し
     '設定': 'Settings',
-    # 画像／動画の切り替えボタン／行の種別表示（複数箇所で同じ文言）
+    # ファイル未選択のときの案内1行
+    'ファイルを選ぶと、そのファイルだけ設定を変えられます': 'Select a file to change the settings for that file only.',
+    # 行の種別表示
     '画像': 'Image',
-    # 画像／動画の切り替えボタン／行の種別表示（複数箇所で同じ文言）
+    # 行の種別表示
     '動画': 'Video',
-    # 個別設定のチェックボックス
-    'このファイルだけ別の設定にする': 'Use different settings for this file',
     # 右列の項目名
-    'モデル': 'Model',
+    '拡大モデル': 'Upscaling model',
     # 右列の項目名
     '倍率': 'Scale',
+    # 個別設定の案内1行
+    'このファイルだけ別の設定です': 'This file uses its own settings.',
+    # 個別設定のボタン（動画）
+    'ほかの動画にも使う': 'Use for other videos too',
+    # 個別設定のボタン（画像・フォルダ）
+    'ほかの画像にも使う': 'Use for other images too',
+    # 個別設定のボタン
+    '一括設定に戻す': 'Use the settings at the top',
     # モデルコンボの選択肢
     'なし（拡大しない）': 'None (no upscaling)',
     # フレーム補間コンボの選択肢
@@ -134,11 +138,11 @@ EN: dict[str, str | None] = {
     # 開始時（空）の状況行
     '処理するファイルがありません。': 'There are no files to process.',
     # 開始時（個別未選択）の状況行。{name}=ファイル名（例: photo.png）
-    '{name}のモデルを選んでください。': 'Choose a model for {name}.',
+    '{name}の拡大モデルを選んでください。': 'Choose an upscaling model for {name}.',
     # 開始時（動画・未選択）の状況行
-    '動画のモデルかフレーム補間を選んでください。': 'Choose a model or frame interpolation for videos.',
+    '動画の拡大モデルかフレーム補間モデルを選んでください。': 'Choose an upscaling model or a frame interpolation model for videos.',
     # 開始時（画像・未選択）の状況行
-    '画像のモデルを選んでください。': 'Choose a model for images.',
+    '画像の拡大モデルを選んでください。': 'Choose an upscaling model for images.',
     # 変換中の開始時の状況行
     'NPU の変換中は処理を始められません': "You can't start while a model is being converted for the NPU",
     # 未変換モデルの開始・試し時の状況行。{label}=モデル表示名（例: Anime Video v3）
@@ -180,41 +184,25 @@ EN: dict[str, str | None] = {
     'AdcSR': 'AdcSR',
     # CUDA用モデルコンボの選択肢
     'SwinIR-M（real-world x4）': 'SwinIR-M (real-world x4)',
-    # --- モデル: 説明・特性の印
-    # 説明行（Anime系2モデルで同じ文言）
-    'アニメ向け。線をくっきり仕上げます。実写には向きません。': 'For anime. Makes lines crisp. Not suited to live action. ',
-    # 説明行（SPAN）
-    '実写向け。元の質感を残して自然に仕上げます。': 'For live action. Keeps the original texture and looks natural. ',
-    # 説明行（AMD縮小版）
-    '実写向け。輪郭をくっきり仕上げます。': 'For live action. Makes edges crisp. ',
+    # --- モデル: 説明（1 行）・特性の印
+    # 説明行（Anime Video v3。GPU/NPU/Vulkan とも同じ）
+    'アニメ向け・速い': 'For anime · Fast',
+    # 説明行（4xNomosUni SPAN）
+    '実写向け・速い': 'For live action · Fast',
+    # 説明行（Real-ESRGAN AMD縮小版）
+    '実写向け・くっきり・やや遅い': 'For live action · Sharp · Somewhat slow',
     # 説明行（SwinIR-M）
-    '実写向け。細部まで丁寧に仕上げます。': 'For live action. Restores fine detail carefully. ',
+    '実写の静止画向け・高精細・遅い': 'For live-action stills · Fine detail · Slow',
     # 説明行（AdcSR）
-    '実写の静止画向け。いちばん高画質です。動画には使えません。': "For live-action stills. The highest quality. Can't be used for videos. ",
-    # 説明行（realesrgan-x4plus）
-    '実写向け。高画質です。': 'For live action. High quality. ',
-    # 説明行（realesrgan-x4plus-anime）
-    'アニメ向け。高画質です。': 'For anime. High quality. ',
-    # 説明行（general-x4v3）
-    '実写・アニメ兼用。ノイズを強めに消します。': 'For live action and anime. Removes noise strongly. ',
-    # 説明行（general-wdn-x4v3）
-    '実写向け。ノイズ消しは控えめです。': 'For live action. Removes noise lightly. ',
-    # 速さの説明（◎）
-    '処理は速いです。': 'Fast. ',
-    # 速さの説明（○）
-    '速さはふつうです。': 'Average speed. ',
-    # 速さの説明（△）
-    '少し時間がかかります。': 'Takes a little time. ',
-    # 速さの説明（✕）
-    'かなり時間がかかります。': 'Takes a long time. ',
-    # 速さの説明（極遅）
-    '動画は1秒ぶんに数十秒かかる超低速です。': 'Extremely slow: one second of video takes tens of seconds. ',
-    # 実行先の注意（NPU系2値で同じ文言）
-    'NPUで処理するので、GPUを空けたまま他の作業ができます。': 'Runs on the NPU, so the GPU stays free for other work.',
-    # 実行先の注意（SwinIR CUDA）
-    'NVIDIAのGPUが必要です。': 'Needs an NVIDIA GPU.',
-    # 実行先の注意（Vulkan）
-    '処理中はPCが熱くなり、他の作業が重くなります。': 'While it runs, the PC gets hot and other work slows down.',
+    '実写の静止画向け・最高画質・とても遅い': 'For live-action stills · Highest quality · Very slow',
+    # 説明行（Real-ESRGAN Vulkan）
+    '実写向け・高画質・遅い': 'For live action · High quality · Slow',
+    # 説明行（Real-ESRGAN Anime Vulkan）
+    'アニメ向け・高画質・遅い': 'For anime · High quality · Slow',
+    # 説明行（General Video v3 ノイズ除去強）
+    '実写・アニメ兼用・ノイズ除去強め': 'For live action and anime · Strong denoising',
+    # 説明行（General Video v3 ノイズ除去弱）
+    '実写向け・ノイズ除去弱め': 'For live action · Light denoising',
     # 一覧の印の前半。{speed}=◎○△✕極遅の印
     '速度{speed}': 'Speed: {speed}',
     # 一覧の印の後半・ツールチップ。{quality}=◎○◎◎の印
@@ -317,6 +305,8 @@ EN: dict[str, str | None] = {
     # 詳細設定のチェックボックス
     '出力フォルダを作る': 'Create an output folder',
     # --- 詳細設定: ヘルプ
+    # 出力先のヘルプ
+    '処理したファイルの保存先です。「元の場所」は元のファイルと同じ場所、「フォルダ選択…」は指定したフォルダに保存します。': 'Where processed files are saved. "Same folder as the source" saves next to the original file, and "Choose a folder…" saves to the folder you pick.',
     # AI実行先のヘルプ
     'AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。SwinIR CUDAは実写向けですが動画処理は非常に低速です。': "Where the AI runs. Auto uses the GPU with DirectML and switches to Vulkan if that can't start. NPU keeps the load off the GPU. SwinIR CUDA suits live action but is extremely slow for videos.",
     # 画像保存形式のヘルプ
@@ -400,6 +390,8 @@ EN: dict[str, str | None] = {
     '一覧から削除': 'Remove from the list',
     # 行の削除ボタンのツールチップ（処理中）
     '処理を中止': 'Cancel processing',
+    # 完了した行の保存先ボタンのツールチップ
+    '保存先を開く': 'Open the output folder',
     # 完了行のツールチップ。{path}=出力パス
     '出力先: {path}': 'Output: {path}',
     # 行のツールチップ（設定の内訳）。{backend}=実行先ID、{upscale}=モデル名（4x）か「なし」、{interpolation}=補間モデルか「なし」

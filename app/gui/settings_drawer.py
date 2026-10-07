@@ -86,6 +86,7 @@ _HELP = {
     "hw_encode": N_("動画の書き出しにGPUを使います。対応していれば速くなります。失敗時は通常エンコードに戻します。"),
     "keep_audio": N_("元動画の音声を、新しく作る動画にも入れます。"),
     "tta": N_("TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。"),
+    "output": N_("処理したファイルの保存先です。「元の場所」は元のファイルと同じ場所、「フォルダ選択…」は指定したフォルダに保存します。"),
     "create_folder": N_("チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。"),
     "target_fps": N_("フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。"),
     "processing_order": N_("アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。"),
@@ -260,7 +261,7 @@ class HelpIcon(QLabel):
 class SettingsDrawer(QFrame):
     """折りたたみ可能な詳細設定パネル。"""
 
-    # 変換の開始・終了を MainWindow へ知らせる（開始/試すの無効化と連動用）。
+    # 変換の開始・終了を MainWindow へ知らせる（開始/確認の無効化と連動用）。
     npu_converting_changed = Signal(bool)
 
     def __init__(self, parent=None, model_label=None) -> None:
@@ -383,6 +384,12 @@ class SettingsDrawer(QFrame):
         self.processing_order = self._combo_with_data(_PROCESSING_ORDER_OPTIONS)
         grid.addWidget(self._label(N_("処理の順番"), _HELP["processing_order"]), 4, 0)
         grid.addWidget(self.processing_order, 4, 1)
+
+        # --- 出力先（全体の設定。選んだあとの処理は MainWindow が持つ） ---
+        self.output_combo = QComboBox()
+        self.output_combo.addItems([t("元の場所"), t("フォルダ選択…")])
+        grid.addWidget(self._label(N_("出力先"), _HELP["output"]), 4, 2)
+        grid.addWidget(self.output_combo, 4, 3)
 
         # --- 表示言語（既存の項目の並びの最後。切り替えは次回起動から） ---
         self.language_combo = self._combo_with_data(_LANGUAGE_OPTIONS)
