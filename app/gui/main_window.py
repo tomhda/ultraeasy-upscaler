@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import binaries, helper_backend, npu_prepare
+from app.core import binaries, catalog, helper_backend, npu_prepare
 from app.core.jobs import Job, JobKind, JobStatus
 from app.core.settings import (
     DEFAULT_MODEL,
@@ -79,93 +79,19 @@ _HELPER_BACKENDS = {
     UpscaleBackend.NPU_NATIVE,
     UpscaleBackend.SWINIR_CUDA,
 }
-_MODEL_LABELS = {
-    "realesrgan-x4plus": N_("Real-ESRGAN"),
-    "realesrgan-x4plus-anime": N_("Real-ESRGAN Anime"),
-    "realesr-animevideov3": N_("Anime Video v3"),
-    HELPER_MODEL_ANIME: N_("Anime Video v3"),
-    "realesr-general-x4v3": N_("General Video v3（ノイズ除去強）"),
-    "realesr-general-wdn-x4v3": N_("General Video v3（ノイズ除去弱）"),
-    HELPER_MODEL_SPAN: N_("4xNomosUni SPAN"),
-    HELPER_MODEL_AMD_RRDB: N_("Real-ESRGAN（AMD縮小版）"),
-    HELPER_MODEL_SWINIR: N_("SwinIR-M"),
-    HELPER_MODEL_ADCSR: N_("AdcSR"),
-}
-_HELPER_MODEL_OPTIONS = [
-    (N_("なし（拡大しない）"), None),
-    (_MODEL_LABELS[HELPER_MODEL_ANIME], HELPER_MODEL_ANIME),
-    (_MODEL_LABELS[HELPER_MODEL_SPAN], HELPER_MODEL_SPAN),
-    (_MODEL_LABELS[HELPER_MODEL_AMD_RRDB], HELPER_MODEL_AMD_RRDB),
-    (_MODEL_LABELS[HELPER_MODEL_SWINIR], HELPER_MODEL_SWINIR),
-    (_MODEL_LABELS[HELPER_MODEL_ADCSR], HELPER_MODEL_ADCSR),
-]
-_HELPER_MODEL_VALUES = {
-    value for _label, value in _HELPER_MODEL_OPTIONS if value is not None
-}
-_SWINIR_CUDA_MODEL_OPTIONS = [
-    (N_("なし（拡大しない）"), None),
-    (N_("SwinIR-M（real-world x4）"), HELPER_MODEL_SWINIR),
-]
-
-# モデルの説明行（1 行）。速さ・実行先の注意は付けない。
-_MODEL_HINT = {
-    HELPER_MODEL_ANIME: N_("アニメ向け・速い"),
-    "realesr-animevideov3": N_("アニメ向け・速い"),
-    HELPER_MODEL_SPAN: N_("実写向け・速い"),
-    HELPER_MODEL_AMD_RRDB: N_("実写向け・くっきり・やや遅い"),
-    HELPER_MODEL_SWINIR: N_("実写の静止画向け・高精細・遅い"),
-    HELPER_MODEL_ADCSR: N_("実写の静止画向け・最高画質・とても遅い"),
-    "realesrgan-x4plus": N_("実写向け・高画質・遅い"),
-    "realesrgan-x4plus-anime": N_("アニメ向け・高画質・遅い"),
-    "realesr-general-x4v3": N_("実写・アニメ兼用・ノイズ除去強め"),
-    "realesr-general-wdn-x4v3": N_("実写向け・ノイズ除去弱め"),
-}
+# モデル・実行先の表は app/core/catalog.py が唯一の出どころ（CLI と共有）。
+# GUI はここでは別名で参照するだけ。
+_MODEL_LABELS = catalog.MODEL_LABELS
+_HELPER_MODEL_OPTIONS = catalog.HELPER_MODEL_OPTIONS
+_HELPER_MODEL_VALUES = catalog.HELPER_MODEL_VALUES
+_SWINIR_CUDA_MODEL_OPTIONS = catalog.SWINIR_CUDA_MODEL_OPTIONS
+_MODEL_HINT = catalog.MODEL_HINT
 
 # (backend, model) → (速度, 画質, アニメ適性, 実写適性, 推奨タグ or None)
 # 速度・画質・適性の印。英語の表示では言葉に置き換える（◎○△✕ は日本語圏の記号のため）。
 _RATING_MARKS = (N_("◎◎"), N_("◎"), N_("○"), N_("△"), N_("✕"))
 
-_MODEL_INFO: dict[tuple[UpscaleBackend, str],
-                  tuple[str, str, str, str, str | None]] = {
-    (UpscaleBackend.VULKAN, "realesr-animevideov3"):
-        ("◎", "◎", "◎", "△", N_("アニメ")),
-    (UpscaleBackend.VULKAN, "realesr-general-x4v3"):
-        ("◎", "○", "○", "○", None),
-    (UpscaleBackend.VULKAN, "realesr-general-wdn-x4v3"):
-        ("◎", "○", "○", "◎", N_("実写")),
-    (UpscaleBackend.VULKAN, "realesrgan-x4plus"):
-        ("✕", "◎", "○", "◎", None),
-    (UpscaleBackend.VULKAN, "realesrgan-x4plus-anime"):
-        ("✕", "◎", "◎", "○", None),
-    (UpscaleBackend.NPU, "realesrgan-x4plus"):
-        ("◎", "◎", "○", "◎", N_("実写")),
-    (UpscaleBackend.NPU, "realesrgan-x4plus-anime"):
-        ("○", "◎", "◎", "○", None),
-    (UpscaleBackend.NPU, "realesr-animevideov3"):
-        ("◎", "◎", "◎", "△", N_("アニメ")),
-    (UpscaleBackend.WINML_GPU, HELPER_MODEL_ANIME):
-        ("◎", "◎", "◎", "△", N_("アニメ")),
-    (UpscaleBackend.WINML_GPU, HELPER_MODEL_SPAN):
-        ("◎", "◎", "○", "◎", N_("実写")),
-    (UpscaleBackend.WINML_GPU, HELPER_MODEL_AMD_RRDB):
-        ("△", "◎", "○", "◎", None),
-    (UpscaleBackend.WINML_GPU, HELPER_MODEL_SWINIR):
-        ("✕", "◎", "○", "◎", N_("静止画")),
-    (UpscaleBackend.WINML_GPU, HELPER_MODEL_ADCSR):
-        ("✕", "◎◎", "○", "◎", N_("実写")),
-    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ADCSR):
-        ("✕", "◎◎", "○", "◎", N_("実写")),
-    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_ANIME):
-        ("○", "◎", "◎", "△", N_("アニメ")),
-    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SPAN):
-        ("◎", "◎", "○", "◎", N_("実写")),
-    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_AMD_RRDB):
-        ("△", "◎", "○", "◎", None),
-    (UpscaleBackend.NPU_NATIVE, HELPER_MODEL_SWINIR):
-        ("✕", "◎", "○", "◎", N_("静止画")),
-    (UpscaleBackend.SWINIR_CUDA, HELPER_MODEL_SWINIR):
-        (N_("極遅"), "◎◎", "△", "◎", N_("実写・再開可")),
-}
+_MODEL_INFO = catalog.MODEL_INFO
 
 
 def _combo_closed_text(text: str) -> str:

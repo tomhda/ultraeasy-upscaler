@@ -27,8 +27,8 @@ Thumbs.db
 /design-qa-comparison.png
 /design-qa.md
 
-# エージェント向けローカル規約（公開しない・各マシンに手動配置）
-AGENTS.md
+# 開発用のローカル規約（公開しない・各マシンに手動配置）。AGENTS.md は公開する
+AGENTS.local.md
 /vendor/winml-sr/
 /vendor/winml-film/
 

@@ -1,6 +1,6 @@
 # ultraeasy-upscaler
 
-[日本語](README.md)
+[日本語](README.md) [![agent-friendly](docs/images/agent-friendly.svg)](AGENTS.md)
 
 **[⬇ Download ultraeasy-upscaler v0.11.0](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip)**
 (zip for Windows x64, 376 MB). See [Install](#install) for the steps.

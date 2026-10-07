@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import addon_kits, helper_backend, npu_prepare
+from app.core import addon_kits, catalog, helper_backend, npu_prepare
 from app.core import user_settings
 from app.core.jobs import Cancelled
 from app.core.settings import (
@@ -88,13 +88,8 @@ _GPU_OPTIONS = [
     ("GPU 2", 2),
     ("GPU 3", 3),
 ]
-_BACKEND_OPTIONS = [
-    (N_("自動（GPU優先）"), "auto"),
-    (N_("GPU（DirectML）"), UpscaleBackend.WINML_GPU.value),
-    (N_("NPU（GPU温存）"), UpscaleBackend.NPU_NATIVE.value),
-    (N_("SwinIR-M（CUDA・超低速）"), UpscaleBackend.SWINIR_CUDA.value),
-    (N_("Vulkan"), UpscaleBackend.VULKAN.value),
-]
+# AI 実行先の選択肢は app/core/catalog.py が唯一の出どころ（CLI と共有）。
+_BACKEND_OPTIONS = catalog.BACKEND_OPTIONS
 
 
 def available_backend_options() -> list[tuple[str, str]]:

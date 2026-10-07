@@ -28,16 +28,14 @@ if (-not (Test-Path -LiteralPath $python)) {
     throw "Python environment not found: $python"
 }
 
+# Two EXEs (GUI + CLI) in one COLLECT sharing the same _internal.
+# Entry points and sharing are defined in ultraeasy-upscaler.spec.
 & $python -m PyInstaller `
-    --name ultraeasy-upscaler `
-    --windowed `
-    --onedir `
     --clean `
     --noconfirm `
     --distpath $dist `
     --workpath $work `
-    --specpath $work `
-    (Join-Path $repo "app\main.py")
+    (Join-Path $repo "ultraeasy-upscaler.spec")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $vendorOut = Join-Path $app "vendor"
@@ -169,6 +167,12 @@ The NPU is not used by default. To use the NPU on an AMD Ryzen AI PC, you need b
 & (Join-Path $app "ultraeasy-upscaler.exe") --portable-self-test
 if ($LASTEXITCODE -ne 0) {
     throw "Portable self-test failed: $LASTEXITCODE"
+}
+
+# The CLI exe must also start from the same folder (same _internal).
+& (Join-Path $app "ultraeasy-upscaler-cli.exe") status
+if ($LASTEXITCODE -ne 0) {
+    throw "CLI self-test failed: $LASTEXITCODE"
 }
 
 if (-not $Destination) {
