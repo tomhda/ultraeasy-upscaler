@@ -58,6 +58,8 @@ class Palette:
     accent_tint: str     # 選択中の行などの薄い塗り
     accent_edge: str
     accent_disabled: str
+    accent_pressed: str  # 塗りを押している間
+    danger_tint: str     # 削除ボタンに乗せたときの薄い塗り
 
 
 def _mix(a: str, b: str, t: float) -> str:
@@ -125,6 +127,8 @@ def build_palette(dark: bool, accent: str) -> Palette:
         accent_tint=_mix(panel, accent, 0.14),
         accent_edge=_mix(panel, accent, 0.40),
         accent_disabled=_mix(panel, accent, 0.35),
+        accent_pressed=_mix(accent, "#000000", 0.22),
+        danger_tint=_mix(panel, base["danger"], 0.22),
         **base,
     )
 
@@ -552,6 +556,55 @@ QPushButton#rowFolder {{
 }}
 QPushButton#rowFolder:hover {{
     color: {p.text};
+}}
+/* 押せる場所が分かるように、乗せたら地と枠を出し、押している間は沈める */
+QPushButton#rowClose, QPushButton#rowRetry, QPushButton#rowFolder {{
+    border: 1px solid transparent;
+    border-radius: 6px;
+}}
+QPushButton#rowRetry:hover, QPushButton#rowFolder:hover {{
+    background-color: {p.button_hover};
+    border-color: {p.border_light};
+}}
+QPushButton#rowClose:hover {{
+    background-color: {p.button_hover};
+    border-color: {p.danger};
+}}
+QPushButton#rowClose:pressed, QPushButton#rowRetry:pressed, QPushButton#rowFolder:pressed {{
+    background-color: {p.button_pressed};
+    border-color: {p.accent_edge};
+}}
+QPushButton#iconButton {{
+    border: 1px solid transparent;
+}}
+QPushButton#iconButton:hover, QPushButton#iconButton[active="true"] {{
+    border-color: {p.border_light};
+}}
+QPushButton#iconButton:pressed {{
+    background-color: {p.button_pressed};
+    border-color: {p.accent_edge};
+}}
+QPushButton#dangerIcon:hover {{
+    background-color: {p.danger_tint};
+}}
+QPushButton#dangerIcon:pressed {{
+    background-color: {p.button_pressed};
+}}
+QPushButton#previewTool:pressed, QPushButton#previewCaption:pressed {{
+    background-color: {p.button_pressed};
+    border-color: {p.accent_edge};
+}}
+QPushButton#previewCaption:hover {{
+    border-color: {p.border_light};
+}}
+QPushButton#accent:pressed, QPushButton#primary:pressed {{
+    background-color: {p.accent_pressed};
+}}
+QPushButton#scaleBtn:hover {{
+    border-color: {p.border_light};
+}}
+QComboBox:hover {{
+    background-color: {p.button_hover};
 }}
 
 QProgressBar {{

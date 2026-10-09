@@ -892,3 +892,36 @@ def test_model_hints_are_single_line_ja_and_en(app, tmp_path):
     finally:
         win.close()
         app.processEvents()
+
+
+def test_header_backend_shows_only_with_npu_and_syncs(app, monkeypatch, tmp_path):
+    """NPU が使える PC でだけヘッダーに AI実行先 が出て、詳細設定の欄と連動する。"""
+    from app.core import helper_backend, npu_prepare
+    from app.gui.main_window import MainWindow
+
+    monkeypatch.setenv(helper_backend.NPU_CACHE_ENV, str(tmp_path))
+    monkeypatch.setattr(npu_prepare, "npu_available", lambda: False)
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    try:
+        assert win._header_backend_field.isVisible() is False
+    finally:
+        win.close()
+
+    monkeypatch.setattr(npu_prepare, "npu_available", lambda: True)
+    win = MainWindow()
+    win.show()
+    app.processEvents()
+    try:
+        assert win._header_backend_field.isVisible() is True
+        header, drawer = win.header_backend_combo, win.backend_combo
+        assert [header.itemData(i) for i in range(header.count())] == [
+            drawer.itemData(i) for i in range(drawer.count())]
+        last = header.count() - 1
+        header.setCurrentIndex(last)
+        assert drawer.currentIndex() == last
+        drawer.setCurrentIndex(0)
+        assert header.currentIndex() == 0
+    finally:
+        win.close()

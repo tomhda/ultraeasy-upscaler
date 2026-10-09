@@ -280,6 +280,22 @@ class MainWindow(QWidget):
             self._header_field(t("フレーム補間モデル"), self.global_interpolation_combo),
             10,
         )
+        # NPU が使える PC では、GPU / NPU の切り替えをヘッダーからできるようにする。
+        # 中身は詳細設定の「AI実行先」と同じで、どちらで変えても両方に反映する。
+        self.header_backend_combo = ModelCombo()
+        self._fix_header_combo_width(self.header_backend_combo)
+        for i in range(self.backend_combo.count()):
+            self.header_backend_combo.addItem(
+                self.backend_combo.itemText(i), self.backend_combo.itemData(i))
+        self.header_backend_combo.setCurrentIndex(self.backend_combo.currentIndex())
+        self.header_backend_combo.currentIndexChanged.connect(
+            self.backend_combo.setCurrentIndex)
+        self.backend_combo.currentIndexChanged.connect(
+            self.header_backend_combo.setCurrentIndex)
+        self._header_backend_field = self._header_field(
+            t("AI実行先"), self.header_backend_combo)
+        self._header_backend_field.setVisible(npu_prepare.npu_available())
+        row.addWidget(self._header_backend_field, 10)
         row.addStretch(1)
 
         self.settings_btn = QPushButton("")
@@ -1724,7 +1740,8 @@ class MainWindow(QWidget):
         self.pause_btn.setEnabled(running)
         self.pause_btn.setText(t("一時停止"))
         # 実行中は入力系をロック（ヘッダー・右列のモデル/倍率/出力先/追加）
-        for w in (self.backend_combo, self.image_model_combo,
+        for w in (self.backend_combo, self.header_backend_combo,
+                  self.image_model_combo,
                   self.video_model_combo, self.global_interpolation_combo,
                   self.model_combo, self.interpolation_combo, self.output_combo,
                   self.clear_btn, self.settings_btn,
