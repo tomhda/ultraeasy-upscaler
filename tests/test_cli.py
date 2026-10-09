@@ -24,9 +24,12 @@ def _make_png(path: Path, size: tuple[int, int] = (64, 48)) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def _english_and_gpu(monkeypatch):
+def _english_and_gpu(monkeypatch, tmp_path):
     """CLI テストは既定で英語・GPU 解決にする（conftest の ja を上書き）。"""
     monkeypatch.setenv("UEU_LANG", "en")
+    # quick-check の取り出しコマを、実際の一時フォルダに残さない
+    import tempfile
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(
         helper_backend, "_winml_helper", lambda: Path("C:/fake/winml-sr.exe"))
     from app.core import binaries
