@@ -138,7 +138,7 @@ ultraeasy-upscaler ポータブル版
 
 1. ultraeasy-upscaler.exe をダブルクリックします。
 2. 画像や動画を、ウィンドウにドラッグ＆ドロップします。
-3. 右側でモデルを選びます。「試す」を押すと、1 コマだけ先に結果を確認できます。
+3. 上でモデルを選びます。右側の「クイック確認」を押すと、1 枚だけ先に結果を確認できます。
 4. 「開始」を押します。
 
 フォルダの中のファイルは、移動や削除をしないでください。
@@ -147,13 +147,19 @@ NPU について
 NPU は標準では使いません。AMD Ryzen AI 搭載の PC で NPU を使うには、次の 2 つが必要です。
 - AMD の Ryzen AI Software 1.8.0（AMD のサイトから入手して導入）
 - 別配布の NPU キット（このフォルダに上書きで展開）
+
+追加キットについて
+FILM (Style)（フレーム補間）と AdcSR（拡大）は別配布です。歯車の「追加キット」からダウンロードできます。
+
+コマンドから使う
+ultraeasy-upscaler-cli.exe で、画面を開かずに同じ処理ができます。使い方は AGENTS.md（英語）にあります。
 "@ | Set-Content -LiteralPath (Join-Path $app "はじめに.txt") -Encoding UTF8
 @"
 ultraeasy-upscaler portable build
 
 1. Double-click ultraeasy-upscaler.exe.
 2. Drag and drop images or videos onto the window.
-3. Choose a model on the right. Select Try to check the result on one frame first.
+3. Choose a model at the top. Select Quick check on the right to check the result on one image first.
 4. Select Start.
 
 Do not move or delete the files inside this folder.
@@ -163,6 +169,12 @@ About the NPU
 The NPU is not used by default. To use the NPU on an AMD Ryzen AI PC, you need both of the following.
 - AMD Ryzen AI Software 1.8.0 (get it from AMD and install it)
 - The NPU kit, a separate download (extract it into this folder, overwriting files)
+
+About add-on kits
+FILM (Style) (frame interpolation) and AdcSR (upscaling) are separate downloads. Get them from Add-on kits under the gear.
+
+Command line
+ultraeasy-upscaler-cli.exe does the same processing without opening the window. See AGENTS.md for how to use it.
 "@ | Set-Content -LiteralPath (Join-Path $app "Getting started.txt") -Encoding UTF8
 
 & (Join-Path $app "ultraeasy-upscaler.exe") --portable-self-test

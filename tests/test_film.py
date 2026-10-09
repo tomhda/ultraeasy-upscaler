@@ -449,11 +449,11 @@ def _canned_kits(installed: dict[str, bool]):
     from app.core.addon_kits import AddonKit
 
     return [
-        AddonKit("film", "FILM (Style)", "185 MB",
+        AddonKit("film", "FILM (Style)", "178 MB",
                  "ultraeasy-upscaler-film-kit.zip", installed["film"]),
         AddonKit("npu", "NPU キット", "56 MB",
                  "ultraeasy-upscaler-npu-kit.zip", installed["npu"]),
-        AddonKit("adcsr_gpu", "AdcSR（GPU 用）", "1.8 GB",
+        AddonKit("adcsr_gpu", "AdcSR（GPU 用）", "1.7 GB",
                  "ultraeasy-upscaler-adcsr-kit.zip", installed["adcsr_gpu"]),
         AddonKit("adcsr_npu", "AdcSR（NPU 用）", "1.7 GB",
                  "ultraeasy-upscaler-npu-kit-adcsr.zip", installed["adcsr_npu"]),

@@ -25,7 +25,7 @@ class AddonKit:
 
     key: str
     name_key: str
-    size: str  # 訳さない（"185 MB" など）
+    size: str  # 訳さない（"178 MB" など）
     filename: str  # ダウンロードする zip 名
     installed: bool
 
@@ -67,7 +67,7 @@ def addon_kits() -> list[AddonKit]:
         AddonKit(
             key="film",
             name_key=N_("FILM (Style)"),
-            size="185 MB",
+            size="178 MB",
             filename="ultraeasy-upscaler-film-kit.zip",
             installed=film_kit_installed(),
         ),
@@ -81,7 +81,7 @@ def addon_kits() -> list[AddonKit]:
         AddonKit(
             key="adcsr_gpu",
             name_key=N_("AdcSR（GPU 用）"),
-            size="1.8 GB",
+            size="1.7 GB",
             filename="ultraeasy-upscaler-adcsr-kit.zip",
             installed=adcsr_gpu_installed(),
         ),

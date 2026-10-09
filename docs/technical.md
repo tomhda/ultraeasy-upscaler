@@ -55,7 +55,7 @@ Vulkan を選んだ場合だけ従来の Real-ESRGAN モデル一覧（2x/4x）�
 
 NPU の入力が短辺 480px 未満のときは GPU へ自動切替する。
 NPU 用モデルの変換は、詳細設定の「NPU の準備」でモデルごとに実行する。未変換のモデルを選んだまま
-「開始」や「試す」を押した場合は、処理を始めずに「NPU の準備」へ案内する（処理の途中で変換は始めない）。
+「開始」や「クイック確認」を押した場合は、処理を始めずに「NPU の準備」へ案内する（処理の途中で変換は始めない）。
 NPU 経路は GPU をほぼ占有しない（推論中の iGPU 3D エンジンは idle 水準、CPU 2〜7%）。
 
 ## モデルの実体
@@ -141,7 +141,10 @@ SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 �
 - 「アップスケーラーモデル」と「フレーム補間モデル」は独立して選べ、双方に「なし」がある（アップスケールのみ／補間のみ／両方）。
 - 両方を選んだ場合の順序は詳細設定「処理の順番」で選ぶ。既定は「アプコン→補間」（重いモデルの対象フレーム数を補間前に抑えられる）。高解像度出力でメモリが厳しい場合のみ「補間→アプコン」。
 - 出力は再生互換性を優先して H.264、元音声を保持する。最大出力サイズは `UEU_MAX_VIDEO_DIM`（既定 3840x2160）。
-- RIFE 補間が有効な動画は PNG フレーム経路を使う。補間なしの動画は rawvideo 3 スレッドパイプライン（ffmpeg デコード → AI 推論 → ffmpeg エンコード）で、PNG の中間書き出しを省略する。
+- フレーム補間は RIFE v4.6（NCNN/Vulkan）と FILM (Style)（Windows ML/DirectML、追加キット）。補間後の fps は既定で元の 2 倍。
+  FILM (Style) は中間時刻 0.5 のフレームを再帰的に作るので、元の 2・4・8 倍のみ。拡大と併用するときは、
+  拡大後の絵を渡すとメモリが足りなくなるため、「処理の順番」にかかわらず常に補間してから拡大する。
+- RIFE / FILM 補間が有効な動画は PNG フレーム経路を使う。補間なしの動画は rawvideo 3 スレッドパイプライン（ffmpeg デコード → AI 推論 → ffmpeg エンコード）で、PNG の中間書き出しを省略する。
 - SwinIR-M CUDA の動画は 150 フレーム単位で H.264 チャンクを確定し、中止・異常終了後に同じ入力と設定で再実行すると完了済みチャンクを飛ばして再開する（再開データは出力先の `.＜出力名＞.swinir-work-*`、完成後に自動削除）。RIFE との併用と HDR 動画には未対応。
 - AdcSR は静止画専用で、動画には使えない。HDR 動画（PQ/HLG）は未対応。
 - 「一時停止」は現在のジョブ完了後に停止する。実行中ジョブを今すぐ中止するには一覧の行の × を押す。
@@ -168,44 +171,57 @@ SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 �
 | `UEU_SWINIR_STARTUP_TIMEOUT` | `1800` 秒 | CUDA worker の起動待ち（30〜86400 秒） |
 | `UEU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100〜300 フレーム） |
 | `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264 出力の最大幅×高さ（例: `1920x1080`） |
+| `UEU_FILM_HELPER` | `vendor/winml-film/winml-film.exe`、次に `tools/winml-film/bin/Release/net*/win-x64/winml-film.exe` | FILM ヘルパーの明示指定 |
+| `UEU_FILM_MODEL` | `models/film/film_style_fp32.onnx` | FILM の ONNX の明示指定 |
+| `UEU_LANG` | Windows の表示言語 | 表示言語（`ja` / `en`）。コマンドラインは既定で `en` |
 
-## ポータブル版と NPU キットの作成
+## ポータブル版と追加キットの作成
 
 PowerShell 7（`pwsh`）で実行する。
 
 ```
 pwsh -File scripts\build_portable.ps1 -WithHelper
 pwsh -File scripts\build_npu_kit.ps1 -WithAdcSR
+pwsh -File scripts\build_film_kit.ps1
+pwsh -File scripts\build_adcsr_kit.ps1
 ```
 
 - `build_portable.ps1` は PyInstaller で `portable_dist/ultraeasy-upscaler/` と `ultraeasy-upscaler-portable-win64.zip` を作る。
   Python・ffmpeg・realesrgan-ncnn-vulkan・RIFE v4.6 を同梱し、`-WithHelper` で `vendor/winml-sr/` と GPU 用モデル（AdcSR を除く）も同梱する。
   同梱物のライセンス文書（`THIRD-PARTY-NOTICES.txt` ほか）も入れる。NPU 専用のファイルは入れない。
-  作成後に exe の自己テスト（同梱バイナリとモデルが exe の隣から見つかるか）を実行する。
+  画面用の `ultraeasy-upscaler.exe` とコマンドライン用の `ultraeasy-upscaler-cli.exe` を、同じ `_internal` を共有する形で作る
+  （定義は `ultraeasy-upscaler.spec`）。
+  作成後に exe の自己テスト（同梱バイナリとモデルが exe の隣から見つかるか）と、`ultraeasy-upscaler-cli.exe status` を実行する。
 - `build_npu_kit.ps1` は `tools/npu-serve/` と NPU 用モデルを `ultraeasy-upscaler-npu-kit.zip` にまとめる。
   `-WithAdcSR` で AdcSR の前半・後半とマニフェストを `ultraeasy-upscaler-npu-kit-adcsr.zip`（無圧縮）にまとめる。
-  どちらも exe のフォルダに上書きで展開する構造。
+- `build_film_kit.ps1` は `vendor/winml-film/` と `models/film/` を `ultraeasy-upscaler-film-kit.zip` にまとめる。
+  FILM の ONNX の作り方は [scripts/film/README.md](../scripts/film/README.md)。
+- `build_adcsr_kit.ps1` は GPU 用の AdcSR モデルを `ultraeasy-upscaler-adcsr-kit.zip` にまとめる。
+- どのキットも exe のフォルダに上書きで展開する構造。
 
 ## アーキテクチャ
 
 - **GUI**: PySide6。`app/gui`
-  - `main_window.py` 3 列の画面、画像用・動画用・個別の設定、やり直し
-  - `queue_view.py` メディアの一覧、`compare_view.py` 左右比較と試し、`settings_drawer.py` 詳細設定と「NPU の準備」
+  - `main_window.py` ヘッダーの一括設定と 3 列の画面、ファイルごとの個別設定、やり直し
+  - `queue_view.py` メディアの一覧、`compare_view.py` 左右比較とクイック確認、`settings_drawer.py` 詳細設定・「追加キット」・「NPU の準備」
   - `theme.py` 配色（Windows のライト/ダークとアクセント色に連動）
+- **コマンドライン**: `app/cli.py`（Qt に依存しない。コアを呼ぶだけ）。使い方は [AGENTS.md](../AGENTS.md)
 - **コア（GUI 非依存・単体テスト可）**: `app/core`
+  - `catalog.py` モデルの表示名・説明・実行先ごとの一覧（画面とコマンドラインで共有）
   - `binaries.py` 外部バイナリ / モデル探索
   - `media.py` 種別判定・ffprobe メタ取得
   - `upscaler.py` 常駐ヘルパーと realesrgan-ncnn-vulkan の統合ラッパ（画像 / フォルダ）
   - `helper_backend.py` / `serve_client.py` DirectML / NPU / CUDA ヘルパーのモデル解決・常駐セッション・バイナリプロトコル
   - `video.py` ffmpeg 抽出 / 再結合 / HW エンコード、rawvideo パイプライン、SwinIR CUDA のチャンク再開
-  - `interpolator.py` RIFE NCNN/Vulkan フレーム補間
+  - `interpolator.py` RIFE NCNN/Vulkan フレーム補間と FILM への振り分け、`film.py` FILM ヘルパーの実行
+  - `addon_kits.py` 追加キットの導入判定とダウンロード先
   - `engine.py` ジョブのオーケストレーション、`jobs.py` / `settings.py` データモデル
-  - `trial.py` 試し（コマの取り出し・切り出し・本処理と同じ経路での 1 枚の拡大）
+  - `trial.py` クイック確認（コマの取り出し・切り出し・本処理と同じ経路での 1 枚の拡大）
   - `npu_prepare.py` NPU キットの有無、モデルごとの変換状態、変換の実行
   - `npu_backend.py` / `npu_worker.py` 旧 NPU API（スクリプト互換のため残置、GUI では使用しない）
 - **ヘルパー（常駐プロセス）**: `tools/winml-sr/`（C#、DirectML。クロスフェード合成と AdcSR の格子補正を含む）、
   `tools/npu-serve/`（Python、VitisAI EP。AdcSR は `npu_worker.py` × 2 と `npu_twostage.py` の 2 プロセス構成）、
-  `tools/swinir/`（Python、PyTorch CUDA）
+  `tools/swinir/`（Python、PyTorch CUDA）、`tools/winml-film/`（C#、DirectML。FILM の補間。常駐せず、フレームのフォルダ単位で起動）
 
 ## 開発
 

@@ -536,3 +536,36 @@ def test_frozen_cli_resolves_next_to_cli_exe(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "executable", str(exe))
     assert settings._app_root() == tmp_path.resolve()
     assert binaries.repo_root() == tmp_path.resolve()
+
+
+def test_run_rejects_model_that_is_not_installed(monkeypatch, tmp_path, capsys):
+    """一覧にあっても資材が無いモデルは、処理の前に kit_missing で止める。"""
+    from app import cli
+
+    src = _make_png(tmp_path / "a.png")
+    monkeypatch.setattr(cli, "_model_available", lambda backend, key: False)
+    code, out, _err = _run(
+        ["run", str(src), "--model", "AdcSR", "--dry-run", "--json"], capsys)
+    assert code == 2
+    error = _json_out(out)["error"]
+    assert error["code"] == "kit_missing"
+    assert "models --json" in error["fix"]
+
+
+def test_run_result_has_source_and_null_scale_without_model(
+        monkeypatch, tmp_path, capsys):
+    """結果だけで 4 倍になったかを確かめられる。拡大しないときの scale は null。"""
+    _fail_copy_upscale(monkeypatch)
+    src = _make_png(tmp_path / "a.png", size=(64, 48))
+    code, out, _err = _run(["run", str(src), "--dry-run", "--json"], capsys)
+    assert code == 0
+    result = _json_out(out)["results"][0]
+    assert result["source"] == {"width": 64, "height": 48}
+    assert result["settings"]["scale"] == 4
+
+    code, out, _err = _run(
+        ["run", str(src), "--model", "none", "--dry-run", "--json"], capsys)
+    # 画像で拡大も補間もしない指定の扱いは既存の検証に任せ、scale の表記だけを見る
+    payload = _json_out(out)
+    if payload.get("results"):
+        assert payload["results"][0]["settings"]["scale"] is None
