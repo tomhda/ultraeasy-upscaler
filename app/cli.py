@@ -198,7 +198,7 @@ def build_parser(argv: list[str] | None = None) -> CliParser:
         epilog=(
             "Examples:\n"
             f"  {PROG} run a.png --model animevideov3 --json\n"
-            f"  {PROG} run clip.mp4 --interpolation rife-v4.6 "
+            f"  {PROG} run clip.mp4 --model none --interpolation rife-v4.6 "
             "--factor 4 --out-dir out"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -207,7 +207,7 @@ def build_parser(argv: list[str] | None = None) -> CliParser:
     p.add_argument(
         "--model", default=None,
         help="Upscaling model key (see models). 'none' skips upscaling. "
-        "Default: first model of the backend.",
+        "Default: the backend's default model, which upscales 4x.",
     )
     p.add_argument(
         "--interpolation", default="none",
@@ -460,6 +460,21 @@ def _check_model_key(backend: str, key: str | None) -> str | None:
     )
 
 
+def _check_model_installed(backend: str, model: str | None) -> None:
+    """A listed model whose files are missing must fail before anything runs."""
+    if model is None or backend == "vulkan":
+        return
+    if _model_available(backend, model):
+        return
+    raise UsageError(
+        CODE_KIT_MISSING,
+        f"Model {model} is not installed.",
+        "Choose a model with \"available\": true in: "
+        f"{PROG} models --json. To add this one, see \"kits\" in: "
+        f"{PROG} status --json, and the add-on kits in the README.",
+    )
+
+
 def _default_model_key(backend: str) -> str | None:
     """First model of the backend (same default as the GUI)."""
     from app.core.settings import DEFAULT_HELPER_MODEL, DEFAULT_MODEL
@@ -584,6 +599,10 @@ def _cmd_status(args: argparse.Namespace) -> int:
         ffmpeg_state = {"found": True, "path": ffmpeg}
     except Exception:
         ffmpeg_state = {"found": False, "path": None}
+    try:
+        ffprobe_state = {"found": True, "path": binaries.ffprobe_exe()}
+    except Exception:
+        ffprobe_state = {"found": False, "path": None}
     npu_ok, npu_reason = _npu_state()
     backends: dict = {
         "gpu": {"available": _gpu_available()},
@@ -601,6 +620,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
         "version": __version__,
         "app_root": str(_app_root()),
         "ffmpeg": ffmpeg_state,
+        "ffprobe": ffprobe_state,
         "backends": backends,
         "kits": kits,
     }
@@ -947,13 +967,30 @@ def _plan_output(input_path: Path, kind: str, settings,
     return _unique_planned(base / name, settings.overwrite, reserved)
 
 
+def _source_info(path: Path, kind: str) -> dict | None:
+    """Input size (and fps/frames for videos), so a result can be checked by itself."""
+    if kind not in ("image", "video"):
+        return None
+    try:
+        from app.core import media
+
+        probed = media.probe(str(path))
+    except Exception:
+        return None
+    info: dict = {"width": probed.width or None, "height": probed.height or None}
+    if kind == "video":
+        info["fps"] = probed.fps
+        info["frames"] = probed.frame_count
+    return info
+
+
 def _result_settings(backend: str, model: str | None, scale: int,
                      interpolation: str | None, factor: int | None,
                      fps: float | None) -> dict:
     return {
         "backend": backend,
         "model": model,
-        "scale": scale,
+        "scale": scale if model is not None else None,
         "interpolation": interpolation,
         "factor": factor,
         "fps": fps,
@@ -979,9 +1016,10 @@ def _validate_run(args: argparse.Namespace):
         raise UsageError(
             CODE_MODEL_NOT_FOR_VIDEO,
             "AdcSR is for still images only. It cannot be used for videos.",
-            "Choose another model for videos. Check available models with: "
-            f"{PROG} models --json",
+            "Choose a model whose \"video\" is true in: "
+            f"{PROG} models --json (for example animevideov3 or 4xNomosUni).",
         )
+    _check_model_installed(backend, model)
     if interpolation is not None:
         _check_interpolation_kit(interpolation)
     _check_npu(backend, model, kinds, paths)
@@ -1039,6 +1077,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                 "kind": item["kind"],
                 "status": "planned",
                 "output": str(item["planned"]),
+                "source": _source_info(item["path"], item["kind"]),
                 "settings": item["result_settings"],
                 **({"note": item["note"]} if item["note"] else {}),
             }
@@ -1161,6 +1200,7 @@ def _done_result(path: Path, kind: str, item: dict, out: Path,
         "status": "done",
         "output": str(Path(out).resolve()),
         "seconds": seconds,
+        "source": _source_info(path, kind),
         "settings": item["result_settings"],
         "width": None,
         "height": None,
@@ -1218,6 +1258,7 @@ def _cmd_quick_check(args: argparse.Namespace) -> int:
         backend, args.model
         if args.model is not None else _default_model_key(backend))
     _check_scale(backend, model, int(args.scale))
+    _check_model_installed(backend, model)
     raw = args.input
     path = Path(raw)
     if not path.exists():
