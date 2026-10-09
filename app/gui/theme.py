@@ -152,18 +152,6 @@ QFrame#header {{
     background-color: transparent;
     min-height: 44px;
 }}
-QLabel#appIcon {{
-    font-family: "Segoe Fluent Icons";
-    font-size: 22px;
-    min-width: 32px;
-    max-width: 32px;
-    min-height: 32px;
-    max-height: 32px;
-    color: {p.accent_text};
-    font-weight: 800;
-    border: 2px solid {p.accent_text};
-    border-radius: 8px;
-}}
 QLabel#appTitle {{
     color: {p.text};
     font-size: 20px;

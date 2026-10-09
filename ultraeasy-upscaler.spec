@@ -14,13 +14,18 @@ REPO = SPECPATH  # type: ignore[name-defined]  # folder holding this spec
 ENTRY_GUI = os.path.join(REPO, "app", "main.py")
 ENTRY_CLI = os.path.join(REPO, "app", "cli_main.py")
 
+ICON = os.path.join(REPO, "app", "assets", "app.ico")
+# ウィンドウとヘッダーに出すロゴは、実行時に _internal/app/assets から読む
+ASSETS = [(os.path.join(REPO, "app", "assets", name), os.path.join("app", "assets"))
+          for name in ("app.ico", "logo.png")]
+
 block_cipher = None
 
 a_gui = Analysis(  # noqa: F821
     [ENTRY_GUI],
     pathex=[REPO],
     binaries=[],
-    datas=[],
+    datas=ASSETS,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -54,6 +59,7 @@ exe_gui = EXE(  # noqa: F821
     strip=False,
     upx=True,
     console=False,
+    icon=ICON,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -73,6 +79,7 @@ exe_cli = EXE(  # noqa: F821
     strip=False,
     upx=True,
     console=True,
+    icon=ICON,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

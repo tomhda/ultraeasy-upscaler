@@ -17,7 +17,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QThread
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon
 from PySide6.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
 from PySide6.QtWidgets import (
     QApplication,
@@ -54,7 +54,7 @@ from app.i18n import N_, t
 
 from .compare_view import StatusLabel, TrialPanel
 from .drop_zone import DropZone
-from .icons import Icon, apply_icon_font, make_icon
+from .icons import Icon, asset_path, logo_pixmap, make_icon
 from .queue_view import QueueView
 from .settings_drawer import _BACKEND_OPTIONS, SettingsDrawer
 from . import theme
@@ -255,10 +255,10 @@ class MainWindow(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(12)
 
-        app_icon = QLabel(Icon.UPLOAD)
-        app_icon.setObjectName("appIcon")
-        apply_icon_font(app_icon, 22)
-        app_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        app_icon = QLabel()
+        app_icon.setObjectName("appLogo")
+        app_icon.setFixedSize(34, 34)
+        app_icon.setPixmap(logo_pixmap(34, self.devicePixelRatioF()))
         row.addWidget(app_icon)
 
         title = QLabel("ultraeasy-upscaler")
@@ -2057,6 +2057,7 @@ class MainWindow(QWidget):
 def run(argv: list[str]) -> int:
     """GUI エントリポイント。app/main.py から呼ばれる。"""
     app = QApplication.instance() or QApplication(argv)
+    app.setWindowIcon(QIcon(str(asset_path("app.ico"))))
     apply_theme(app)
     win = MainWindow()
     win.show()

@@ -1,6 +1,9 @@
 """Windows icon-font helpers for the GUI."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QLabel, QPushButton
@@ -23,6 +26,25 @@ class Icon:
     PROCESSOR = "\uf158"
     RETRY = "\ue72c"
     UPLOAD = "\ue74a"
+
+
+def asset_path(name: str) -> Path:
+    """app/assets の中のファイル（配布版では exe の _internal の中）。"""
+    base = getattr(sys, "_MEIPASS", None)
+    root = Path(base) / "app" if base else Path(__file__).resolve().parents[1]
+    return root / "assets" / name
+
+
+def logo_pixmap(size: int, ratio: float = 1.0) -> QPixmap:
+    """ロゴを size（論理ピクセル）で返す。高 DPI でもぼけないよう実ピクセルで縮める。"""
+    source = QPixmap(str(asset_path("logo.png")))
+    px = max(1, round(size * ratio))
+    scaled = source.scaled(
+        px, px, Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    scaled.setDevicePixelRatio(ratio)
+    return scaled
 
 
 def icon_font(size: int, weight: int = QFont.Weight.Normal) -> QFont:
