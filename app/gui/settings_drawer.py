@@ -185,7 +185,9 @@ class ClearCheckBox(QCheckBox):
 
     def sizeHint(self) -> QSize:  # noqa: N802
         hint = super().sizeHint()
-        return QSize(max(hint.width(), 220), max(hint.height(), 34))
+        # 文字は自前で x=34 から描くので、幅も同じ前提で測る（長い英語の名前が切れないように）
+        text_width = 34 + self.fontMetrics().horizontalAdvance(self.text()) + 8
+        return QSize(max(hint.width(), text_width, 220), max(hint.height(), 34))
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         del event
