@@ -47,6 +47,6 @@ fp32 の export 後に、正規化の 4D 化 → bf16cast → 前半/後半へ�
 切断後は前半・後半の ONNX と `adcsr_npu_manifest.json` を models ディレクトリに置く。
 初回起動時に前半・後半を順に VAIML コンパイルする（この検証機で前半約 93 分 + 後半約 30 分。次回はキャッシュを利用）。
 2 プロセス構成は VitisAI EP の不具合（同一プロセスで後半を実行すると前半の以後の出力が NaN になる。[amd/RyzenAI-SW#402](https://github.com/amd/RyzenAI-SW/issues/402)）の回避で、
-SDK 更新後は起動時のセルフテストで検知する。`UEU_ADCSR_NPU2=0` で GPU 実行に戻る。
+SDK 更新後は起動時のセルフテストで検知する。`TOGU_ADCSR_NPU2=0` で GPU 実行に戻る。
 
 NPU 側の技術的な背景は [ryzen-ai-npu-super-resolution-notes](https://github.com/tomhda/ryzen-ai-npu-super-resolution-notes) を参照。

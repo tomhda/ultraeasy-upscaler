@@ -45,7 +45,7 @@ foreach ($doc in @($usageJa, $usageEn)) {
     }
 }
 
-$stage = Join-Path ([IO.Path]::GetTempPath()) "ueu-film-kit"
+$stage = Join-Path ([IO.Path]::GetTempPath()) "togu-film-kit"
 if (Test-Path -LiteralPath $stage) {
     Remove-Item -LiteralPath $stage -Recurse -Force
 }

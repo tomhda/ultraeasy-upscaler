@@ -101,7 +101,7 @@ def _run_worker(args: list[str], progress: ProgressCb, cancel=None) -> None:
             if not line:
                 continue
             lines.append(line)
-            if line.startswith("UEU_PROGRESS\t"):
+            if line.startswith("TOGU_PROGRESS\t"):
                 parts = line.split("\t", 2)
                 if len(parts) == 3:
                     try:

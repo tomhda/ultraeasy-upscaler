@@ -128,7 +128,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--lang", choices=("ja", "en"), default=None,
-        help="Message language. Default: UEU_LANG or English.",
+        help="Message language. Default: TOGU_LANG or English.",
     )
 
 
@@ -1310,7 +1310,7 @@ def _cmd_quick_check(args: argparse.Namespace) -> int:
         overwrite=bool(args.overwrite),
     )
 
-    workdir = Path(tempfile.mkdtemp(prefix="ueu-quick-"))
+    workdir = Path(tempfile.mkdtemp(prefix="togu-quick-"))
     if kind == JobKind.VIDEO:
         frame = workdir / "source_frame.png"
         source_frame = str(frame)

@@ -620,7 +620,7 @@ EN: dict[str, str | None] = {
     '対応モデルがありません: backend={backend}, model={model}, tile={tile}': 'No matching model: backend={backend}, model={model}, tile={tile}',
     # モデル解決の内部エラー文。{filename}=ファイル名、{dirs}=探索先一覧
     'AIモデルが見つかりません: {filename}\n探索先: {dirs}': 'Model file not found: {filename}\nLooked in: {dirs}',
-    # ヘルパー指定の内部エラー文。{env}=環境変数名（例: UEU_WINML_HELPER）、{path}=指定場所
+    # ヘルパー指定の内部エラー文。{env}=環境変数名（例: TOGU_WINML_HELPER）、{path}=指定場所
     '{env} のファイルが見つかりません: {path}': 'The file set in {env} was not found: {path}',
     # GPUヘルパー不在時。{env}=環境変数名
     'winml-sr.exeが見つかりません。tools/winml-srをビルドするか、{env}を指定してください。': 'winml-sr.exe was not found. Build tools/winml-sr, or set {env}.',

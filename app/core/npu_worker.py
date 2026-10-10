@@ -15,7 +15,7 @@ from . import binaries, media
 
 def _emit_progress(fraction: float, message: str) -> None:
     fraction = max(0.0, min(1.0, fraction))
-    print(f"UEU_PROGRESS\t{fraction:.6f}\t{message}", flush=True)
+    print(f"TOGU_PROGRESS\t{fraction:.6f}\t{message}", flush=True)
 
 
 def _write_image(path: Path, img_bgr) -> None:
@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _run_folder(input_path, output_path, args.image_format, args.model)
     except Exception as exc:
-        print(f"UEU_ERROR\t{exc}", file=sys.stderr, flush=True)
+        print(f"TOGU_ERROR\t{exc}", file=sys.stderr, flush=True)
         return 1
     return 0
 

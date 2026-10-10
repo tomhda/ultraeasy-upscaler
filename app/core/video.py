@@ -51,7 +51,7 @@ _HEVC_CANDIDATES = ["hevc_amf", "hevc_nvenc", "hevc_qsv"]
 # H.264 の実用上限。GPUエンコーダだけでなく libx264 等にも同じガードを
 # 適用し、入力経路による挙動差をなくす。
 DEFAULT_MAX_VIDEO_DIM = (3840, 2160)
-MAX_VIDEO_DIM_ENV = "UEU_MAX_VIDEO_DIM"
+MAX_VIDEO_DIM_ENV = "TOGU_MAX_VIDEO_DIM"
 
 _VIDEO_DIM_SEPARATOR_RE = re.compile(r"\s*[xX×,:]\s*|\s+")
 _VIDEO_COLOR_FILTER = (
@@ -212,7 +212,7 @@ def _encoder_works(encoder: str) -> bool:
       - AMF は `-f null` 出力では Init に失敗するため、実コンテナ（mp4）へ書く。
       - 解像度が小さすぎると失敗する HW があるため 256x256 を使う。
     """
-    tmp = Path(tempfile.gettempdir()) / f"ueu_enc_probe_{encoder}.mp4"
+    tmp = Path(tempfile.gettempdir()) / f"togu_enc_probe_{encoder}.mp4"
     cmd = [
         binaries.ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
         "-f", "lavfi", "-i", "testsrc=size=256x256:rate=10:duration=0.3",
@@ -555,9 +555,9 @@ def reassemble(frames_dir: str, audio_source: str, out_path: str, fps: float,
         progress(1.0, t("再結合完了"))
 
 
-SWINIR_PYTHON_ENV = "UEU_SWINIR_PYTHON"
-SWINIR_MODEL_ENV = "UEU_SWINIR_MODEL"
-SWINIR_CHUNK_FRAMES_ENV = "UEU_SWINIR_CHUNK_FRAMES"
+SWINIR_PYTHON_ENV = "TOGU_SWINIR_PYTHON"
+SWINIR_MODEL_ENV = "TOGU_SWINIR_MODEL"
+SWINIR_CHUNK_FRAMES_ENV = "TOGU_SWINIR_CHUNK_FRAMES"
 SWINIR_DEFAULT_CHUNK_FRAMES = 150
 SWINIR_MODEL_NAME = "003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth"
 
@@ -875,7 +875,7 @@ def _swinir_run_chunk(
         encoder_drain = threading.Thread(
             target=_drain_binary_lines,
             args=(encoder.stderr, encoder_stderr),
-            name="ueu-swinir-encode-stderr",
+            name="togu-swinir-encode-stderr",
             daemon=True,
         )
         encoder_drain.start()
@@ -1070,7 +1070,7 @@ def upscale_video_swinir_chunked(
                 decoder_drain = threading.Thread(
                     target=_drain_binary_lines,
                     args=(decoder.stderr, decoder_stderr),
-                    name="ueu-swinir-decode-stderr",
+                    name="togu-swinir-decode-stderr",
                     daemon=True,
                 )
                 decoder_drain.start()
@@ -1315,10 +1315,10 @@ def upscale_video_piped(
         assert encoder_proc.stdin is not None and encoder_proc.stderr is not None
 
         decoder_drain = threading.Thread(
-            target=_drain, args=(decoder.stderr, decoder_stderr), name="ueu-decode-stderr", daemon=True
+            target=_drain, args=(decoder.stderr, decoder_stderr), name="togu-decode-stderr", daemon=True
         )
         encoder_drain = threading.Thread(
-            target=_drain, args=(encoder_proc.stderr, encoder_stderr), name="ueu-encode-stderr", daemon=True
+            target=_drain, args=(encoder_proc.stderr, encoder_stderr), name="togu-encode-stderr", daemon=True
         )
         decoder_drain.start()
         encoder_drain.start()
@@ -1385,9 +1385,9 @@ def upscale_video_piped(
                 _fail("encoder", exc)
 
         threads = [
-            threading.Thread(target=_decode, name="ueu-video-read", daemon=True),
-            threading.Thread(target=_infer, name="ueu-video-ai", daemon=True),
-            threading.Thread(target=_encode, name="ueu-video-write", daemon=True),
+            threading.Thread(target=_decode, name="togu-video-read", daemon=True),
+            threading.Thread(target=_infer, name="togu-video-ai", daemon=True),
+            threading.Thread(target=_encode, name="togu-video-write", daemon=True),
         ]
         for thread in threads:
             thread.start()

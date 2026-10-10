@@ -18,7 +18,7 @@ from .settings import UpscaleSettings
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 # 作業フォルダ名の接頭辞（仕様どおり）。
-WORK_DIR_PREFIX = "ueu-trial-"
+WORK_DIR_PREFIX = "togu-trial-"
 
 
 def extract_frame(video_path: str, seconds: float, out_png: str) -> None:

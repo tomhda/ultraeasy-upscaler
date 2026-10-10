@@ -53,8 +53,8 @@ def npu_models_dir() -> Path:
 
 
 def npu_cache_dir() -> Path:
-    """VitisAIキャッシュの場所を返す（UEU_NPU_CACHEで上書き可能）。"""
-    override = os.environ.get("UEU_NPU_CACHE")
+    """VitisAIキャッシュの場所を返す（TOGU_NPU_CACHEで上書き可能）。"""
+    override = os.environ.get("TOGU_NPU_CACHE")
     if override:
         return Path(override).expanduser()
     return repo_root() / "vendor" / "amd-npu-1.8"
@@ -158,7 +158,7 @@ FILM_MODEL = "film-style"
 
 def film_helper_exe() -> str:
     """FILM/Windows ML 補間ヘルパーを探す（起動はしない）。"""
-    override = os.environ.get("UEU_FILM_HELPER")
+    override = os.environ.get("TOGU_FILM_HELPER")
     if override:
         candidate = Path(override).expanduser()
         if candidate.is_file():
@@ -181,7 +181,7 @@ def film_helper_exe() -> str:
 
 def film_model_path() -> Path:
     """配布版 ONNX または明示指定された FILM モデルを返す（起動はしない）。"""
-    override = os.environ.get("UEU_FILM_MODEL")
+    override = os.environ.get("TOGU_FILM_MODEL")
     path = (Path(override).expanduser() if override else
             repo_root() / "models" / "film" / "film_style_fp32.onnx")
     if not path.is_file():

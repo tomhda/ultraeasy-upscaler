@@ -62,16 +62,16 @@ def test_language_defaults_to_ja():
 # --- 起動時の決め方（環境変数 → 保存設定 → Windows 表示言語） ---
 
 def test_resolve_prefers_env(monkeypatch):
-    monkeypatch.setenv("UEU_LANG", "en")
+    monkeypatch.setenv("TOGU_LANG", "en")
     assert i18n.resolve_startup_language() == "en"
-    monkeypatch.setenv("UEU_LANG", "ja")
+    monkeypatch.setenv("TOGU_LANG", "ja")
     assert i18n.resolve_startup_language() == "ja"
 
 
 def test_resolve_prefers_saved_over_windows(monkeypatch):
     from app.core import user_settings
 
-    monkeypatch.delenv("UEU_LANG", raising=False)
+    monkeypatch.delenv("TOGU_LANG", raising=False)
     monkeypatch.setattr(user_settings, "load_language", lambda: "en")
     monkeypatch.setattr(i18n, "_windows_prefers_japanese", lambda: True)
     assert i18n.resolve_startup_language() == "en"
@@ -80,7 +80,7 @@ def test_resolve_prefers_saved_over_windows(monkeypatch):
 def test_resolve_falls_back_to_windows(monkeypatch):
     from app.core import user_settings
 
-    monkeypatch.delenv("UEU_LANG", raising=False)
+    monkeypatch.delenv("TOGU_LANG", raising=False)
     monkeypatch.setattr(user_settings, "load_language", lambda: "auto")
     monkeypatch.setattr(i18n, "_windows_prefers_japanese", lambda: True)
     assert i18n.resolve_startup_language() == "ja"
@@ -91,7 +91,7 @@ def test_resolve_falls_back_to_windows(monkeypatch):
 def test_resolve_ignores_broken_settings(monkeypatch):
     from app.core import user_settings
 
-    monkeypatch.delenv("UEU_LANG", raising=False)
+    monkeypatch.delenv("TOGU_LANG", raising=False)
 
     def _boom():
         raise OSError("disk gone")
@@ -102,7 +102,7 @@ def test_resolve_ignores_broken_settings(monkeypatch):
 
 
 def test_init_language_pins_result(monkeypatch):
-    monkeypatch.setenv("UEU_LANG", "en")
+    monkeypatch.setenv("TOGU_LANG", "en")
     assert i18n.init_language() == "en"
     assert language() == "en"
 
@@ -146,7 +146,7 @@ def test_settings_uses_env_dir(monkeypatch, tmp_path):
     from app.core import user_settings
 
     other = tmp_path / "other-place"
-    monkeypatch.setenv("UEU_SETTINGS_DIR", str(other))
+    monkeypatch.setenv("TOGU_SETTINGS_DIR", str(other))
     user_settings.save_language("en")
     assert (other / "settings.json").is_file()
     assert user_settings.load_language() == "en"
@@ -158,7 +158,7 @@ def test_settings_migrates_from_legacy_dir(monkeypatch, tmp_path):
     """古いフォルダだけあるときは古いほうを読み、保存は新しいほうへ。"""
     from app.core import user_settings
 
-    monkeypatch.delenv("UEU_SETTINGS_DIR", raising=False)
+    monkeypatch.delenv("TOGU_SETTINGS_DIR", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     old = tmp_path / "local" / "ultraeasy-upscaler"
     new = tmp_path / "local" / "togu-scaler"
@@ -177,7 +177,7 @@ def test_settings_prefers_new_dir(monkeypatch, tmp_path):
     """両方あるときは新しいほうを読む。"""
     from app.core import user_settings
 
-    monkeypatch.delenv("UEU_SETTINGS_DIR", raising=False)
+    monkeypatch.delenv("TOGU_SETTINGS_DIR", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     old = tmp_path / "local" / "ultraeasy-upscaler"
     new = tmp_path / "local" / "togu-scaler"
@@ -193,7 +193,7 @@ def test_settings_neither_dir_is_auto(monkeypatch, tmp_path):
     """どちらも無いときは "auto"。"""
     from app.core import user_settings
 
-    monkeypatch.delenv("UEU_SETTINGS_DIR", raising=False)
+    monkeypatch.delenv("TOGU_SETTINGS_DIR", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
 
     assert user_settings.load_language() == "auto"

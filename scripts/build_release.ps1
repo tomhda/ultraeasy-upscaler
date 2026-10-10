@@ -129,7 +129,7 @@ try {
     # --- NOTICE 文の雛形 ---
     $noticeGpuModels = @'
 NOTICE-models-gpu-fp32.txt — GPU（DirectML）用 fp32 ONNX モデル
-展開先: models/ai/（UEU_MODELS_DIR 未設定時の既定探索先）
+展開先: models/ai/（TOGU_MODELS_DIR 未設定時の既定探索先）
 
 | zip 内ファイル | GUI のモデルキー | 実体・帰属 | ライセンス（同梱ファイル） |
 |---|---|---|---|
@@ -145,7 +145,7 @@ NOTICE-models-gpu-fp32.txt — GPU（DirectML）用 fp32 ONNX モデル
 
     $noticeAdcsrGpu = @'
 NOTICE-models-adcsr-gpu-fp32.txt — AdcSR GPU（DirectML）用 fp32 ONNX モデル
-展開先: models/ai/（UEU_MODELS_DIR 未設定時の既定探索先）
+展開先: models/ai/（TOGU_MODELS_DIR 未設定時の既定探索先）
 
 | zip 内ファイル | GUI のモデルキー | 実体・帰属 | ライセンス（同梱ファイル） |
 |---|---|---|---|
@@ -162,7 +162,7 @@ LICENSE-OpenRAIL-M-CompVis-SD1.txt に同梱する。使用制限の要点:
 
     $noticeNpuModels = @'
 NOTICE-models-npu-bf16.txt — NPU（Ryzen AI VitisAI EP）用 bf16cast ONNX モデル
-展開先: models/ai/（UEU_MODELS_DIR 未設定時の既定探索先）
+展開先: models/ai/（TOGU_MODELS_DIR 未設定時の既定探索先）
 初回起動時に VAIML コンパイルが必要（次回以降はキャッシュを利用）。
 `*_body_*` は tail-cut 用の body（末尾の DepthToSpace 以降を CPU で実行。
 `*.tail.json` と組で使う。全体モデルも残すのですべて単体で動作する）。
@@ -181,7 +181,7 @@ NOTICE-models-npu-bf16.txt — NPU（Ryzen AI VitisAI EP）用 bf16cast ONNX モ
 
     $noticeAdcsrNpu = @'
 NOTICE-models-adcsr-npu-bf16.txt — AdcSR NPU（2 段モード）用 bf16cast ONNX モデル
-展開先: models/ai/（UEU_MODELS_DIR 未設定時の既定探索先）
+展開先: models/ai/（TOGU_MODELS_DIR 未設定時の既定探索先）
 前半（UNet）・後半（VAE デコーダ）・adcsr_npu_manifest.json の 3 点がそろった
 場合だけ NPU 2 段モードで実行する。初回起動時に前半・後半を順に VAIML
 コンパイルする（次回以降はキャッシュを利用）。
@@ -198,7 +198,7 @@ LICENSE-OpenRAIL-M-CompVis-SD1.txt に同梱する。再配布時は同じ使用
 
     $noticeWinml = @'
 NOTICE-winml-sr.txt — ビルド済み DirectML ヘルパー winml-sr
-展開先: vendor/winml-sr/（UEU_WINML_HELPER 未設定時の既定探索先）
+展開先: vendor/winml-sr/（TOGU_WINML_HELPER 未設定時の既定探索先）
 
 内容: tools/winml-sr の Release ビルド一式（winml-sr.exe、依存 DLL、
 seam_templates/ の AdcSR 格子補正テンプレート）。

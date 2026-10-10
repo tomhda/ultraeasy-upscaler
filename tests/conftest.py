@@ -20,8 +20,8 @@ def _fix_display_language_ja(monkeypatch, tmp_path):
     """
     from app import i18n
 
-    monkeypatch.setenv("UEU_LANG", "ja")
-    monkeypatch.setenv("UEU_SETTINGS_DIR", str(tmp_path / "ueu-settings"))
+    monkeypatch.setenv("TOGU_LANG", "ja")
+    monkeypatch.setenv("TOGU_SETTINGS_DIR", str(tmp_path / "togu-settings"))
     monkeypatch.setattr(i18n, "_LANG", "ja", raising=False)
 
 

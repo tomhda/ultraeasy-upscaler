@@ -36,7 +36,7 @@ def _progress(label: str):
 
 def main() -> int:
     vendor = binaries.realesrgan_dir()
-    out_root = Path(tempfile.mkdtemp(prefix="ueu_e2e_"))
+    out_root = Path(tempfile.mkdtemp(prefix="togu_e2e_"))
     print("出力先:", out_root)
 
     # --- 画像 E2E: input.jpg(220) を 4x → 880 ---

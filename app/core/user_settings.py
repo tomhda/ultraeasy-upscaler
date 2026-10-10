@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.i18n import N_
 
-SETTINGS_DIR_ENV = "UEU_SETTINGS_DIR"
+SETTINGS_DIR_ENV = "TOGU_SETTINGS_DIR"
 SETTINGS_FILENAME = "settings.json"
 
 AUTO = "auto"
@@ -56,7 +56,7 @@ def _old_settings_dir() -> Path:
 
 
 def settings_dir() -> Path:
-    """設定フォルダ。UEU_SETTINGS_DIR があればそちらを使う（テスト用）。"""
+    """設定フォルダ。TOGU_SETTINGS_DIR があればそちらを使う（テスト用）。"""
     override = os.environ.get(SETTINGS_DIR_ENV)
     if override:
         return Path(override).expanduser()
@@ -71,7 +71,7 @@ def settings_path() -> Path:
 def _effective_path() -> Path:
     """読み込む settings.json の場所。
 
-    UEU_SETTINGS_DIR があるときはそのフォルダだけを使う（引き継ぎはしない）。
+    TOGU_SETTINGS_DIR があるときはそのフォルダだけを使う（引き継ぎはしない）。
     そうでなく、新しいフォルダに settings.json が無く古いフォルダにあるときは
     古いほうを読む。保存は常に settings_path() へ。
     """

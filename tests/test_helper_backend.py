@@ -342,7 +342,7 @@ def _stage_two_stage_files(monkeypatch, tmp_path):
     (tmp_path / "adcsr_nchw_128x128_fp32.onnx").write_bytes(b"gpu-model")
     monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(tmp_path))
     monkeypatch.setattr(helper_backend, "npu_cache_dir", lambda: tmp_path)
-    monkeypatch.delenv("UEU_ADCSR_NPU2", raising=False)
+    monkeypatch.delenv("TOGU_ADCSR_NPU2", raising=False)
     return front, back
 
 
@@ -359,7 +359,7 @@ def test_npu_two_stage_settings_tables() -> None:
     }
     assert HELPER_MODEL_NPU_BACK[HELPER_MODEL_ADCSR] == "adcsr_back_nchw_128x128_bf16cast.onnx"
     assert ADCSR_NPU_MANIFEST == "adcsr_npu_manifest.json"
-    assert ADCSR_NPU2_ENV == "UEU_ADCSR_NPU2"
+    assert ADCSR_NPU2_ENV == "TOGU_ADCSR_NPU2"
 
 
 def test_adcsr_npu_two_stage_spec_stays_npu(monkeypatch, tmp_path) -> None:
@@ -374,10 +374,10 @@ def test_adcsr_npu_two_stage_spec_stays_npu(monkeypatch, tmp_path) -> None:
 def test_adcsr_npu_two_stage_disabled_or_missing_falls_back(monkeypatch, tmp_path) -> None:
     _stage_two_stage_files(monkeypatch, tmp_path)
     settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=HELPER_MODEL_ADCSR)
-    monkeypatch.setenv("UEU_ADCSR_NPU2", "0")
+    monkeypatch.setenv("TOGU_ADCSR_NPU2", "0")
     backend, _tile, _path = helper_backend._session_spec(settings, 1280, 534)
     assert backend == UpscaleBackend.WINML_GPU
-    monkeypatch.delenv("UEU_ADCSR_NPU2")
+    monkeypatch.delenv("TOGU_ADCSR_NPU2")
     (tmp_path / "adcsr_npu_manifest.json").unlink()
     backend, _tile, _path = helper_backend._session_spec(settings, 1280, 534)
     assert backend == UpscaleBackend.WINML_GPU

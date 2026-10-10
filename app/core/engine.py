@@ -128,7 +128,7 @@ def _process_video(job, settings, progress, cancel) -> Path:
         raise ValueError(
             t("アップスケーラーモデルまたはフレーム補間モデルを選択してください。")
         )
-    tmp = Path(tempfile.mkdtemp(prefix="ueu_"))
+    tmp = Path(tempfile.mkdtemp(prefix="togu_"))
     src_frames = tmp / "src"
     interp_frames = tmp / "interp"
     up_frames = tmp / "up"

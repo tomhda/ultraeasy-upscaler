@@ -199,11 +199,11 @@ HELPER_MODEL_NPU_TAIL = {
 # 無ければ 2 段モード不可として従来どおり GPU 転送する。
 ADCSR_NPU_MANIFEST = "adcsr_npu_manifest.json"
 
-# AdcSR NPU 2段モードの即時無効化フラグ。UEU_ADCSR_NPU2=0 で従来の GPU 転送に戻る。
-ADCSR_NPU2_ENV = "UEU_ADCSR_NPU2"
+# AdcSR NPU 2段モードの即時無効化フラグ。TOGU_ADCSR_NPU2=0 で従来の GPU 転送に戻る。
+ADCSR_NPU2_ENV = "TOGU_ADCSR_NPU2"
 
-# NPU tail-cut の即時無効化フラグ。UEU_NPU_TAILCUT=0 で従来の全体モデルに戻る。
-NPU_TAILCUT_ENV = "UEU_NPU_TAILCUT"
+# NPU tail-cut の即時無効化フラグ。TOGU_NPU_TAILCUT=0 で従来の全体モデルに戻る。
+NPU_TAILCUT_ENV = "TOGU_NPU_TAILCUT"
 
 
 def _app_root() -> Path:
@@ -216,9 +216,9 @@ def _app_root() -> Path:
 
 _REPO_ROOT = _app_root()
 # マシン固有の絶対パスは使わず、リポジトリ相対の既定値にする。
-# 実運用ではUEU_MODELS_DIR / UEU_NPU_CACHEで上書きできる。
+# 実運用ではTOGU_MODELS_DIR / TOGU_NPU_CACHEで上書きできる。
 # 配布版の ONNX は setup.ps1 が models/ai/ へ展開する（開発時の tmp/npu-anime
-# は UEU_MODELS_DIR で指定する）。
+# は TOGU_MODELS_DIR で指定する）。
 DEFAULT_MODELS_DIR = _REPO_ROOT / "models" / "ai"
 DEFAULT_VENDOR_MODELS_DIR = _REPO_ROOT / "vendor" / "amd-npu" / "onnx-models"
 DEFAULT_NPU_CACHE_DIR = _REPO_ROOT / "vendor" / "amd-npu-1.8"
@@ -266,7 +266,7 @@ class UpscaleSettings:
     # INTERPOLATE_FIRST を選ぶ。
     processing_order: ProcessingOrder = ProcessingOrder.UPSCALE_FIRST
 
-    # 動画エンコード時の最大寸法。None のときは UEU_MAX_VIDEO_DIM、未設定なら
+    # 動画エンコード時の最大寸法。None のときは TOGU_MAX_VIDEO_DIM、未設定なら
     # video.py の既定値 3840x2160 を使う。値は (幅, 高さ) のタプル。
     # 既存の位置引数互換を保つため、動画・補間設定の末尾に置く。
     max_video_dim: tuple[int, int] | None = None

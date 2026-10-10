@@ -110,8 +110,8 @@ def test_film_is_listed_only_with_both_model_and_helper(
     monkeypatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(binaries, "repo_root", lambda: tmp_path)
-    monkeypatch.delenv("UEU_FILM_HELPER", raising=False)
-    monkeypatch.delenv("UEU_FILM_MODEL", raising=False)
+    monkeypatch.delenv("TOGU_FILM_HELPER", raising=False)
+    monkeypatch.delenv("TOGU_FILM_MODEL", raising=False)
     helper = tmp_path / "vendor" / "winml-film" / "winml-film.exe"
     model = tmp_path / "models" / "film" / "film_style_fp32.onnx"
     helper.parent.mkdir(parents=True)
@@ -542,8 +542,8 @@ def test_addon_kit_detection_reads_files_only(monkeypatch, tmp_path: Path) -> No
     models = tmp_path / "models-ai"
     models.mkdir()
     monkeypatch.setenv(helper_backend.MODELS_DIR_ENV, str(models))
-    monkeypatch.delenv("UEU_FILM_HELPER", raising=False)
-    monkeypatch.delenv("UEU_FILM_MODEL", raising=False)
+    monkeypatch.delenv("TOGU_FILM_HELPER", raising=False)
+    monkeypatch.delenv("TOGU_FILM_MODEL", raising=False)
 
     states = {kit.key: kit.installed for kit in addon_kits.addon_kits()}
     assert states == {
@@ -591,8 +591,8 @@ def test_self_test_returns_6_when_film_kit_partial(monkeypatch, tmp_path: Path) 
         binaries, "available_interpolation_models", lambda: ["rife-v4.6"]
     )
     monkeypatch.setattr(binaries, "repo_root", lambda: tmp_path)
-    monkeypatch.delenv("UEU_FILM_HELPER", raising=False)
-    monkeypatch.delenv("UEU_FILM_MODEL", raising=False)
+    monkeypatch.delenv("TOGU_FILM_HELPER", raising=False)
+    monkeypatch.delenv("TOGU_FILM_MODEL", raising=False)
 
     assert app_main.portable_self_test() == 0
 

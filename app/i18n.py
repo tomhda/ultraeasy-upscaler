@@ -10,7 +10,7 @@ import os
 
 from app.locale.en import EN
 
-LANG_ENV = "UEU_LANG"
+LANG_ENV = "TOGU_LANG"
 
 JA = "ja"
 EN_CODE = "en"

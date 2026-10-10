@@ -511,7 +511,7 @@ def test_upscale_small_image_both_merge_modes(monkeypatch, tmp_path: Path) -> No
     import npu_twostage
 
     for crossfade in ("1", "0"):
-        monkeypatch.setenv("UEU_NPU_CROSSFADE", crossfade)
+        monkeypatch.setenv("TOGU_NPU_CROSSFADE", crossfade)
         session, _front, _back = _make_session(monkeypatch, tmp_path)
         rgb = np.full((64, 64, 3), 128, dtype=np.uint8)
         out, ntiles = session.upscale_image_rgb(rgb)
@@ -565,8 +565,8 @@ def test_kill_hook_triggers_recovery(monkeypatch, tmp_path: Path) -> None:
             raise npu_twostage.WorkerGone("front exited mid-request 1")
         return _const_blobs(0.1, [(1, 256, 64, 64), (1, 3, 1, 1), (1, 3, 1, 1)])
 
-    monkeypatch.setenv("UEU_TS_KILL_ROLE", "front")
-    monkeypatch.setenv("UEU_TS_KILL_AT_TILE", "1")
+    monkeypatch.setenv("TOGU_TS_KILL_ROLE", "front")
+    monkeypatch.setenv("TOGU_TS_KILL_AT_TILE", "1")
     session, front, _back = _make_session(monkeypatch, tmp_path, front_fn=flaky_front)
     recovered = []
     monkeypatch.setattr(session, "_recover", lambda reason: recovered.append(reason))

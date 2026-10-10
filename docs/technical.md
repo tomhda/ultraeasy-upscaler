@@ -140,7 +140,7 @@ SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 �
 
 - 「アップスケーラーモデル」と「フレーム補間モデル」は独立して選べ、双方に「なし」がある（アップスケールのみ／補間のみ／両方）。
 - 両方を選んだ場合の順序は詳細設定「処理の順番」で選ぶ。既定は「アプコン→補間」（重いモデルの対象フレーム数を補間前に抑えられる）。高解像度出力でメモリが厳しい場合のみ「補間→アプコン」。
-- 出力は再生互換性を優先して H.264、元音声を保持する。最大出力サイズは `UEU_MAX_VIDEO_DIM`（既定 3840x2160）。
+- 出力は再生互換性を優先して H.264、元音声を保持する。最大出力サイズは `TOGU_MAX_VIDEO_DIM`（既定 3840x2160）。
 - フレーム補間は RIFE v4.6（NCNN/Vulkan）と FILM (Style)（Windows ML/DirectML、追加キット）。補間後の fps は既定で元の 2 倍。
   FILM (Style) は中間時刻 0.5 のフレームを再帰的に作るので、元の 2・4・8 倍のみ。拡大と併用するときは、
   拡大後の絵を渡すとメモリが足りなくなるため、「処理の順番」にかかわらず常に補間してから拡大する。
@@ -160,20 +160,20 @@ SwinIR-M CUDA は実写 1 秒の動画で E2E 約 19 秒、640x480 アニメ 1 �
 
 | 環境変数 | 既定値 | 用途 |
 |---|---|---|
-| `UEU_WINML_HELPER` | `vendor/winml-sr/winml-sr.exe`、次に `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinML ヘルパーの明示指定 |
-| `UEU_MODELS_DIR` | `models/ai` | GPU fp32 / NPU bf16cast モデルの探索先 |
-| `UEU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU 常駐サーバーを起動する Python |
-| `UEU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU 用モデルの変換結果（キャッシュ）の置き場所 |
-| `UEU_ADCSR_NPU2` | `1` | `0` で AdcSR の NPU 2 プロセス構成を無効化（GPU 実行へ） |
-| `UEU_NPU_TAILCUT` | `1` | `0` で NPU tail-cut を無効化（全体モデルで実行） |
-| `UEU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA 環境の Python |
-| `UEU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M 重みの明示指定 |
-| `UEU_SWINIR_STARTUP_TIMEOUT` | `1800` 秒 | CUDA worker の起動待ち（30〜86400 秒） |
-| `UEU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100〜300 フレーム） |
-| `UEU_MAX_VIDEO_DIM` | `3840x2160` | H.264 出力の最大幅×高さ（例: `1920x1080`） |
-| `UEU_FILM_HELPER` | `vendor/winml-film/winml-film.exe`、次に `tools/winml-film/bin/Release/net*/win-x64/winml-film.exe` | FILM ヘルパーの明示指定 |
-| `UEU_FILM_MODEL` | `models/film/film_style_fp32.onnx` | FILM の ONNX の明示指定 |
-| `UEU_LANG` | Windows の表示言語 | 表示言語（`ja` / `en`）。コマンドラインは既定で `en` |
+| `TOGU_WINML_HELPER` | `vendor/winml-sr/winml-sr.exe`、次に `tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe` の自動探索 | WinML ヘルパーの明示指定 |
+| `TOGU_MODELS_DIR` | `models/ai` | GPU fp32 / NPU bf16cast モデルの探索先 |
+| `TOGU_NPU_PYTHON` | `%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe` | NPU 常駐サーバーを起動する Python |
+| `TOGU_NPU_CACHE` | `vendor/amd-npu-1.8` | NPU 用モデルの変換結果（キャッシュ）の置き場所 |
+| `TOGU_ADCSR_NPU2` | `1` | `0` で AdcSR の NPU 2 プロセス構成を無効化（GPU 実行へ） |
+| `TOGU_NPU_TAILCUT` | `1` | `0` で NPU tail-cut を無効化（全体モデルで実行） |
+| `TOGU_SWINIR_PYTHON` | `tmp/swinir-venv/Scripts/python.exe` | SwinIR CUDA 環境の Python |
+| `TOGU_SWINIR_MODEL` | `tmp/swinir-models/003_*.pth` | SwinIR-M 重みの明示指定 |
+| `TOGU_SWINIR_STARTUP_TIMEOUT` | `1800` 秒 | CUDA worker の起動待ち（30〜86400 秒） |
+| `TOGU_SWINIR_CHUNK_FRAMES` | `150` | 動画チェックポイント間隔（100〜300 フレーム） |
+| `TOGU_MAX_VIDEO_DIM` | `3840x2160` | H.264 出力の最大幅×高さ（例: `1920x1080`） |
+| `TOGU_FILM_HELPER` | `vendor/winml-film/winml-film.exe`、次に `tools/winml-film/bin/Release/net*/win-x64/winml-film.exe` | FILM ヘルパーの明示指定 |
+| `TOGU_FILM_MODEL` | `models/film/film_style_fp32.onnx` | FILM の ONNX の明示指定 |
+| `TOGU_LANG` | Windows の表示言語 | 表示言語（`ja` / `en`）。コマンドラインは既定で `en` |
 
 ## ポータブル版と追加キットの作成
 

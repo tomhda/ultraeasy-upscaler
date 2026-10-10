@@ -186,8 +186,8 @@ if ($WithNpu) {
     Write-Output ""
     Write-Output "NPU を使うには Ryzen AI Software 1.8.0 の導入が必要です（配布対象外）。"
     Write-Output "手順: https://ryzenai.docs.amd.com/en/1.8/inst.html"
-    Write-Output "導入後、NPU 常駐サーバーを起動する Python を UEU_NPU_PYTHON に設定します。"
-    Write-Output ("例: setx UEU_NPU_PYTHON `"%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe`"")
+    Write-Output "導入後、NPU 常駐サーバーを起動する Python を TOGU_NPU_PYTHON に設定します。"
+    Write-Output ("例: setx TOGU_NPU_PYTHON `"%USERPROFILE%\miniforge3\envs\ryzen-ai-1.8.0\python.exe`"")
     Write-Output "初回起動時は VAIML コンパイルが数分〜1時間かかります（次回以降はキャッシュを利用）。"
 }
 

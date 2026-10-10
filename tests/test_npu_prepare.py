@@ -1,8 +1,8 @@
 """NPU 追加キット・変換画面のテスト（オフスクリーン）。
 
 実際の推論・変換（VAIML コンパイル）はしない。`open_session`・`convert`
-は偽物に差し替える。実キャッシュ・実モデルには触らず、`UEU_NPU_CACHE` /
-`UEU_MODELS_DIR` の差し替えと空の vendor 向けで判定を確かめる。
+は偽物に差し替える。実キャッシュ・実モデルには触らず、`TOGU_NPU_CACHE` /
+`TOGU_MODELS_DIR` の差し替えと空の vendor 向けで判定を確かめる。
 """
 from __future__ import annotations
 
@@ -823,4 +823,4 @@ def test_build_npu_kit_script() -> None:
     assert "togu-scaler-npu-kit.zip" in text
     assert "togu-scaler-npu-kit-adcsr.zip" in text
     assert "NPU ドライバ 32.0.203.329 以降" in text
-    assert "UEU_NPU_PYTHON" in text
+    assert "TOGU_NPU_PYTHON" in text

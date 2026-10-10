@@ -28,8 +28,8 @@ nan_to_num で隠さず ERROR 応答に段階・テンソル名・非有限値�
 98=コンパイル期限超過、99=require-cache 60秒超過 (未ヒット疑い)。
 
 試験用フック (本番では使わない):
-  UEU_WORKER_SLEEP_S=<秒>: 各 DATA 応答の前に sleep (応答停止の障害注入用)。
-  UEU_WORKER_SLEEP_FILE=<パス>: 要求ごとにファイル内容 (秒) を読み直して sleep。
+  TOGU_WORKER_SLEEP_S=<秒>: 各 DATA 応答の前に sleep (応答停止の障害注入用)。
+  TOGU_WORKER_SLEEP_FILE=<パス>: 要求ごとにファイル内容 (秒) を読み直して sleep。
     0/空/欠落は sleep なし。セッション開始後の注入 (ファイル書換え) 用。
 """
 from __future__ import annotations
@@ -274,8 +274,8 @@ def _serve(args: argparse.Namespace) -> int:
     proto.send_message(stdout, proto.T_READY, int(args.generation), 0, proto.pack_json(ready))
     _log(f"ready sent (role={args.role} generation={args.generation})")
 
-    inject_sleep = float(os.environ.get("UEU_WORKER_SLEEP_S", "0") or 0)
-    sleep_file = os.environ.get("UEU_WORKER_SLEEP_FILE", "")
+    inject_sleep = float(os.environ.get("TOGU_WORKER_SLEEP_S", "0") or 0)
+    sleep_file = os.environ.get("TOGU_WORKER_SLEEP_FILE", "")
 
     def _inject_seconds() -> float:
         if sleep_file:

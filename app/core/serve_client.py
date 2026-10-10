@@ -124,7 +124,7 @@ class ServeClient:
             finally:
                 finished.set()
 
-        reader = threading.Thread(target=_read_ready, name="ueu-ready", daemon=True)
+        reader = threading.Thread(target=_read_ready, name="togu-ready", daemon=True)
         reader.start()
         started = time.monotonic()
         try:
@@ -198,7 +198,7 @@ class ServeClient:
             except BaseException as exc:  # noqa: BLE001 - 呼び出し側へ引き渡す
                 box["error"] = exc
 
-        thread = threading.Thread(target=_target, name="ueu-send", daemon=True)
+        thread = threading.Thread(target=_target, name="togu-send", daemon=True)
         thread.start()
         thread.join(timeout=timeout)
         if thread.is_alive():
@@ -235,7 +235,7 @@ class ServeClient:
                     result["error"] = exc
                 finally:
                     finished.set()
-            reader = threading.Thread(target=_read, name="ueu-frame-read", daemon=True)
+            reader = threading.Thread(target=_read, name="togu-frame-read", daemon=True)
             reader.start()
             while not finished.wait(0.05):
                 if cancel.is_set():
@@ -372,7 +372,7 @@ class ServeClient:
             except Exception:
                 pass
 
-        self._stderr_thread = threading.Thread(target=_drain, name="ueu-stderr", daemon=True)
+        self._stderr_thread = threading.Thread(target=_drain, name="togu-stderr", daemon=True)
         self._stderr_thread.start()
 
     def _failure_message(self, message: str) -> str:

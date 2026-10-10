@@ -26,14 +26,14 @@ oracle 必須の反映:
     clip(...).astype(uint8)) は本モジュールから呼ばない。round に変えない。
 
 診断用環境変数 (独立):
-  UEU_NPU_SEAMFIX=0    seam-fix を無効化 (既定は有効・要テンプレート一致)。
-  UEU_NPU_CROSSFADE=0  クロスフェードを無効化しハードカットにする (既定は有効)。
+  TOGU_NPU_SEAMFIX=0    seam-fix を無効化 (既定は有効・要テンプレート一致)。
+  TOGU_NPU_CROSSFADE=0  クロスフェードを無効化しハードカットにする (既定は有効)。
 
 試験用フック (本番では使わない):
-  UEU_TS_KILL_ROLE=front|back + UEU_TS_KILL_AT_TILE=<1始まり>:
+  TOGU_TS_KILL_ROLE=front|back + TOGU_TS_KILL_AT_TILE=<1始まり>:
     指定タイルの直前に対象ワーカーを TerminateProcess で落とす
     (外部 kill と同じ死に方。復旧経路の決定性試験用)。
-  (ワーカー側: UEU_WORKER_SLEEP_S / UEU_WORKER_SLEEP_FILE は npu_worker.py 参照)
+  (ワーカー側: TOGU_WORKER_SLEEP_S / TOGU_WORKER_SLEEP_FILE は npu_worker.py 参照)
 """
 from __future__ import annotations
 
@@ -520,7 +520,7 @@ class _Canvas:
     """2 段モード専用の逐次加算合成 (全タイル出力を保持しない)。
 
     crossfade 有効時は winml-sr MergeTile (blend) と同じ線形テーパー＋重み正規化、
-    無効時 (UEU_NPU_CROSSFADE=0) はコアのハードカット配置。
+    無効時 (TOGU_NPU_CROSSFADE=0) はコアのハードカット配置。
     単位は CHW float 0-1。
     """
 
@@ -1103,14 +1103,14 @@ class TwoStageSession:
                 stage="frame", tensor="", rate=-1.0, recoveries=0,
                 detail=f"frame too large for float buffer: {width}x{height}x{self.scale}",
             )
-        crossfade = not _env_disabled("UEU_NPU_CROSSFADE")
+        crossfade = not _env_disabled("TOGU_NPU_CROSSFADE")
         canvas = _Canvas(padded_hw[1] * self.scale, padded_hw[0] * self.scale,
                          crossfade=crossfade)
         # 試験用フック (本番では使わない): 指定タイルの直前に対象ワーカーを
         # TerminateProcess で落とす (外部 kill と同じ死に方)。復旧経路の決定性試験用。
-        kill_role = os.environ.get("UEU_TS_KILL_ROLE", "")
+        kill_role = os.environ.get("TOGU_TS_KILL_ROLE", "")
         try:
-            kill_at = int(os.environ.get("UEU_TS_KILL_AT_TILE", "0") or 0)
+            kill_at = int(os.environ.get("TOGU_TS_KILL_AT_TILE", "0") or 0)
         except ValueError:
             kill_at = 0
         kill_done = False
@@ -1171,7 +1171,7 @@ class TwoStageSession:
             raise TwoStageFatal(stage="merge", tensor="merged", rate=rate,
                                 recoveries=recoveries,
                                 detail="non-finite merged canvas")
-        if self._seam_eligible() and not _env_disabled("UEU_NPU_SEAMFIX"):
+        if self._seam_eligible() and not _env_disabled("TOGU_NPU_SEAMFIX"):
             ms = apply_seam_fix_inplace(merged, self.seam_template)
             _log(f"[timing] seam-fix total={ms:.1f} ms "
                  f"(pitch={self.seam_template['pitch']}, size={out_w}x{out_h})")
@@ -1181,7 +1181,7 @@ class TwoStageSession:
                                     recoveries=recoveries,
                                     detail="non-finite after seam-fix")
         elif self.seam_template is not None:
-            _log("[worker-info] seam-fix skipped (model/pitch mismatch or UEU_NPU_SEAMFIX=0)")
+            _log("[worker-info] seam-fix skipped (model/pitch mismatch or TOGU_NPU_SEAMFIX=0)")
         sr_rgb = np.transpose(
             np.clip(merged * 255.0, 0.0, 255.0).astype(np.uint8), (1, 2, 0)
         )

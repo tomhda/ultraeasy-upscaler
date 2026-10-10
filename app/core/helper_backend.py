@@ -47,13 +47,13 @@ from .settings import (
     UpscaleSettings,
 )
 
-WINML_HELPER_ENV = "UEU_WINML_HELPER"
-MODELS_DIR_ENV = "UEU_MODELS_DIR"
-NPU_PYTHON_ENV = "UEU_NPU_PYTHON"
-NPU_CACHE_ENV = "UEU_NPU_CACHE"
-SWINIR_PYTHON_ENV = "UEU_SWINIR_PYTHON"
-SWINIR_MODEL_ENV = "UEU_SWINIR_MODEL"
-SWINIR_STARTUP_TIMEOUT_ENV = "UEU_SWINIR_STARTUP_TIMEOUT"
+WINML_HELPER_ENV = "TOGU_WINML_HELPER"
+MODELS_DIR_ENV = "TOGU_MODELS_DIR"
+NPU_PYTHON_ENV = "TOGU_NPU_PYTHON"
+NPU_CACHE_ENV = "TOGU_NPU_CACHE"
+SWINIR_PYTHON_ENV = "TOGU_SWINIR_PYTHON"
+SWINIR_MODEL_ENV = "TOGU_SWINIR_MODEL"
+SWINIR_STARTUP_TIMEOUT_ENV = "TOGU_SWINIR_STARTUP_TIMEOUT"
 SWINIR_DEFAULT_STARTUP_TIMEOUT = 30 * 60.0
 SWINIR_MODEL_NAME = "003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth"
 OVERLAP = 16  # 全モデル共通の既定値（settings.HELPER_DEFAULT_OVERLAP と同じ）。
@@ -231,7 +231,7 @@ def _winml_helper() -> Path:
         )
 
     # 配布版（setup.ps1 が vendor/winml-sr/ へ展開したビルド済みヘルパー）を
-    # 開発ビルドより先に探す。UEU_WINML_HELPER の明示指定はこの前段で優先される。
+    # 開発ビルドより先に探す。TOGU_WINML_HELPER の明示指定はこの前段で優先される。
     distributed = binaries.repo_root() / "vendor" / "winml-sr" / "winml-sr.exe"
     if distributed.is_file():
         return distributed.resolve()
@@ -370,12 +370,12 @@ def _helper_env() -> dict[str, str]:
 
 
 def adcsr_npu2_enabled() -> bool:
-    """UEU_ADCSR_NPU2=0 で無効。それ以外は既定有効。"""
+    """TOGU_ADCSR_NPU2=0 で無効。それ以外は既定有効。"""
     return os.environ.get(ADCSR_NPU2_ENV, "1") != "0"
 
 
 def npu_tailcut_enabled() -> bool:
-    """UEU_NPU_TAILCUT=0 で無効。それ以外は既定有効。"""
+    """TOGU_NPU_TAILCUT=0 で無効。それ以外は既定有効。"""
     return os.environ.get(NPU_TAILCUT_ENV, "1") != "0"
 
 

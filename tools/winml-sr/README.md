@@ -91,7 +91,7 @@ stdout/stdin のバイナリプロトコル（int32 LE、RGB24生ピクセル）
 tools/winml-sr/bin/Release/net*/win-x64/winml-sr.exe
 ```
 
-任意の場所へ配置した場合は `UEU_WINML_HELPER` で実行ファイルを指定できる。
+任意の場所へ配置した場合は `TOGU_WINML_HELPER` で実行ファイルを指定できる。
 
 実測（480p→4x、20フレーム連続、クライアント壁時計）:
 

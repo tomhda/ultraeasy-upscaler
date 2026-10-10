@@ -2,7 +2,7 @@
 
 実画面にウィンドウを出さずにレイアウトを PNG 化して確認できる。
     .venv\\Scripts\\python.exe scripts\\preview_shot.py [out.png]
-既定の出力: C:\\tmp\\ueu_gui_shot.png
+既定の出力: C:\\tmp\\togu_gui_shot.png
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _load_windows_preview_fonts() -> None:
 
 
 def main() -> int:
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\tmp\ueu_gui_shot.png")
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\tmp\togu_gui_shot.png")
     out.parent.mkdir(parents=True, exist_ok=True)
 
     app = QApplication([])

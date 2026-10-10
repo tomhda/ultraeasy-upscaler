@@ -106,7 +106,7 @@ NPU 用への変換について
   メモリが 32GB 未満の PC では、ほかのアプリを閉じてから実行してください。
 - NPU ドライバや Ryzen AI Software を更新すると、変換のやり直しが必要になることがあります。
 
-Ryzen AI Software を標準と違う場所に入れた場合は、環境変数 UEU_NPU_PYTHON に
+Ryzen AI Software を標準と違う場所に入れた場合は、環境変数 TOGU_NPU_PYTHON に
 その python.exe の場所を指定してください。
 "@
 
@@ -136,7 +136,7 @@ About converting for the NPU
 - After you update the NPU driver or Ryzen AI Software, the conversion may need to be done again.
 
 If Ryzen AI Software is installed in a non-default location, set the environment variable
-UEU_NPU_PYTHON to the path of its python.exe.
+TOGU_NPU_PYTHON to the path of its python.exe.
 "@
 
 function New-NpuKit(
@@ -150,7 +150,7 @@ function New-NpuKit(
     if (Test-Path -LiteralPath $zipPath) {
         Fail "既にあります（上書きしません）: $zipPath"
     }
-    $stage = Join-Path ([IO.Path]::GetTempPath()) "ueu-npu-kit"
+    $stage = Join-Path ([IO.Path]::GetTempPath()) "togu-npu-kit"
     if (Test-Path -LiteralPath $stage) {
         Remove-Item -LiteralPath $stage -Recurse -Force
     }

@@ -141,10 +141,10 @@ def test_format_time_position() -> None:
 
 
 def test_work_dir_roundtrip() -> None:
-    """作業フォルダは ueu-trial- 接頭辞で作り、消せる。"""
+    """作業フォルダは togu-trial- 接頭辞で作り、消せる。"""
     workdir = trial_core.create_work_dir()
     try:
-        assert workdir.name.startswith("ueu-trial-")
+        assert workdir.name.startswith("togu-trial-")
         assert workdir.is_dir()
     finally:
         trial_core.cleanup_work_dir(workdir)

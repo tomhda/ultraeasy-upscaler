@@ -26,7 +26,7 @@ def _make_png(path: Path, size: tuple[int, int] = (64, 48)) -> Path:
 @pytest.fixture(autouse=True)
 def _english_and_gpu(monkeypatch, tmp_path):
     """CLI テストは既定で英語・GPU 解決にする（conftest の ja を上書き）。"""
-    monkeypatch.setenv("UEU_LANG", "en")
+    monkeypatch.setenv("TOGU_LANG", "en")
     # quick-check の取り出しコマを、実際の一時フォルダに残さない
     import tempfile
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
@@ -474,7 +474,7 @@ def test_npu_convert_unavailable(monkeypatch, capsys):
 # ------------------------------------------------------------------ wording
 
 def test_default_is_english(monkeypatch, tmp_path, capsys):
-    monkeypatch.delenv("UEU_LANG", raising=False)
+    monkeypatch.delenv("TOGU_LANG", raising=False)
     code, _out, err = _run(["info", "no-such-file.png"], capsys)
     assert code == 2
     assert "error: Input not found:" in err

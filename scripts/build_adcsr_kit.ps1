@@ -56,7 +56,7 @@ foreach ($doc in @($usageJa, $usageEn)) {
     }
 }
 
-$stage = Join-Path ([IO.Path]::GetTempPath()) "ueu-adcsr-kit"
+$stage = Join-Path ([IO.Path]::GetTempPath()) "togu-adcsr-kit"
 if (Test-Path -LiteralPath $stage) {
     Remove-Item -LiteralPath $stage -Recurse -Force
 }
