@@ -888,7 +888,7 @@
    ],
    "device": "VAIML",
    "vaimlParam": {
-    "vaimlModelPath": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu\\modelcachekey_x4plus_anime_nchw_256x256_bf16cast\\vaiml_par_0",
+    "vaimlModelPath": "C:\\Users\\thash\\code\\togu-scaler\\vendor\\amd-npu\\modelcachekey_x4plus_anime_nchw_256x256_bf16cast\\vaiml_par_0",
     "deviceName": "stx",
     "outputShapes": [
      {
@@ -910,7 +910,7 @@
       ]
      }
     ],
-    "vaimlUnarchivePath": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu\\modelcachekey_x4plus_anime_nchw_256x256_bf16cast",
+    "vaimlUnarchivePath": "C:\\Users\\thash\\code\\togu-scaler\\vendor\\amd-npu\\modelcachekey_x4plus_anime_nchw_256x256_bf16cast",
     "subgraphName": "vaiml_par_0",
     "priority": "normal",
     "runnerType": "hw",
@@ -940,7 +940,7 @@
     }
    }
   ],
-  "cacheDir": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu",
+  "cacheDir": "C:\\Users\\thash\\code\\togu-scaler\\vendor\\amd-npu",
   "cacheKey": "modelcachekey_x4plus_anime_nchw_256x256_bf16cast",
   "version": {
    "versionInfos": [
@@ -1041,12 +1041,12 @@
     }
    ]
   },
-  "onnxPath": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu\\onnx-models\\x4plus_anime_nchw_256x256_bf16cast.onnx",
+  "onnxPath": "C:\\Users\\thash\\code\\togu-scaler\\vendor\\amd-npu\\onnx-models\\x4plus_anime_nchw_256x256_bf16cast.onnx",
   "sessionOptions": {
    "xlnx_enable_old_qdq": "1",
    "enable_txn_elf": "1",
    "enable_cache_file_io_in_mem": "0",
-   "cache_dir": "C:\\Users\\thash\\code\\ultraeasy-upscaler\\vendor\\amd-npu",
+   "cache_dir": "C:\\Users\\thash\\code\\togu-scaler\\vendor\\amd-npu",
    "enable_preemption": "1",
    "session_options": "2687474631688",
    "is_preemptible": "1",

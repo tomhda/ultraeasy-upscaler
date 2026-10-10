@@ -2,7 +2,7 @@
 
 [English](README.en.md) [![agent-friendly](docs/images/agent-friendly.svg)](AGENTS.md)
 
-**[⬇ TOGU SCALER v0.12.0 をダウンロード](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-portable-win64.zip)**
+**[⬇ TOGU SCALER v0.12.1 をダウンロード](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-portable-win64.zip)**
 （Windows x64 用の zip、382 MB）。手順は「[導入](#導入)」を参照。
 v0.11.0 までの名前は ultraeasy-upscaler です。
 
@@ -51,7 +51,7 @@ Superman (1941)（パブリックドメイン）
 
 Windows 11（x64）と、DirectX 12 対応の GPU で動作確認済み
 
-1. [`togu-scaler-portable-win64.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-portable-win64.zip) をダウンロード
+1. [`togu-scaler-portable-win64.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-portable-win64.zip) をダウンロード
 2. zip を好きな場所に展開（ポータブル版のためインストール不要）。
 3. `togu-scaler.exe` を起動。署名のない実行ファイルなので、Windows の SmartScreen が「Windows によって PC が保護されました」と表示することがある。その場合は「詳細情報」→「実行」。
 
@@ -151,10 +151,10 @@ zip には動作に必要な全ファイルが入っているため、フォル�
 
 | キット | 使えるようになるもの | ファイル |
 |---|---|---|
-| FILM (Style) | フレーム補間モデル FILM (Style) | [`togu-scaler-film-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-film-kit.zip)（178 MB） |
-| AdcSR（GPU 用） | 拡大モデル AdcSR（GPU） | [`togu-scaler-adcsr-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-adcsr-kit.zip)（1.7 GB） |
-| NPU キット | NPU での処理（下記） | [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit.zip)（56 MB） |
-| AdcSR（NPU 用） | 拡大モデル AdcSR（NPU） | [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit-adcsr.zip)（1.7 GB） |
+| FILM (Style) | フレーム補間モデル FILM (Style) | [`togu-scaler-film-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-film-kit.zip)（178 MB） |
+| AdcSR（GPU 用） | 拡大モデル AdcSR（GPU） | [`togu-scaler-adcsr-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-adcsr-kit.zip)（1.7 GB） |
+| NPU キット | NPU での処理（下記） | [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-npu-kit.zip)（56 MB） |
+| AdcSR（NPU 用） | 拡大モデル AdcSR（NPU） | [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-npu-kit-adcsr.zip)（1.7 GB） |
 
 1. TOGU SCALER を終了し、zip の中身を `togu-scaler.exe` があるフォルダに上書きで展開する。
 2. 起動すると、モデルの一覧で選べるようになる。
@@ -170,9 +170,9 @@ zip には動作に必要な全ファイルが入っているため、フォル�
 AMD Ryzen AI 搭載機では、追加キットをダウンロードすることで NPU 処理が可能。次の 2 つが導入済みの場合、選択可能になる。
 
 - AMD の [Ryzen AI Software 1.8.0](https://ryzenai.docs.amd.com/en/latest/inst.html)（AMD のサイトから入手して導入。NPU ドライバ 32.0.203.329 以降）
-- [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit.zip)（56 MB）。
+- [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-npu-kit.zip)（56 MB）。
 
-AdcSR を NPU で使う場合は、追加でNPU専用モデル [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit-adcsr.zip)（1.7 GB）も必要。
+AdcSR を NPU で使う場合は、追加でNPU専用モデル [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.1/togu-scaler-npu-kit-adcsr.zip)（1.7 GB）も必要。
 
 手順:
 

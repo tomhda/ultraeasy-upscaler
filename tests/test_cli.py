@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from app import __version__ as app_version
 from app import cli
 from app.core import helper_backend
 
@@ -83,7 +84,7 @@ def test_status_json_shape(monkeypatch, capsys):
     assert code == 0
     payload = _json_out(out)
     assert payload["ok"] is True
-    assert payload["version"] == "0.12.0"
+    assert payload["version"] == app_version
     assert isinstance(payload["app_root"], str)
     assert payload["ffmpeg"] == {"found": True, "path": "C:/fake/ffmpeg.exe"}
     assert payload["backends"]["gpu"] == {"available": True}
@@ -507,7 +508,7 @@ def test_help_has_args_defaults_examples(capsys):
 def test_version(capsys):
     code, out, _err = _run(["--version"], capsys)
     assert code == 0
-    assert "0.12.0" in out
+    assert app_version in out
 
 
 # ----------------------------------------------------------------------- env

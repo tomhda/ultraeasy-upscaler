@@ -8,7 +8,7 @@
 //                [--overlap 16] [--compile] [--download] [--warmup 2]
 //   winml-sr psnr --a <img> --b <img>
 //
-// タイル分割/結合は ultraeasy-upscaler app/core/npu_runner.py と同一ロジック
+// タイル分割/結合は TOGU SCALER の app/core/npu_runner.py と同一ロジック
 // （reflectパディング→オーバーラップ付き切り出し→コア領域のみ合成）。
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
