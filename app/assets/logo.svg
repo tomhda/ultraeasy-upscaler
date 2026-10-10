@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="ultraeasy-upscaler">
-  <rect width="256" height="256" rx="56" fill="#12171d"/>
-  <path d="M128 40 L208 124 H160 V152 H96 V124 H48 Z" fill="#4be333"/>
-  <rect x="96" y="164" width="28" height="28" fill="#4be333"/>
-  <rect x="132" y="164" width="28" height="28" fill="#4be333" opacity="0.75"/>
-  <rect x="96" y="200" width="28" height="28" fill="#4be333" opacity="0.55"/>
-  <rect x="132" y="200" width="28" height="28" fill="#4be333" opacity="0.35"/>
-</svg>
