@@ -1094,6 +1094,24 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return _execute_run(args, planned)
 
 
+def _fallback_prefix() -> str:
+    """The start of the progress message the core emits when it switches to Vulkan."""
+    from app.i18n import t
+
+    return t("Vulkanへ切替（モデル: {model} で代替） ({error})",
+             model="\x00", error="\x00").split("\x00")[0]
+
+
+def _fallback_info(settings, message: str) -> dict:
+    from app.core.settings import vulkan_fallback_settings
+
+    return {
+        "backend": "vulkan",
+        "model": vulkan_fallback_settings(settings).model,
+        "message": message,
+    }
+
+
 def _execute_run(args: argparse.Namespace, planned: list[dict]) -> int:
     from app.core import engine
     from app.core.jobs import Job, JobKind
@@ -1104,8 +1122,12 @@ def _execute_run(args: argparse.Namespace, planned: list[dict]) -> int:
     interrupted = False
     last_line: list[str] = []
 
-    def progress(index: int, name: str):
+    fallback_prefix = _fallback_prefix()
+
+    def progress(index: int, name: str, seen: dict):
         def _cb(fraction: float, message: str) -> None:
+            if message.startswith(fallback_prefix):
+                seen["message"] = message.splitlines()[0]
             if args.quiet:
                 return
             line = (f"[{index + 1}/{total}] {name} "
@@ -1123,9 +1145,10 @@ def _execute_run(args: argparse.Namespace, planned: list[dict]) -> int:
         settings = item["settings"]
         job = Job(input_path=path, kind=JobKind(kind))
         start = time.monotonic()
+        seen: dict = {}
         try:
             out = engine.process_job(
-                job, settings, progress=progress(index, path.name))
+                job, settings, progress=progress(index, path.name, seen))
         except KeyboardInterrupt:
             interrupted = True
             break
@@ -1141,6 +1164,12 @@ def _execute_run(args: argparse.Namespace, planned: list[dict]) -> int:
         seconds = round(time.monotonic() - start, 2)
         results.append(_done_result(
             path, kind, item, out, seconds, args, item["note"]))
+        if seen:
+            # The requested backend could not start and the app switched to
+            # Vulkan with a substitute model. Say so; "settings" stays as requested.
+            results[-1]["fallback"] = _fallback_info(settings, seen["message"])
+            if not args.json:
+                print(f"note: {path.name}: {seen['message']}", file=sys.stderr)
         if not results[-1]["_failed"]:
             if not args.json:
                 print(f"done: {path.name} -> {results[-1]['output']} "
@@ -1319,6 +1348,13 @@ def _cmd_quick_check(args: argparse.Namespace) -> int:
     trial_source = source_frame
     if rect is not None:
         trial_source = str(workdir / "cropped.png")
+    seen: dict = {}
+    fallback_prefix = _fallback_prefix()
+
+    def _trial_progress(_fraction: float, message: str) -> None:
+        if message.startswith(fallback_prefix):
+            seen["message"] = message.splitlines()[0]
+
     start = time.monotonic()
     try:
         if kind == JobKind.VIDEO:
@@ -1326,7 +1362,7 @@ def _cmd_quick_check(args: argparse.Namespace) -> int:
         if rect is not None:
             trial_core.crop_image(source_frame, rect, trial_source)
         out.parent.mkdir(parents=True, exist_ok=True)
-        trial_core.run_trial(trial_source, settings, str(out))
+        trial_core.run_trial(trial_source, settings, str(out), progress=_trial_progress)
     except UsageError:
         raise
     except ValueError as exc:
@@ -1359,6 +1395,10 @@ def _cmd_quick_check(args: argparse.Namespace) -> int:
         "settings": _result_settings(
             backend, model, int(args.scale), None, None, None),
     }
+    if seen:
+        payload["fallback"] = _fallback_info(settings, seen["message"])
+        if not args.json:
+            print(f"note: {seen['message']}", file=sys.stderr)
     if args.json:
         _emit_json(payload)
     else:

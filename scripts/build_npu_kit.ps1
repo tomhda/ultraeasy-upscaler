@@ -159,13 +159,23 @@ function New-NpuKit(
         $modelsOut = Join-Path $stage "models\ai"
         New-Item -ItemType Directory -Path $serveOut, $modelsOut -Force | Out-Null
 
-        # NPU 常駐ヘルパー（直下の .py だけ。selftest/ と __pycache__ は入れない）。
+        # NPU 常駐ヘルパー（直下の .py と selftest/。__pycache__ は入れない）。
         $serveFiles = Get-ChildItem -LiteralPath $serveSource -Filter "*.py" -File
         if ($serveFiles.Count -eq 0) {
             Fail "NPU ヘルパーがありません: $serveSource"
         }
         foreach ($file in $serveFiles) {
             Copy-Item -LiteralPath $file.FullName -Destination $serveOut -Force
+        }
+        # AdcSR は起動時の自己診断で selftest/ の 2 つを読む。無いと起動できない。
+        $selftestOut = Join-Path $serveOut "selftest"
+        New-Item -ItemType Directory -Path $selftestOut -Force | Out-Null
+        foreach ($name in @("adcsr_tile.npy", "adcsr_ref_stats.json")) {
+            $source = Join-Path $serveSource "selftest\$name"
+            if (-not (Test-Path -LiteralPath $source)) {
+                Fail "自己診断用のファイルがありません: $source"
+            }
+            Copy-Item -LiteralPath $source -Destination $selftestOut -Force
         }
 
         foreach ($name in $ModelFiles) {

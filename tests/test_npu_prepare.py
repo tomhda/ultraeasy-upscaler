@@ -824,3 +824,21 @@ def test_build_npu_kit_script() -> None:
     assert "togu-scaler-npu-kit-adcsr.zip" in text
     assert "NPU ドライバ 32.0.203.329 以降" in text
     assert "TOGU_NPU_PYTHON" in text
+    # AdcSR が起動時に読む自己診断用のファイルをキットに入れること。
+    assert "adcsr_tile.npy" in text
+    assert "adcsr_ref_stats.json" in text
+
+
+def test_convert_adcsr_stops_early_without_selftest(monkeypatch, tmp_path) -> None:
+    """自己診断用のファイルが無いときは、長い変換を始める前に止める。"""
+    from app.core import binaries, helper_backend, npu_prepare
+    from app.core.settings import HELPER_MODEL_ADCSR
+
+    monkeypatch.setattr(binaries, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(helper_backend, "npu_compiled", lambda _key: False)
+    opened: list[object] = []
+    monkeypatch.setattr(helper_backend, "open_session",
+                        lambda *a, **k: opened.append(a))
+    with pytest.raises(helper_backend.HelperBackendUnavailable):
+        npu_prepare.convert(HELPER_MODEL_ADCSR)
+    assert opened == []

@@ -124,6 +124,10 @@ def convert(model_key: str, progress=None, cancel=None) -> None:
     if helper_backend.npu_compiled(key) is None:
         raise HelperBackendUnavailable(
             t("NPU 用のファイルが揃っていません: {model}", model=model_key))
+    if key == HELPER_MODEL_ADCSR and not helper_backend.adcsr_selftest_ready():
+        # 無いまま始めると、約 2 時間の変換のあとの自己診断で失敗する。
+        raise HelperBackendUnavailable(
+            t("NPU 用のファイルが揃っていません: {model}", model=model_key))
     settings = UpscaleSettings(backend=UpscaleBackend.NPU_NATIVE, model=key, scale=4)
     session = helper_backend.open_session(
         settings, _CONVERT_WIDTH, _CONVERT_HEIGHT,

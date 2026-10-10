@@ -60,6 +60,10 @@ togu-scaler-cli run photo.png --model 4xNomosUni --out-dir out --json
   from the written file; `source` is the input. `results[0].output` is the full path of the file.
 - Failure: exit code 1 and `results[i].status` is `"failed"` with an `error` object. Other inputs
   still run.
+- Switched backend: when the requested backend cannot start, the app switches to Vulkan with a
+  substitute model and still finishes with `"done"`. The result then has a `fallback` object
+  (`backend`, `model`, `message`); `settings` stays as requested. No `fallback` key means the
+  requested backend and model did the work. `quick-check` reports it the same way.
 
 ### Upscale a video, or interpolate its frames
 

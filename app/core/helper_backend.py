@@ -427,6 +427,18 @@ def adcsr_two_stage_files() -> tuple[Path, Path, Path] | None:
     return front, back, manifest
 
 
+ADCSR_SELFTEST_FILES = ("adcsr_tile.npy", "adcsr_ref_stats.json")
+
+
+def adcsr_selftest_ready() -> bool:
+    """AdcSR の NPU 2 段モードが起動時に読む自己診断用のファイルが揃っているか。
+
+    無いと、前半・後半の変換（約 2 時間）が終わったあとの自己診断で起動に失敗する。
+    """
+    folder = binaries.repo_root() / "tools" / "npu-serve" / "selftest"
+    return all((folder / name).is_file() for name in ADCSR_SELFTEST_FILES)
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:

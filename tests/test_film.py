@@ -566,6 +566,14 @@ def test_addon_kit_detection_reads_files_only(monkeypatch, tmp_path: Path) -> No
     (models / HELPER_MODEL_NPU_BACK[HELPER_MODEL_ADCSR]).touch()
     (models / ADCSR_NPU_MANIFEST).touch()
 
+    # 自己診断用のファイルが無いあいだは、AdcSR（NPU 用）は未導入のまま。
+    states = {kit.key: kit.installed for kit in addon_kits.addon_kits()}
+    assert states["adcsr_npu"] is False
+    selftest = tmp_path / "tools" / "npu-serve" / "selftest"
+    selftest.mkdir()
+    for name in helper_backend.ADCSR_SELFTEST_FILES:
+        (selftest / name).touch()
+
     states = {kit.key: kit.installed for kit in addon_kits.addon_kits()}
     assert states == {
         "film": True,

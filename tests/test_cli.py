@@ -217,6 +217,7 @@ def test_run_image_success_json(monkeypatch, tmp_path, capsys):
         "interpolation": None, "factor": None, "fps": None,
     }
     assert "[1/1]" in err  # progress goes to stderr, not stdout
+    assert "fallback" not in result
 
 
 def test_run_continues_after_failure(monkeypatch, tmp_path, capsys):
@@ -573,3 +574,29 @@ def test_run_result_has_source_and_null_scale_without_model(
     payload = _json_out(out)
     if payload.get("results"):
         assert payload["results"][0]["settings"]["scale"] is None
+
+
+def test_run_reports_vulkan_fallback(monkeypatch, tmp_path, capsys):
+    """実行先が起動できず Vulkan に切り替わったら、結果の fallback に出す。"""
+    from app.core import engine
+    from app.i18n import t
+
+    _fail_copy_upscale(monkeypatch)
+    real = engine.process_job
+
+    def switched(job, settings, progress=None, **kwargs):
+        progress(0.0, t("Vulkanへ切替（モデル: {model} で代替） ({error})",
+                        model="realesrgan-x4plus", error="helper stopped\nmore"))
+        return real(job, settings, progress=progress, **kwargs)
+
+    monkeypatch.setattr(engine, "process_job", switched)
+    src = _make_png(tmp_path / "a.png", (64, 48))
+    code, out, _err = _run(
+        ["run", str(src), "--model", "animevideov3", "--json"], capsys)
+    assert code == 0
+    result = _json_out(out)["results"][0]
+    assert result["status"] == "done"
+    assert result["settings"]["backend"] == "gpu"  # 指定した内容のまま
+    assert result["fallback"]["backend"] == "vulkan"
+    assert result["fallback"]["model"]
+    assert "\n" not in result["fallback"]["message"]

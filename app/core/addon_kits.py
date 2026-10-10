@@ -57,8 +57,9 @@ def adcsr_gpu_installed() -> bool:
 
 
 def adcsr_npu_installed() -> bool:
-    """NPU 用の AdcSR モデル（前半・後半・マニフェスト）が見つかるか。"""
-    return helper_backend.adcsr_two_stage_files() is not None
+    """NPU 用の AdcSR モデル（前半・後半・マニフェスト）と自己診断用のファイルが見つかるか。"""
+    return (helper_backend.adcsr_two_stage_files() is not None
+            and helper_backend.adcsr_selftest_ready())
 
 
 def addon_kits() -> list[AddonKit]:
