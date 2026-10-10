@@ -1,6 +1,6 @@
 # AGENTS.md
 
-How to use ultraeasy-upscaler from the command line, without opening the window.
+How to use TOGU SCALER from the command line, without opening the window.
 Written for AI agents and scripts. The README covers the window.
 
 ## What this is
@@ -11,19 +11,19 @@ interpolates video frames. Everything runs on the local PC (GPU, or the NPU on s
 ## Setup
 
 - Requires: Windows 11 x64 and a DirectX 12 GPU.
-- Portable build: extract `ultraeasy-upscaler-portable-win64.zip`. The command is
-  `ultraeasy-upscaler-cli.exe`, in the same folder as `ultraeasy-upscaler.exe`. Nothing else to install.
+- Portable build: extract `togu-scaler-portable-win64.zip`. The command is
+  `togu-scaler-cli.exe`, in the same folder as `togu-scaler.exe`. Nothing else to install.
 - From source: Python 3.13, `pip install -r requirements.txt`, `ffmpeg` and `ffprobe` on `PATH`,
   then run `powershell -ExecutionPolicy Bypass -File setup.ps1` once to fetch the helper and models.
   The command is `python -m app.cli`, run from the repository root.
 - Working directory: any. Paths in arguments can be relative or absolute.
 
-The examples below use `ultraeasy-upscaler-cli`. From source, replace it with `python -m app.cli`.
+The examples below use `togu-scaler-cli`. From source, replace it with `python -m app.cli`.
 
 Check that it works before anything else:
 
 ```bash
-ultraeasy-upscaler-cli status --json
+togu-scaler-cli status --json
 ```
 
 Success: exit code 0, `"ok": true`, `"ffmpeg": {"found": true}`, and at least one of
@@ -34,7 +34,7 @@ Success: exit code 0, `"ok": true`, `"ffmpeg": {"found": true}`, and at least on
 ### See which models can be used
 
 ```bash
-ultraeasy-upscaler-cli models --json
+togu-scaler-cli models --json
 ```
 
 - Output: `upscale[]` and `interpolation[]`. Each entry has `key`, `name`, `available`, and `note`.
@@ -48,7 +48,7 @@ ultraeasy-upscaler-cli models --json
 ### Upscale an image
 
 ```bash
-ultraeasy-upscaler-cli run photo.png --model 4xNomosUni --out-dir out --json
+togu-scaler-cli run photo.png --model 4xNomosUni --out-dir out --json
 ```
 
 - Input: one or more images, videos, or folders of images.
@@ -64,8 +64,8 @@ ultraeasy-upscaler-cli run photo.png --model 4xNomosUni --out-dir out --json
 ### Upscale a video, or interpolate its frames
 
 ```bash
-ultraeasy-upscaler-cli run clip.mp4 --model animevideov3 --json
-ultraeasy-upscaler-cli run clip.mp4 --model none --interpolation rife-v4.6 --json
+togu-scaler-cli run clip.mp4 --model animevideov3 --json
+togu-scaler-cli run clip.mp4 --model none --interpolation rife-v4.6 --json
 ```
 
 - Output: an H.264 `.mp4`. Audio is kept unless `--no-audio` is given.
@@ -82,7 +82,7 @@ ultraeasy-upscaler-cli run clip.mp4 --model none --interpolation rife-v4.6 --jso
 ### Check the result on one frame first
 
 ```bash
-ultraeasy-upscaler-cli quick-check clip.mp4 --time 5 --model animevideov3 --out check.png --json
+togu-scaler-cli quick-check clip.mp4 --time 5 --model animevideov3 --out check.png --json
 ```
 
 - Enlarges one image (for a video, the frame at `--time` seconds; default 2) and saves it as a PNG.
@@ -92,7 +92,7 @@ ultraeasy-upscaler-cli quick-check clip.mp4 --time 5 --model animevideov3 --out 
 ### Plan without processing
 
 ```bash
-ultraeasy-upscaler-cli run a.png b.mp4 --model animevideov3 --dry-run --json
+togu-scaler-cli run a.png b.mp4 --model animevideov3 --dry-run --json
 ```
 
 - Validates every input and prints the settings and the exact output path each one would get.
@@ -130,7 +130,7 @@ The command never asks for input.
 Errors look like this, on stdout with `--json` (otherwise as `error:` and `fix:` lines on stderr):
 
 ```json
-{"ok": false, "error": {"code": "model_unknown", "message": "Unknown model: foo.", "fix": "Check available models with: ultraeasy-upscaler-cli models --json"}}
+{"ok": false, "error": {"code": "model_unknown", "message": "Unknown model: foo.", "fix": "Check available models with: togu-scaler-cli models --json"}}
 ```
 
 `code` is a fixed name, and `fix` says what to do next. Common codes: `input_not_found`,
@@ -158,24 +158,24 @@ Some models are separate downloads. `status --json` shows which are installed un
 
 | `kits` key | Adds | File |
 |---|---|---|
-| `film` | `--interpolation film-style` | `ultraeasy-upscaler-film-kit.zip` |
-| `adcsr_gpu` | `--model AdcSR` on the GPU | `ultraeasy-upscaler-adcsr-kit.zip` |
-| `npu` | `--backend npu` (AMD Ryzen AI PCs with Ryzen AI Software) | `ultraeasy-upscaler-npu-kit.zip` |
-| `adcsr_npu` | `--model AdcSR` on the NPU | `ultraeasy-upscaler-npu-kit-adcsr.zip` |
+| `film` | `--interpolation film-style` | `togu-scaler-film-kit.zip` |
+| `adcsr_gpu` | `--model AdcSR` on the GPU | `togu-scaler-adcsr-kit.zip` |
+| `npu` | `--backend npu` (AMD Ryzen AI PCs with Ryzen AI Software) | `togu-scaler-npu-kit.zip` |
+| `adcsr_npu` | `--model AdcSR` on the NPU | `togu-scaler-npu-kit-adcsr.zip` |
 
-The files are on the [releases page](https://github.com/tomhda/ultraeasy-upscaler/releases/latest).
-To install one, extract the zip into the folder that contains `ultraeasy-upscaler-cli.exe`.
+The files are on the [releases page](https://github.com/tomhda/togu-scaler/releases/latest).
+To install one, extract the zip into the folder that contains `togu-scaler-cli.exe`.
 The command itself downloads nothing; installing a kit is a decision for the person you work for.
 
 ## More help
 
-- `ultraeasy-upscaler-cli --help`, and `--help` after any command, list the arguments, defaults,
+- `togu-scaler-cli --help`, and `--help` after any command, list the arguments, defaults,
   and examples.
 - The window, the models, and the add-on kits: [README.md](README.md) (Japanese),
   [README.en.md](README.en.md) (English). The README uses display names such as "4xNomosUni SPAN";
   the value for `--model` is the `key` from `models --json`.
 - Internals and running from source:
-  [docs/technical.md](https://github.com/tomhda/ultraeasy-upscaler/blob/main/docs/technical.md) (Japanese).
+  [docs/technical.md](https://github.com/tomhda/togu-scaler/blob/main/docs/technical.md) (Japanese).
 
 ## agent-friendly check record
 

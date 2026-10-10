@@ -16,7 +16,7 @@ from .settings import (
 )
 
 # GitHub の最新リリースからキット zip を取る。ファイル名は 1 か所で組み立てる。
-KIT_RELEASE_BASE = "https://github.com/tomhda/ultraeasy-upscaler/releases/latest/download"
+KIT_RELEASE_BASE = "https://github.com/tomhda/togu-scaler/releases/latest/download"
 
 
 @dataclass(frozen=True)
@@ -68,28 +68,28 @@ def addon_kits() -> list[AddonKit]:
             key="film",
             name_key=N_("FILM (Style)"),
             size="178 MB",
-            filename="ultraeasy-upscaler-film-kit.zip",
+            filename="togu-scaler-film-kit.zip",
             installed=film_kit_installed(),
         ),
         AddonKit(
             key="npu",
             name_key=N_("NPU キット"),
             size="56 MB",
-            filename="ultraeasy-upscaler-npu-kit.zip",
+            filename="togu-scaler-npu-kit.zip",
             installed=npu_kit_installed(),
         ),
         AddonKit(
             key="adcsr_gpu",
             name_key=N_("AdcSR（GPU 用）"),
             size="1.7 GB",
-            filename="ultraeasy-upscaler-adcsr-kit.zip",
+            filename="togu-scaler-adcsr-kit.zip",
             installed=adcsr_gpu_installed(),
         ),
         AddonKit(
             key="adcsr_npu",
             name_key=N_("AdcSR（NPU 用）"),
             size="1.7 GB",
-            filename="ultraeasy-upscaler-npu-kit-adcsr.zip",
+            filename="togu-scaler-npu-kit-adcsr.zip",
             installed=adcsr_npu_installed(),
         ),
     ]

@@ -450,13 +450,13 @@ def _canned_kits(installed: dict[str, bool]):
 
     return [
         AddonKit("film", "FILM (Style)", "178 MB",
-                 "ultraeasy-upscaler-film-kit.zip", installed["film"]),
+                 "togu-scaler-film-kit.zip", installed["film"]),
         AddonKit("npu", "NPU キット", "56 MB",
-                 "ultraeasy-upscaler-npu-kit.zip", installed["npu"]),
+                 "togu-scaler-npu-kit.zip", installed["npu"]),
         AddonKit("adcsr_gpu", "AdcSR（GPU 用）", "1.7 GB",
-                 "ultraeasy-upscaler-adcsr-kit.zip", installed["adcsr_gpu"]),
+                 "togu-scaler-adcsr-kit.zip", installed["adcsr_gpu"]),
         AddonKit("adcsr_npu", "AdcSR（NPU 用）", "1.7 GB",
-                 "ultraeasy-upscaler-npu-kit-adcsr.zip", installed["adcsr_npu"]),
+                 "togu-scaler-npu-kit-adcsr.zip", installed["adcsr_npu"]),
     ]
 
 
@@ -518,10 +518,10 @@ def test_kit_button_opens_release_url(app, monkeypatch) -> None:
         drawer.kit_rows["adcsr_npu"]["button"].click()
         app.processEvents()
         assert opened == [
-            "https://github.com/tomhda/ultraeasy-upscaler/releases/latest/download/"
-            "ultraeasy-upscaler-film-kit.zip",
-            "https://github.com/tomhda/ultraeasy-upscaler/releases/latest/download/"
-            "ultraeasy-upscaler-npu-kit-adcsr.zip",
+            "https://github.com/tomhda/togu-scaler/releases/latest/download/"
+            "togu-scaler-film-kit.zip",
+            "https://github.com/tomhda/togu-scaler/releases/latest/download/"
+            "togu-scaler-npu-kit-adcsr.zip",
         ]
     finally:
         drawer.close()

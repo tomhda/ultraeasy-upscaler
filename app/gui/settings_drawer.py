@@ -5,7 +5,7 @@ import threading
 import time
 
 from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QThread, QTimer, Signal, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QPaintEvent, QPainter, QPen
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPaintEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -108,6 +108,10 @@ _LANGUAGE_OPTIONS = [
     (N_("日本語"), "ja"),
     (N_("English"), "en"),
 ]
+# アクセントカラーの選択肢（値・表示名の表は user_settings が唯一の出どころ）。
+_ACCENT_OPTIONS = [
+    (label, value) for value, label in user_settings.ACCENT_OPTIONS
+]
 _HELP = {
     "backend": N_("AIの実行先です。自動はDirectML GPUを優先し、起動できない場合はVulkanへ切り替えます。NPUはGPU負荷を抑えます。SwinIR CUDAは実写向けですが動画処理は非常に低速です。"),
     "image_format": N_("画像を書き出す形式です。pngは劣化なし、jpgは容量小、webpは容量を抑えやすい形式です。"),
@@ -121,6 +125,7 @@ _HELP = {
     "tta": N_("TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。"),
     "output": N_("処理したファイルの保存先です。「元の場所」は元のファイルと同じ場所、「フォルダ選択…」は指定したフォルダに保存します。"),
     "create_folder": N_("チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。"),
+    "accent": N_("画面の強調に使う色です。「Windows に合わせる」では、Windows の個人用設定で選んだ色を使います。"),
     "target_fps": N_("フレーム補間後の滑らかさです。通常は元動画の2倍を選びます。指定fpsが元動画以下なら処理できません。"),
     "processing_order": N_("アップスケールとフレーム補間を両方行うときの順番です。通常は「アプコン→補間」が速くおすすめ。高解像度でメモリ不足になるときだけ「補間→アプコン」にします。FILM (Style) は、メモリを抑えるため常に「補間 → アプコン」の順で処理します。"),
 }
@@ -434,6 +439,21 @@ class SettingsDrawer(QFrame):
         )
         self._load_language_combo()
 
+        # --- アクセントカラー（表示言語の近く。選ぶとすぐ画面全体に反映） ---
+        self.accent_combo = self._combo_with_data(_ACCENT_OPTIONS)
+        for i in range(self.accent_combo.count()):
+            value = self.accent_combo.itemData(i)
+            if value != user_settings.ACCENT_AUTO:
+                pix = QPixmap(14, 14)
+                pix.fill(QColor(str(value)))
+                self.accent_combo.setItemIcon(i, QIcon(pix))
+        grid.addWidget(self._label(N_("アクセントカラー"), _HELP["accent"]), 5, 2)
+        grid.addWidget(self.accent_combo, 5, 3)
+        self.accent_combo.currentIndexChanged.connect(
+            self._on_accent_changed
+        )
+        self._load_accent_combo()
+
         root.addLayout(grid)
 
         # --- トグル群 ---
@@ -479,7 +499,7 @@ class SettingsDrawer(QFrame):
         kit_section.addWidget(kit_heading)
         kit_desc = QLabel(
             t(
-                "ダウンロードした zip を、ultraeasy-upscaler.exe のあるフォルダに"
+                "ダウンロードした zip を、togu-scaler.exe のあるフォルダに"
                 "展開してください。次回の起動から使えます。"
             )
         )
@@ -565,6 +585,23 @@ class SettingsDrawer(QFrame):
         """選択を保存し、次回起動から有効になる案内を出す。"""
         user_settings.save_language(str(self.language_combo.currentData()))
         self.language_notice.setText(t("次回の起動から切り替わります。"))
+
+    def _load_accent_combo(self) -> None:
+        """保存されたアクセントカラーを欄に反映する。"""
+        saved = user_settings.load_accent()
+        index = self.accent_combo.findData(saved)
+        previous = self.accent_combo.blockSignals(True)
+        try:
+            self.accent_combo.setCurrentIndex(index if index >= 0 else 0)
+        finally:
+            self.accent_combo.blockSignals(previous)
+
+    def _on_accent_changed(self) -> None:
+        """選択を保存し、すぐ画面全体に反映する（再起動は求めない）。"""
+        user_settings.save_accent(str(self.accent_combo.currentData()))
+        app = QApplication.instance()
+        if app is not None:
+            theme.refresh(app)
 
     # --- 既定値の読込／設定への反映 ---
     def load_defaults(self, settings: UpscaleSettings | None = None) -> None:

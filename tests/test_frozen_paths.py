@@ -13,7 +13,7 @@ def test_app_root_is_next_to_the_exe_when_frozen(monkeypatch, tmp_path):
     """
     from app.core import settings
 
-    exe = tmp_path / "ultraeasy-upscaler.exe"
+    exe = tmp_path / "togu-scaler.exe"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe))
 

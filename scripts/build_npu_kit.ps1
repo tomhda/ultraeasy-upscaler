@@ -4,10 +4,10 @@
     NPU 追加キットの zip（別配布）を作成する。
 
 .DESCRIPTION
-    ultraeasy-upscaler-npu-kit.zip（AdcSR 以外）を作る。exe のフォルダに
+    togu-scaler-npu-kit.zip（AdcSR 以外）を作る。exe のフォルダに
     上書き展開する前提の構造（tools/npu-serve/*.py、models/ai/ の NPU 用
     モデル、NPUキットの使い方.txt）にする。
-    -WithAdcSR を付けたときだけ ultraeasy-upscaler-npu-kit-adcsr.zip
+    -WithAdcSR を付けたときだけ togu-scaler-npu-kit-adcsr.zip
     （無圧縮）も作る。
 
     モデルの選定は app/core/settings.py の表（HELPER_MODEL_FILES の
@@ -82,19 +82,19 @@ function Get-ModelLists {
 }
 
 $usageText = @"
-ultraeasy-upscaler NPU キット
+togu-scaler NPU キット
 
 AMD Ryzen AI 搭載の PC で、NPU を使って処理するための追加ファイルです。
 
 必要なもの
-- ultraeasy-upscaler ポータブル版
+- togu-scaler ポータブル版
 - AMD の Ryzen AI Software 1.8.0（AMD のサイトから入手して導入）
 - NPU ドライバ 32.0.203.329 以降
 
 入れ方
-1. ultraeasy-upscaler を終了します。
-2. この zip の中身を、ultraeasy-upscaler.exe があるフォルダに上書きで展開します。
-3. ultraeasy-upscaler を起動し、右上の歯車から詳細設定を開きます。
+1. togu-scaler を終了します。
+2. この zip の中身を、togu-scaler.exe があるフォルダに上書きで展開します。
+3. togu-scaler を起動し、右上の歯車から詳細設定を開きます。
 4. 「NPU の準備」で、使うモデルの「NPU 用に変換」を押します。
    NPU ではモデルをそのままでは動かせないため、NPU 用に変換する作業です。
 5. 変換が終わったら、「AI実行先」で NPU を選びます。
@@ -111,19 +111,19 @@ Ryzen AI Software を標準と違う場所に入れた場合は、環境変数 U
 "@
 
 $usageTextEn = @"
-ultraeasy-upscaler NPU kit
+togu-scaler NPU kit
 
 Extra files for processing on the NPU of an AMD Ryzen AI PC.
 
 What you need
-- The ultraeasy-upscaler portable build
+- The togu-scaler portable build
 - AMD Ryzen AI Software 1.8.0 (get it from AMD and install it)
 - NPU driver 32.0.203.329 or later
 
 How to add it
-1. Close ultraeasy-upscaler.
-2. Extract the contents of this zip into the folder that contains ultraeasy-upscaler.exe, overwriting files.
-3. Start ultraeasy-upscaler and open More settings with the gear at the top right.
+1. Close togu-scaler.
+2. Extract the contents of this zip into the folder that contains togu-scaler.exe, overwriting files.
+3. Start togu-scaler and open More settings with the gear at the top right.
 4. Under NPU setup, select Convert for NPU on each model you will use.
    The NPU cannot run a model as it is, so this converts the model for the NPU.
 5. When the conversion has finished, choose NPU under Run on.
@@ -190,7 +190,7 @@ function New-NpuKit(
             Copy-Item -LiteralPath $source -Destination $modelsOut -Force
         }
 
-        if ($ZipName -eq "ultraeasy-upscaler-npu-kit.zip") {
+        if ($ZipName -eq "togu-scaler-npu-kit.zip") {
             [IO.File]::WriteAllText(
                 (Join-Path $stage "NPUキットの使い方.txt"),
                 $usageText, [Text.UTF8Encoding]::new($true))
@@ -238,9 +238,9 @@ $adcsrLicenses = @(
     "LICENSE-OpenRAIL-M-CompVis-SD1.txt"
 )
 
-New-NpuKit "ultraeasy-upscaler-npu-kit.zip" $lists.Base `
+New-NpuKit "togu-scaler-npu-kit.zip" $lists.Base `
     "NOTICE-models-npu-bf16.txt" $baseLicenses "Optimal"
 if ($WithAdcSR) {
-    New-NpuKit "ultraeasy-upscaler-npu-kit-adcsr.zip" $lists.Adcsr `
+    New-NpuKit "togu-scaler-npu-kit-adcsr.zip" $lists.Adcsr `
         "NOTICE-models-adcsr-npu-bf16.txt" $adcsrLicenses "NoCompression"
 }

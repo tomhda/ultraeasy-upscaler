@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QPalette
 
+from app.core import user_settings
 from app.i18n import language as _current_language
 
 # アクセント色を取得できないときの既定
@@ -449,6 +450,10 @@ QComboBox QAbstractItemView {{
     selection-color: {p.on_accent};
     outline: none;
 }}
+/* 選べない項目（未導入のモデルなど）は無効な文字の色で出す */
+QComboBox QAbstractItemView::item:disabled {{
+    color: {p.text_mute};
+}}
 
 QFrame#card {{
     background-color: {p.panel};
@@ -681,6 +686,13 @@ notifier = _Notifier()
 
 def _system_palette(app) -> Palette:
     dark = app.styleHints().colorScheme() != Qt.ColorScheme.Light
+    try:
+        chosen = user_settings.load_accent()
+    except Exception:
+        chosen = user_settings.ACCENT_AUTO
+    if chosen != user_settings.ACCENT_AUTO:
+        # アプリで選んだ色を使う（"auto" のときだけ Windows の色を読む）。
+        return build_palette(dark, chosen)
     accent = app.palette().color(QPalette.ColorRole.Accent)
     return build_palette(dark, accent.name() if accent.isValid() else _FALLBACK_ACCENT)
 

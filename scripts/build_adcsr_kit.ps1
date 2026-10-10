@@ -4,7 +4,7 @@
     AdcSR（GPU 用）追加キットの zip（別配布）を作成する。
 
 .DESCRIPTION
-    ultraeasy-upscaler-adcsr-kit.zip を作る。exe のフォルダに
+    togu-scaler-adcsr-kit.zip を作る。exe のフォルダに
     上書き展開する前提の構造（models/ai/ の GPU 用 AdcSR 一式、
     AdcSRキットの使い方.txt）にする。
 
@@ -29,7 +29,7 @@ function Fail([string]$Message) {
     throw $Message
 }
 
-$zipName = "ultraeasy-upscaler-adcsr-kit.zip"
+$zipName = "togu-scaler-adcsr-kit.zip"
 $zipPath = Join-Path $repo $zipName
 if (Test-Path -LiteralPath $zipPath) {
     Fail "既にあります（上書きしません）: $zipPath"

@@ -1,11 +1,11 @@
-# ultraeasy-upscaler
+# TOGU SCALER
 
 [日本語](README.md) [![agent-friendly](docs/images/agent-friendly.svg)](AGENTS.md)
 
-**[⬇ Download ultraeasy-upscaler v0.11.0](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip)**
+**[⬇ Download TOGU SCALER v0.11.0](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-portable-win64.zip)**
 (zip for Windows x64, 382 MB). See [Install](#install) for the steps.
 
-ultraeasy-upscaler is a Windows app that upscales images and videos, and interpolates video frames, with a few clicks.
+TOGU SCALER is a Windows app that upscales images and videos, and interpolates video frames, with a few clicks.
 Everything runs on your own PC. It collects no data, shows no ads, and is open source.
 It supports up to five super-resolution models, including Real-ESRGAN, and the frame interpolation models RIFE v4.6 and FILM (Style).
 You can drop in many files and process them in one go. It runs on a GPU, and on the NPU of some PCs.
@@ -50,9 +50,9 @@ and Superman (1941), which is in the public domain.
 
 Tested on Windows 11 (x64) with a DirectX 12 GPU.
 
-1. Download [`ultraeasy-upscaler-portable-win64.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-portable-win64.zip).
+1. Download [`togu-scaler-portable-win64.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-portable-win64.zip).
 2. Extract the zip anywhere you like. It is a portable app and needs no installation.
-3. Run `ultraeasy-upscaler.exe`. The file is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Select **More info**, then **Run anyway**.
+3. Run `togu-scaler.exe`. The file is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Select **More info**, then **Run anyway**.
 
 The zip contains every file the app needs, so moving or deleting files inside the folder will very likely stop it from working.
 To uninstall, delete the extracted folder.
@@ -148,12 +148,12 @@ Models that are not included in the app are separate downloads.
 
 | Kit | Adds | File |
 |---|---|---|
-| FILM (Style) | The frame interpolation model FILM (Style) | [`ultraeasy-upscaler-film-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-film-kit.zip) (178 MB) |
-| AdcSR (for GPU) | The upscaling model AdcSR on the GPU | [`ultraeasy-upscaler-adcsr-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-adcsr-kit.zip) (1.7 GB) |
-| NPU kit | Processing on the NPU (below) | [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit.zip) (56 MB) |
-| AdcSR (for NPU) | The upscaling model AdcSR on the NPU | [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit-adcsr.zip) (1.7 GB) |
+| FILM (Style) | The frame interpolation model FILM (Style) | [`togu-scaler-film-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-film-kit.zip) (178 MB) |
+| AdcSR (for GPU) | The upscaling model AdcSR on the GPU | [`togu-scaler-adcsr-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-adcsr-kit.zip) (1.7 GB) |
+| NPU kit | Processing on the NPU (below) | [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit.zip) (56 MB) |
+| AdcSR (for NPU) | The upscaling model AdcSR on the NPU | [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit-adcsr.zip) (1.7 GB) |
 
-1. Close ultraeasy-upscaler and extract the contents of the zip into the folder that contains `ultraeasy-upscaler.exe`, overwriting files.
+1. Close TOGU SCALER and extract the contents of the zip into the folder that contains `togu-scaler.exe`, overwriting files.
 2. Start the app. The model is now in the list.
 
 **Add-on kits** in the settings shows which kits are installed and downloads each zip. See the NOTICE file in each zip for the terms of use.
@@ -167,13 +167,13 @@ Models that are not included in the app are separate downloads.
 On AMD Ryzen AI PCs, downloading an extra kit lets the app process on the NPU. The NPU becomes selectable when both of the following are in place.
 
 - AMD's [Ryzen AI Software 1.8.0](https://ryzenai.docs.amd.com/en/latest/inst.html) (get it from AMD and install it; NPU driver 32.0.203.329 or later)
-- [`ultraeasy-upscaler-npu-kit.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit.zip) (56 MB)
+- [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit.zip) (56 MB)
 
-To use AdcSR on the NPU, you also need the NPU-only model [`ultraeasy-upscaler-npu-kit-adcsr.zip`](https://github.com/tomhda/ultraeasy-upscaler/releases/download/v0.11.0/ultraeasy-upscaler-npu-kit-adcsr.zip) (1.7 GB).
+To use AdcSR on the NPU, you also need the NPU-only model [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit-adcsr.zip) (1.7 GB).
 
 Steps:
 
-1. Close ultraeasy-upscaler and extract the contents of the kit zip into the folder that contains `ultraeasy-upscaler.exe`, overwriting files.
+1. Close TOGU SCALER and extract the contents of the kit zip into the folder that contains `togu-scaler.exe`, overwriting files.
 2. Start the app, select the gear, and under **NPU setup** convert the models you will use for the NPU (select **Convert for NPU** on the model's row). The NPU cannot run a model as it is, so each model needs this once. The conversion is not heavy, but it holds some memory and takes from minutes to hours.
 3. When the conversion for the NPU has finished, choose NPU under **Run on**.
 
@@ -196,14 +196,14 @@ Technical notes on running these models on the NPU (compiler workarounds, speedu
 
 ## Command line
 
-`ultraeasy-upscaler-cli.exe`, in the same folder as `ultraeasy-upscaler.exe`, does the same processing without opening the window. It can print its results as JSON, so scripts and AI agents can use it.
+`togu-scaler-cli.exe`, in the same folder as `togu-scaler.exe`, does the same processing without opening the window. It can print its results as JSON, so scripts and AI agents can use it.
 
 ```
-ultraeasy-upscaler-cli status --json
-ultraeasy-upscaler-cli models --json
-ultraeasy-upscaler-cli run photo.png --model 4xNomosUni --out-dir out --json
-ultraeasy-upscaler-cli run clip.mp4 --model none --interpolation rife-v4.6 --json
-ultraeasy-upscaler-cli quick-check clip.mp4 --time 5 --model animevideov3 --out check.png --json
+togu-scaler-cli status --json
+togu-scaler-cli models --json
+togu-scaler-cli run photo.png --model 4xNomosUni --out-dir out --json
+togu-scaler-cli run clip.mp4 --model none --interpolation rife-v4.6 --json
+togu-scaler-cli quick-check clip.mp4 --time 5 --model animevideov3 --out check.png --json
 ```
 
 - The value for `--model` is the `key` that `models --json` returns (`4xNomosUni` for 4xNomosUni SPAN, `animevideov3` for Anime Video v3).
@@ -226,11 +226,11 @@ The list of commands, how to check a result, and the side effects are in [AGENTS
 ## Technical details
 
 Running from source, the requirements of each engine, measurements, environment variables, the internal structure, and how the portable build is made are in
-[docs/technical.md](https://github.com/tomhda/ultraeasy-upscaler/blob/main/docs/technical.md) (in Japanese).
+[docs/technical.md](https://github.com/tomhda/togu-scaler/blob/main/docs/technical.md) (in Japanese).
 
 ## License
 
-- ultraeasy-upscaler itself is under the [MIT License](LICENSE).
+- TOGU SCALER itself is under the [MIT License](LICENSE).
 - Each model has its own license. Check it before use.
 
 | Model | Author | License |

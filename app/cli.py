@@ -1,6 +1,6 @@
 """Command line entry: run the same pipeline as the GUI without a screen.
 
-Source: ``python -m app.cli <command> ...``. Frozen: ``ultraeasy-upscaler-cli.exe``.
+Source: ``python -m app.cli <command> ...``. Frozen: ``togu-scaler-cli.exe``.
 The processing itself calls into ``app/core/`` (engine/trial/npu_prepare);
 nothing is reimplemented for the CLI. This module never imports Qt.
 """
@@ -13,7 +13,7 @@ import sys
 import time
 from pathlib import Path
 
-from app import __version__
+from app import APP_SLUG, __version__
 
 
 # Exit codes: 0 success, 1 processing failure, 2 usage error.
@@ -24,7 +24,7 @@ EXIT_USAGE = 2
 # Fixed error codes (lowercase with underscores).
 # エラーの「直し方」やヘルプの例に出す、このコマンドの呼び方
 PROG = (
-    "ultraeasy-upscaler-cli" if getattr(sys, "frozen", False)
+    f"{APP_SLUG}-cli" if getattr(sys, "frozen", False)
     else "python -m app.cli"
 )
 
@@ -146,7 +146,7 @@ def build_parser(argv: list[str] | None = None) -> CliParser:
     )
     parser._json_requested = "--json" in (argv if argv is not None else sys.argv[1:])
     parser.add_argument(
-        "--version", action="version", version=__version__,
+        "--version", action="version", version=f"{APP_SLUG} {__version__}",
         help="Print the version and exit.",
     )
     _add_common(parser)
@@ -627,7 +627,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     if args.json:
         _emit_json(payload)
     else:
-        print(f"ultraeasy-upscaler {__version__}")
+        print(f"{APP_SLUG} {__version__}")
         print(f"app root: {payload['app_root']}")
         if ffmpeg_state["found"]:
             print(f"ffmpeg: found ({ffmpeg_state['path']})")

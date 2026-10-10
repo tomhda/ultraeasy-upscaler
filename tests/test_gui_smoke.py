@@ -48,7 +48,7 @@ def test_window_creates_and_adds_job(app):
     win.show()
     app.processEvents()
 
-    assert win.windowTitle().startswith("ultraeasy-upscaler")
+    assert win.windowTitle().startswith("TOGU SCALER")
     assert win.queue.row_count() == 0
 
     # サンプル画像をキューへ投入（vendor 同梱の input.jpg）
@@ -894,8 +894,8 @@ def test_model_hints_are_single_line_ja_and_en(app, tmp_path):
         app.processEvents()
 
 
-def test_header_backend_shows_only_with_npu_and_syncs(app, monkeypatch, tmp_path):
-    """NPU が使える PC でだけヘッダーに AI実行先 が出て、詳細設定の欄と連動する。"""
+def test_header_backend_always_shows_and_syncs(app, monkeypatch, tmp_path):
+    """ヘッダーに AI実行先 が常に出て、詳細設定の欄と連動する。"""
     from app.core import helper_backend, npu_prepare
     from app.gui.main_window import MainWindow
 
@@ -905,7 +905,7 @@ def test_header_backend_shows_only_with_npu_and_syncs(app, monkeypatch, tmp_path
     win.show()
     app.processEvents()
     try:
-        assert win._header_backend_field.isVisible() is False
+        assert win._header_backend_field.isVisible() is True
     finally:
         win.close()
 
@@ -925,3 +925,112 @@ def test_header_backend_shows_only_with_npu_and_syncs(app, monkeypatch, tmp_path
         assert header.currentIndex() == 0
     finally:
         win.close()
+
+
+def test_scale_buttons_show_reason_when_unavailable(app, monkeypatch, tmp_path):
+    """押せない倍率ボタンだけに理由が出る（押せるボタンには付かない）。"""
+    import shutil as _shutil
+
+    from app.core import binaries
+    from app.core.settings import UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    reason = ("2倍は、AI実行先が Vulkan で、"
+              "モデルが Anime Video v3 のときに選べます")
+    win = MainWindow()
+    app.processEvents()
+    try:
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
+
+        # GPU（自動）では 2 倍は押せず理由が出る。4 倍には付かない。
+        assert win._selected_backend() == UpscaleBackend.WINML_GPU
+        assert win._scale_btns[2].isEnabled() is False
+        assert win._scale_btns[2].toolTip() == reason
+        assert win._scale_btns[4].toolTip() == ""
+
+        # Vulkan で Anime Video v3 のとき 2 倍は押せて理由は出ない。
+        monkeypatch.setattr(
+            binaries, "available_models",
+            lambda: ["realesr-animevideov3", "realesrgan-x4plus"],
+        )
+        monkeypatch.setattr(binaries, "model_supports_scale", lambda _m, _s: True)
+        vulkan = win.backend_combo.findData(UpscaleBackend.VULKAN.value)
+        win.backend_combo.setCurrentIndex(vulkan)
+        app.processEvents()
+        idx = win.model_combo.findData("realesr-animevideov3")
+        assert idx >= 0
+        win.model_combo.setCurrentIndex(idx)
+        app.processEvents()
+        assert win._scale_btns[2].isEnabled() is True
+        assert win._scale_btns[2].toolTip() == ""
+    finally:
+        win.close()
+        app.processEvents()
+
+
+def test_adcsr_shows_not_installed_without_kit(app, monkeypatch, tmp_path):
+    """キットが無いとき AdcSR は「（未導入）」付きで選べない（ヘッダーと右列）。"""
+    import shutil as _shutil
+
+    from app.core import addon_kits
+    from app.core.settings import HELPER_MODEL_ADCSR, UpscaleBackend
+    from app.gui.main_window import MainWindow
+
+    monkeypatch.setattr(addon_kits, "adcsr_gpu_installed", lambda: False)
+    monkeypatch.setattr(addon_kits, "adcsr_npu_installed", lambda: False)
+    win = MainWindow()
+    app.processEvents()
+    try:
+        assert win._selected_backend() == UpscaleBackend.WINML_GPU
+        idx = win.image_model_combo.findData(HELPER_MODEL_ADCSR)
+        assert idx >= 0
+        assert "（未導入）" in win.image_model_combo.itemText(idx)
+        item = win.image_model_combo.model().item(idx)
+        assert item is not None
+        assert item.isEnabled() is False
+
+        src = tmp_path / "pic.png"
+        _shutil.copy(SAMPLE_IMAGE, src)
+        ok, _ = win.add_path(str(src))
+        assert ok is True
+        app.processEvents()
+        ridx = win.model_combo.findData(HELPER_MODEL_ADCSR)
+        assert ridx >= 0
+        assert "（未導入）" in win.model_combo.itemText(ridx)
+        ritem = win.model_combo.model().item(ridx)
+        assert ritem is not None
+        assert ritem.isEnabled() is False
+        # 未導入のまま実行に進まない（一括は既定のモデルのまま）。
+        assert win.build_settings().model != HELPER_MODEL_ADCSR
+    finally:
+        win.close()
+        app.processEvents()
+
+
+def test_adcsr_selectable_with_kit(app, monkeypatch):
+    """キットがあるとき AdcSR はふつうに選べる。"""
+    from app.core import addon_kits
+    from app.core.settings import HELPER_MODEL_ADCSR
+    from app.gui.main_window import MainWindow
+
+    monkeypatch.setattr(addon_kits, "adcsr_gpu_installed", lambda: True)
+    monkeypatch.setattr(addon_kits, "adcsr_npu_installed", lambda: True)
+    win = MainWindow()
+    app.processEvents()
+    try:
+        idx = win.image_model_combo.findData(HELPER_MODEL_ADCSR)
+        assert idx >= 0
+        assert "（未導入）" not in win.image_model_combo.itemText(idx)
+        item = win.image_model_combo.model().item(idx)
+        assert item is not None
+        assert item.isEnabled() is True
+        win.image_model_combo.setCurrentIndex(idx)
+        app.processEvents()
+        assert win.build_settings().model == HELPER_MODEL_ADCSR
+    finally:
+        win.close()
+        app.processEvents()

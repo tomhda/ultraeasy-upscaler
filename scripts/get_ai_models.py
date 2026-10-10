@@ -97,7 +97,7 @@ def _download(spec: ModelSpec) -> Path:
     temporary = destination.with_suffix(destination.suffix + ".part")
     request = urllib.request.Request(
         spec.url,
-        headers={"User-Agent": "ultraeasy-upscaler/get_ai_models"},
+        headers={"User-Agent": "togu-scaler/get_ai_models"},
     )
     print(f"ダウンロード: {spec.url}")
     try:

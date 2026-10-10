@@ -8,7 +8,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $repo ".venv\Scripts\python.exe"
 $work = Join-Path $repo "portable_build"
 $dist = Join-Path $repo "portable_dist"
-$app = Join-Path $dist "ultraeasy-upscaler"
+$app = Join-Path $dist "togu-scaler"
 
 function Assert-UnderRepo([string]$Path) {
     $full = [System.IO.Path]::GetFullPath($Path)
@@ -29,13 +29,13 @@ if (-not (Test-Path -LiteralPath $python)) {
 }
 
 # Two EXEs (GUI + CLI) in one COLLECT sharing the same _internal.
-# Entry points and sharing are defined in ultraeasy-upscaler.spec.
+# Entry points and sharing are defined in togu-scaler.spec.
 & $python -m PyInstaller `
     --clean `
     --noconfirm `
     --distpath $dist `
     --workpath $work `
-    (Join-Path $repo "ultraeasy-upscaler.spec")
+    (Join-Path $repo "togu-scaler.spec")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $vendorOut = Join-Path $app "vendor"
@@ -54,7 +54,7 @@ Get-ChildItem -LiteralPath $realesrganSource | Where-Object { $realesrganSamples
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $realesrganOut -Recurse -Force }
 
 # FILM キット（vendor/winml-film/、models/film/）は本体 zip に入れない。
-# 別配布の ultraeasy-upscaler-film-kit.zip（scripts/build_film_kit.ps1）で配る。
+# 別配布の togu-scaler-film-kit.zip（scripts/build_film_kit.ps1）で配る。
 # FILM のライセンス（LICENSE-Apache-2.0-FILM.txt）も本体側には入れず、FILM キットに入れる。
 $rifeBase = Get-ChildItem -LiteralPath (Join-Path $repo "vendor\rife") -Recurse `
     -Filter "rife-ncnn-vulkan.exe" | Select-Object -First 1 -ExpandProperty DirectoryName
@@ -134,9 +134,9 @@ Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination (Join-Path $ap
 Copy-Item -LiteralPath (Join-Path $repo "README.en.md") -Destination (Join-Path $app "README.en.md") -Force
 Copy-Item -LiteralPath (Join-Path $repo "AGENTS.md") -Destination (Join-Path $app "AGENTS.md") -Force
 @"
-ultraeasy-upscaler ポータブル版
+togu-scaler ポータブル版
 
-1. ultraeasy-upscaler.exe をダブルクリックします。
+1. togu-scaler.exe をダブルクリックします。
 2. 画像や動画を、ウィンドウにドラッグ＆ドロップします。
 3. 上でモデルを選びます。右側の「クイック確認」を押すと、1 枚だけ先に結果を確認できます。
 4. 「開始」を押します。
@@ -152,12 +152,12 @@ NPU は標準では使いません。AMD Ryzen AI 搭載の PC で NPU を使う
 FILM (Style)（フレーム補間）と AdcSR（拡大）は別配布です。歯車の「追加キット」からダウンロードできます。
 
 コマンドから使う
-ultraeasy-upscaler-cli.exe で、画面を開かずに同じ処理ができます。使い方は AGENTS.md（英語）にあります。
+togu-scaler-cli.exe で、画面を開かずに同じ処理ができます。使い方は AGENTS.md（英語）にあります。
 "@ | Set-Content -LiteralPath (Join-Path $app "はじめに.txt") -Encoding UTF8
 @"
-ultraeasy-upscaler portable build
+togu-scaler portable build
 
-1. Double-click ultraeasy-upscaler.exe.
+1. Double-click togu-scaler.exe.
 2. Drag and drop images or videos onto the window.
 3. Choose a model at the top. Select Quick check on the right to check the result on one image first.
 4. Select Start.
@@ -174,22 +174,22 @@ About add-on kits
 FILM (Style) (frame interpolation) and AdcSR (upscaling) are separate downloads. Get them from Add-on kits under the gear.
 
 Command line
-ultraeasy-upscaler-cli.exe does the same processing without opening the window. See AGENTS.md for how to use it.
+togu-scaler-cli.exe does the same processing without opening the window. See AGENTS.md for how to use it.
 "@ | Set-Content -LiteralPath (Join-Path $app "Getting started.txt") -Encoding UTF8
 
-& (Join-Path $app "ultraeasy-upscaler.exe") --portable-self-test
+& (Join-Path $app "togu-scaler.exe") --portable-self-test
 if ($LASTEXITCODE -ne 0) {
     throw "Portable self-test failed: $LASTEXITCODE"
 }
 
 # The CLI exe must also start from the same folder (same _internal).
-& (Join-Path $app "ultraeasy-upscaler-cli.exe") status
+& (Join-Path $app "togu-scaler-cli.exe") status
 if ($LASTEXITCODE -ne 0) {
     throw "CLI self-test failed: $LASTEXITCODE"
 }
 
 if (-not $Destination) {
-    $Destination = Join-Path $repo "ultraeasy-upscaler-portable-win64.zip"
+    $Destination = Join-Path $repo "togu-scaler-portable-win64.zip"
 }
 $destinationFull = [System.IO.Path]::GetFullPath($Destination)
 if (Test-Path -LiteralPath $destinationFull) {

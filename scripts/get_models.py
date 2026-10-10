@@ -45,7 +45,7 @@ RIFE_ZIP_URL = (
 
 def _download(url: str) -> bytes:
     print(f"  download: {url}")
-    req = urllib.request.Request(url, headers={"User-Agent": "ultraeasy-upscaler/get_models"})
+    req = urllib.request.Request(url, headers={"User-Agent": "togu-scaler/get_models"})
     with urllib.request.urlopen(req, timeout=180) as resp:  # 302 はデフォルトで追従
         return resp.read()
 

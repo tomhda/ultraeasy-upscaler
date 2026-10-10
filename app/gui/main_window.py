@@ -34,7 +34,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import binaries, catalog, helper_backend, npu_prepare
+from app import APP_NAME
+from app.core import addon_kits, binaries, catalog, helper_backend, npu_prepare
 from app.core.jobs import Job, JobKind, JobStatus
 from app.core.settings import (
     DEFAULT_MODEL,
@@ -120,11 +121,11 @@ class ModelCombo(QComboBox):
 
 
 class MainWindow(QWidget):
-    """ultraeasy-upscaler のメイン画面。"""
+    """TOGU SCALER のメイン画面。"""
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("ultraeasy-upscaler")
+        self.setWindowTitle(APP_NAME)
         # 小さい画面（1366x768 や 1080p@125% 等）でもはみ出さないよう、
         # 起動サイズは利用可能領域にクランプする
         screen = QApplication.primaryScreen()
@@ -261,7 +262,7 @@ class MainWindow(QWidget):
         app_icon.setPixmap(logo_pixmap(34, self.devicePixelRatioF()))
         row.addWidget(app_icon)
 
-        title = QLabel("ultraeasy-upscaler")
+        title = QLabel(APP_NAME)
         title.setObjectName("appTitle")
         row.addWidget(title)
 
@@ -294,7 +295,8 @@ class MainWindow(QWidget):
             self.header_backend_combo.setCurrentIndex)
         self._header_backend_field = self._header_field(
             t("AI実行先"), self.header_backend_combo)
-        self._header_backend_field.setVisible(npu_prepare.npu_available())
+        # AI実行先は常に出す（選択肢は詳細設定と同じ available_backend_options()）。
+        self._header_backend_field.setVisible(True)
         row.addWidget(self._header_backend_field, 10)
         row.addStretch(1)
 
@@ -995,6 +997,7 @@ class MainWindow(QWidget):
             for button in self._scale_btns.values():
                 button.setEnabled(False)
             self._update_all_model_info()
+            self._refresh_scale_tooltips()
             return
         if backend in _HELPER_BACKENDS:
             # 「なし」は無効にするだけで、コンボ自体は戻せるよう有効のままにする。
@@ -1005,6 +1008,7 @@ class MainWindow(QWidget):
                     and not self._running
                 )
             self._update_all_model_info()
+            self._refresh_scale_tooltips()
             return
 
         upscale_enabled = model not in (None, "__missing__")
@@ -1012,6 +1016,7 @@ class MainWindow(QWidget):
             for button in self._scale_btns.values():
                 button.setEnabled(False)
             self._update_all_model_info()
+            self._refresh_scale_tooltips()
             return
 
         self._fix_stored_scale(job)
@@ -1022,6 +1027,40 @@ class MainWindow(QWidget):
                 supported = True
             button.setEnabled(supported and not self._running)
         self._update_all_model_info()
+        self._refresh_scale_tooltips()
+
+    def _refresh_scale_tooltips(self) -> None:
+        """押せない倍率ボタンに理由を出す（押せるボタンには付けない）。
+
+        ファイルを選び、拡大モデルが「なし」でなく、そのボタンが 2 倍か
+        3 倍で、実行中でないのに押せないときだけ、新 GPU/NPU 経路では
+        選べない旨を出す。それ以外の理由（ファイル未選択、実行中、
+        モデルが「なし」）では付けない。
+        """
+        job = self._selected_job()
+        model = None
+        if job is not None:
+            try:
+                model = self.model_combo.currentData()
+            except RuntimeError:
+                model = None
+        for scale, button in self._scale_btns.items():
+            try:
+                if (
+                    job is not None
+                    and model not in (None, "__missing__")
+                    and scale in (2, 3)
+                    and not self._running
+                    and not button.isEnabled()
+                ):
+                    button.setToolTip(
+                        t("2倍は、AI実行先が Vulkan で、"
+                          "モデルが Anime Video v3 のときに選べます")
+                    )
+                else:
+                    button.setToolTip("")
+            except RuntimeError:
+                pass
 
     def _film_selected(self) -> bool:
         """一括か個別のどれかで FILM (Style) が選ばれているか。"""
@@ -1057,6 +1096,19 @@ class MainWindow(QWidget):
             if value != HELPER_MODEL_ADCSR
         ]
 
+    @staticmethod
+    def _adcsr_available(backend: UpscaleBackend) -> bool:
+        """その実行先で AdcSR のキットが入っているか。
+
+        GPU（DirectML）は `adcsr_gpu`、NPU は `adcsr_npu` を見る。
+        AdcSR を出さない実行先では常に入っている扱いにする。
+        """
+        if backend == UpscaleBackend.NPU_NATIVE:
+            return addon_kits.adcsr_npu_installed()
+        if backend == UpscaleBackend.WINML_GPU:
+            return addon_kits.adcsr_gpu_installed()
+        return True
+
     def _base_options(
         self, backend: UpscaleBackend, is_video: bool,
         models: list[str] | None = None,
@@ -1090,6 +1142,8 @@ class MainWindow(QWidget):
                 else DEFAULT_HELPER_MODEL
             )
             allowed = {v for _label, v in self._base_options(backend, is_video)}
+            if not self._adcsr_available(backend):
+                allowed.discard(HELPER_MODEL_ADCSR)
             if combo.count() == 0:
                 return default_model
             return value if value in allowed else default_model
@@ -1149,6 +1203,8 @@ class MainWindow(QWidget):
             allowed = {
                 v for _label, v in self._base_options(backend, is_video, models)
             }
+            if not self._adcsr_available(backend):
+                allowed.discard(HELPER_MODEL_ADCSR)
             if effective not in allowed:
                 default = self._default_model_for(backend, models)
                 if job.id in self._overrides:
@@ -1175,12 +1231,29 @@ class MainWindow(QWidget):
         self, combo: QComboBox,
         options: list[tuple[str, object]], selected: object | None,
     ) -> None:
-        """モデルコンボの項目を差し替え、可能なら選択値を維持する。"""
+        """モデルコンボの項目を差し替え、可能なら選択値を維持する。
+
+        いまの実行先に合う AdcSR のキットが入っていないときは、
+        FILM と同じく「AdcSR（未導入）」を選べない項目で出す。
+        """
+        unavailable_adcsr = not self._adcsr_available(self._selected_backend())
         previous = combo.blockSignals(True)
         try:
             combo.clear()
             for label, value in options:
-                combo.addItem(t(label), value)
+                if value == HELPER_MODEL_ADCSR and unavailable_adcsr:
+                    combo.addItem(
+                        t("{name}（未導入）", name=t("AdcSR")),
+                        value,
+                    )
+                    item = combo.model().item(combo.count() - 1)
+                    if item is not None:
+                        item.setEnabled(False)
+                        item.setToolTip(
+                            t("詳細設定の「追加キット」からダウンロードできます")
+                        )
+                else:
+                    combo.addItem(t(label), value)
             if selected is not None:
                 index = combo.findData(selected)
                 if index >= 0:
@@ -1242,6 +1315,14 @@ class MainWindow(QWidget):
         for i in range(combo.count()):
             data = combo.itemData(i)
             if data in (None, "__missing__"):
+                continue
+            if data == HELPER_MODEL_ADCSR and not self._adcsr_available(backend):
+                # 未導入の表示は載せ替えのまま残す（印を付けない）。
+                item = item_model.item(i)
+                if item is not None:
+                    item.setToolTip(
+                        t("詳細設定の「追加キット」からダウンロードできます")
+                    )
                 continue
             base = t(_MODEL_LABELS.get(data, data))
             suffix = ""
@@ -1356,6 +1437,8 @@ class MainWindow(QWidget):
                 return {value for _label, value in _SWINIR_CUDA_MODEL_OPTIONS}
             allowed = {value for _label, value in _HELPER_MODEL_OPTIONS}
             if tab == _VIDEO_TAB:
+                allowed.discard(HELPER_MODEL_ADCSR)
+            if not self._adcsr_available(backend):
                 allowed.discard(HELPER_MODEL_ADCSR)
             return allowed
         if models is None:
@@ -2003,7 +2086,7 @@ class MainWindow(QWidget):
     # -------------------------------------------------------------- 補助
     def _flash_hint(self, text: str) -> None:
         """開始ボタンの上に状況メッセージを出す（ウィンドウタイトルにも併記）。"""
-        self.setWindowTitle(t("ultraeasy-upscaler — {text}", text=text))
+        self.setWindowTitle(t("TOGU SCALER — {text}", text=text))
         self.status_label.setText(text)
 
     def _launch_explorer(self, args: list[str]) -> None:

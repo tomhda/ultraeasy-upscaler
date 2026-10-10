@@ -1,13 +1,13 @@
-﻿ultraeasy-upscaler AdcSR キット（GPU 用）
+﻿TOGU SCALER AdcSR キット（GPU 用）
 
 拡大モデル AdcSR を GPU で使えるようにする追加ファイルです。
 AdcSR は静止画専用です。動画には使えません。
 
 入れ方
-1. ultraeasy-upscaler を終了します。
-2. この zip の中身を、ultraeasy-upscaler.exe のあるフォルダに上書きで展開します。
+1. TOGU SCALER を終了します。
+2. この zip の中身を、togu-scaler.exe のあるフォルダに上書きで展開します。
    （models フォルダが、既にあるものと合わさります）
-3. ultraeasy-upscaler を起動します。「画像の拡大モデル」で AdcSR を選べるようになります。
+3. TOGU SCALER を起動します。「画像の拡大モデル」で AdcSR を選べるようになります。
 
 使うときの注意
 - 処理にとても時間がかかります（Radeon 860M で 854×480 の画像 1 枚に約 108 秒）。

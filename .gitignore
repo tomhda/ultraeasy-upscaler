@@ -9,6 +9,7 @@ __pycache__/
 /portable_build/
 /portable_dist/
 /ultraeasy-upscaler-portable-*.zip
+/togu-scaler-portable-*.zip
 /tools/winml-sr/bin/
 /tools/winml-sr/obj/
 /tools/winml-film/bin/
@@ -36,3 +37,7 @@ AGENTS.local.md
 ultraeasy-upscaler-npu-kit*.zip
 ultraeasy-upscaler-film-kit.zip
 ultraeasy-upscaler-adcsr-kit.zip
+togu-scaler-portable-*.zip
+togu-scaler-npu-kit*.zip
+togu-scaler-film-kit.zip
+togu-scaler-adcsr-kit.zip

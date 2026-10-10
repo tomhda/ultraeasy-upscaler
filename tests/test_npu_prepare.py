@@ -820,7 +820,7 @@ def test_build_npu_kit_script() -> None:
     assert raw.startswith(b"\xef\xbb\xbf")
     text = raw.decode("utf-8-sig")
     assert "-WithAdcSR" in text
-    assert "ultraeasy-upscaler-npu-kit.zip" in text
-    assert "ultraeasy-upscaler-npu-kit-adcsr.zip" in text
+    assert "togu-scaler-npu-kit.zip" in text
+    assert "togu-scaler-npu-kit-adcsr.zip" in text
     assert "NPU ドライバ 32.0.203.329 以降" in text
     assert "UEU_NPU_PYTHON" in text

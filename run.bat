@@ -1,5 +1,5 @@
 @echo off
-REM ultraeasy-upscaler launcher
+REM togu-scaler launcher
 chcp 65001 >nul
 set PYTHONUTF8=1
 setlocal

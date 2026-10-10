@@ -152,6 +152,124 @@ def test_settings_uses_env_dir(monkeypatch, tmp_path):
     assert user_settings.load_language() == "en"
 
 
+# --- 設定の引き継ぎ（改名前 ultraeasy-upscaler → togu-scaler） ---
+
+def test_settings_migrates_from_legacy_dir(monkeypatch, tmp_path):
+    """古いフォルダだけあるときは古いほうを読み、保存は新しいほうへ。"""
+    from app.core import user_settings
+
+    monkeypatch.delenv("UEU_SETTINGS_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    old = tmp_path / "local" / "ultraeasy-upscaler"
+    new = tmp_path / "local" / "togu-scaler"
+    old.mkdir(parents=True)
+    (old / "settings.json").write_text('{"language": "en"}', encoding="utf-8")
+
+    assert user_settings.load_language() == "en"
+    user_settings.save_language("ja")
+    assert (new / "settings.json").is_file()
+    assert user_settings.load_language() == "ja"
+    # 古いフォルダは消さない・書き換えない。
+    assert (old / "settings.json").read_text(encoding="utf-8") == '{"language": "en"}'
+
+
+def test_settings_prefers_new_dir(monkeypatch, tmp_path):
+    """両方あるときは新しいほうを読む。"""
+    from app.core import user_settings
+
+    monkeypatch.delenv("UEU_SETTINGS_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    old = tmp_path / "local" / "ultraeasy-upscaler"
+    new = tmp_path / "local" / "togu-scaler"
+    old.mkdir(parents=True)
+    new.mkdir(parents=True)
+    (old / "settings.json").write_text('{"language": "en"}', encoding="utf-8")
+    (new / "settings.json").write_text('{"language": "ja"}', encoding="utf-8")
+
+    assert user_settings.load_language() == "ja"
+
+
+def test_settings_neither_dir_is_auto(monkeypatch, tmp_path):
+    """どちらも無いときは "auto"。"""
+    from app.core import user_settings
+
+    monkeypatch.delenv("UEU_SETTINGS_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+
+    assert user_settings.load_language() == "auto"
+    assert user_settings.load_accent() == "auto"
+
+
+# --- アクセントカラー（保存と読み込み・言語との共存・画面への反映） ---
+
+def test_accent_roundtrip():
+    from app.core import user_settings
+
+    for value in ("auto", "#3b82f6", "#e5484d", "#8b5cf6"):
+        user_settings.save_accent(value)
+        assert user_settings.load_accent() == value
+
+
+def test_accent_invalid_is_auto():
+    from app.core import user_settings
+
+    user_settings.settings_path().parent.mkdir(parents=True, exist_ok=True)
+    user_settings.settings_path().write_text("{壊れた", encoding="utf-8")
+    assert user_settings.load_accent() == "auto"
+    user_settings.settings_path().write_text("[1,2]", encoding="utf-8")
+    assert user_settings.load_accent() == "auto"
+    user_settings.settings_path().write_text('{"accent": "red"}', encoding="utf-8")
+    assert user_settings.load_accent() == "auto"
+    user_settings.settings_path().write_text('{"accent": "#ff0000"}', encoding="utf-8")
+    assert user_settings.load_accent() == "auto"
+
+
+def test_accent_rejects_unknown():
+    from app.core import user_settings
+
+    with pytest.raises(ValueError):
+        user_settings.save_accent("red")
+
+
+def test_accent_and_language_coexist():
+    from app.core import user_settings
+
+    user_settings.save_language("en")
+    user_settings.save_accent("#e5484d")
+    assert user_settings.load_language() == "en"
+    assert user_settings.load_accent() == "#e5484d"
+    user_settings.save_language("ja")
+    assert user_settings.load_language() == "ja"
+    assert user_settings.load_accent() == "#e5484d"
+
+
+def test_accent_selection_changes_palette():
+    from PySide6.QtWidgets import QApplication
+
+    from app.core import user_settings
+    from app.gui import theme
+    from app.gui.settings_drawer import SettingsDrawer
+
+    application = QApplication.instance() or QApplication([])
+    drawer = SettingsDrawer()
+    try:
+        assert [value for _, value in
+                [(drawer.accent_combo.itemText(i), drawer.accent_combo.itemData(i))
+                 for i in range(drawer.accent_combo.count())]][0] == "auto"
+        assert drawer.accent_combo.count() == 9
+        # 色の項目にはその色の小さな四角のアイコンが付く（auto を除く）。
+        assert drawer.accent_combo.itemIcon(0).isNull() is True
+        assert drawer.accent_combo.itemIcon(1).isNull() is False
+
+        drawer.accent_combo.setCurrentIndex(drawer.accent_combo.findData("#e5484d"))
+        assert user_settings.load_accent() == "#e5484d"
+        assert theme.current().accent == "#e5484d"
+    finally:
+        drawer.accent_combo.setCurrentIndex(drawer.accent_combo.findData("auto"))
+        drawer.close()
+        application.processEvents()
+
+
 # --- 洗い出しの網羅性（AST で機械的に確認） ---
 
 def _collect():
@@ -321,7 +439,7 @@ def test_main_window_boots_in_english():
         win = MainWindow()
         win.show()
         application.processEvents()
-        assert win.windowTitle().startswith("ultraeasy-upscaler")
+        assert win.windowTitle().startswith("TOGU SCALER")
         assert win.start_btn.text() == "Start"
         assert win.pause_btn.text() == "Pause"
         assert win.image_model_combo.itemText(0) == "None (no upscaling)"

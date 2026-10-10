@@ -186,17 +186,17 @@ pwsh -File scripts\build_film_kit.ps1
 pwsh -File scripts\build_adcsr_kit.ps1
 ```
 
-- `build_portable.ps1` は PyInstaller で `portable_dist/ultraeasy-upscaler/` と `ultraeasy-upscaler-portable-win64.zip` を作る。
+- `build_portable.ps1` は PyInstaller で `portable_dist/togu-scaler/` と `togu-scaler-portable-win64.zip` を作る。
   Python・ffmpeg・realesrgan-ncnn-vulkan・RIFE v4.6 を同梱し、`-WithHelper` で `vendor/winml-sr/` と GPU 用モデル（AdcSR を除く）も同梱する。
   同梱物のライセンス文書（`THIRD-PARTY-NOTICES.txt` ほか）も入れる。NPU 専用のファイルは入れない。
-  画面用の `ultraeasy-upscaler.exe` とコマンドライン用の `ultraeasy-upscaler-cli.exe` を、同じ `_internal` を共有する形で作る
-  （定義は `ultraeasy-upscaler.spec`）。
-  作成後に exe の自己テスト（同梱バイナリとモデルが exe の隣から見つかるか）と、`ultraeasy-upscaler-cli.exe status` を実行する。
-- `build_npu_kit.ps1` は `tools/npu-serve/` と NPU 用モデルを `ultraeasy-upscaler-npu-kit.zip` にまとめる。
-  `-WithAdcSR` で AdcSR の前半・後半とマニフェストを `ultraeasy-upscaler-npu-kit-adcsr.zip`（無圧縮）にまとめる。
-- `build_film_kit.ps1` は `vendor/winml-film/` と `models/film/` を `ultraeasy-upscaler-film-kit.zip` にまとめる。
+  画面用の `togu-scaler.exe` とコマンドライン用の `togu-scaler-cli.exe` を、同じ `_internal` を共有する形で作る
+  （定義は `togu-scaler.spec`）。
+  作成後に exe の自己テスト（同梱バイナリとモデルが exe の隣から見つかるか）と、`togu-scaler-cli.exe status` を実行する。
+- `build_npu_kit.ps1` は `tools/npu-serve/` と NPU 用モデルを `togu-scaler-npu-kit.zip` にまとめる。
+  `-WithAdcSR` で AdcSR の前半・後半とマニフェストを `togu-scaler-npu-kit-adcsr.zip`（無圧縮）にまとめる。
+- `build_film_kit.ps1` は `vendor/winml-film/` と `models/film/` を `togu-scaler-film-kit.zip` にまとめる。
   FILM の ONNX の作り方は [scripts/film/README.md](../scripts/film/README.md)。
-- `build_adcsr_kit.ps1` は GPU 用の AdcSR モデルを `ultraeasy-upscaler-adcsr-kit.zip` にまとめる。
+- `build_adcsr_kit.ps1` は GPU 用の AdcSR モデルを `togu-scaler-adcsr-kit.zip` にまとめる。
 - どのキットも exe のフォルダに上書きで展開する構造。
 
 ## アーキテクチャ

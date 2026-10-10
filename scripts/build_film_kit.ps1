@@ -4,7 +4,7 @@
     FILM 追加キットの zip（別配布）を作成する。
 
 .DESCRIPTION
-    ultraeasy-upscaler-film-kit.zip を作る。exe のフォルダに
+    togu-scaler-film-kit.zip を作る。exe のフォルダに
     上書き展開する前提の構造（vendor/winml-film/ 一式、models/film/ 一式、
     FILMキットの使い方.txt）にする。
     LICENSE-Apache-2.0-FILM.txt は本体 zip には入れず、このキットに入れる
@@ -23,7 +23,7 @@ function Fail([string]$Message) {
     throw $Message
 }
 
-$zipName = "ultraeasy-upscaler-film-kit.zip"
+$zipName = "togu-scaler-film-kit.zip"
 $zipPath = Join-Path $repo $zipName
 if (Test-Path -LiteralPath $zipPath) {
     Fail "既にあります（上書きしません）: $zipPath"

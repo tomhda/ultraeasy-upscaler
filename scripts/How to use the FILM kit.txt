@@ -1,13 +1,13 @@
-﻿ultraeasy-upscaler FILM kit
+﻿TOGU SCALER FILM kit
 
 These files add the frame interpolation model FILM (Style).
 It runs on a GPU that supports DirectX 12.
 
 Install
-1. Close ultraeasy-upscaler.
-2. Extract the contents of this zip into the folder that contains ultraeasy-upscaler.exe, overwriting files.
+1. Close TOGU SCALER.
+2. Extract the contents of this zip into the folder that contains togu-scaler.exe, overwriting files.
    (The vendor and models folders merge with the ones already there.)
-3. Start ultraeasy-upscaler. FILM (Style) is now available under "Frame interpolation model".
+3. Start TOGU SCALER. FILM (Style) is now available under "Frame interpolation model".
 
 Notes
 - It takes longer than RIFE v4.6. In return, it holds up better in scenes with large motion.

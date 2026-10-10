@@ -1,6 +1,6 @@
-ultraeasy-upscaler portable build: licenses and sources of the bundled software
+TOGU SCALER portable build: licenses and sources of the bundled software
 
-ultraeasy-upscaler itself is under the MIT License (LICENSE.txt).
+TOGU SCALER itself is under the MIT License (LICENSE.txt).
 This folder also contains the third-party software and models listed below, each under its own license.
 
 1. FFmpeg (vendor/ffmpeg/bin/ffmpeg.exe, ffprobe.exe)
@@ -18,7 +18,7 @@ This folder also contains the third-party software and models listed below, each
    - License: Python Software Foundation License Version 2
    - https://www.python.org/
 
-4. PyInstaller bootloader (ultraeasy-upscaler.exe)
+4. PyInstaller bootloader (togu-scaler.exe)
    - License: GPL v2 or later with the bootloader exception (executables it produces may be distributed under any license)
    - https://pyinstaller.org/
 
@@ -37,7 +37,7 @@ This folder also contains the third-party software and models listed below, each
    - RIFE models: MIT License (https://github.com/hzwer/Practical-RIFE)
 
 8. winml-sr and the Windows ML runtime (vendor/winml-sr/), only when the GPU helper is bundled
-   - winml-sr: MIT License (part of ultraeasy-upscaler)
+   - winml-sr: MIT License (part of TOGU SCALER)
    - Microsoft Windows ML Runtime, ONNX Runtime, DirectML:
      see vendor/winml-sr/license.txt, ThirdPartyNotices.txt and NOTICE-winml-sr.txt
 

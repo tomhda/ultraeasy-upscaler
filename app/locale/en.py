@@ -8,11 +8,31 @@ from __future__ import annotations
 EN: dict[str, str | None] = {
     # --- 共通: 言語とウィンドウ
     # 閉じる前の案内など、ウィンドウ題名に足す文言。{text}=状況行の文言
-    'ultraeasy-upscaler — {text}': 'ultraeasy-upscaler — {text}',
+    'TOGU SCALER — {text}': 'TOGU SCALER — {text}',
     # 詳細設定の項目名
     '表示言語': 'Display language',
     # 表示言語の選択肢（OSに合わせる）
     'Windows の設定に合わせる': 'Same as Windows',
+    # アクセントカラーの見出し
+    'アクセントカラー': 'Accent color',
+    # アクセントカラーの選択肢（Windows に合わせる）
+    'Windows に合わせる': 'Match Windows',
+    # アクセントカラーの選択肢（色名）
+    '青': 'Blue',
+    # アクセントカラーの選択肢（色名）
+    '水色': 'Cyan',
+    # アクセントカラーの選択肢（色名）
+    '緑': 'Green',
+    # アクセントカラーの選択肢（色名）
+    '黄': 'Yellow',
+    # アクセントカラーの選択肢（色名）
+    'オレンジ': 'Orange',
+    # アクセントカラーの選択肢（色名）
+    '赤': 'Red',
+    # アクセントカラーの選択肢（色名）
+    'ピンク': 'Pink',
+    # アクセントカラーの選択肢（色名）
+    '紫': 'Purple',
     # 表示言語の選択肢
     '日本語': '日本語',
     # 表示言語の選択肢（原文のまま）
@@ -262,6 +282,8 @@ EN: dict[str, str | None] = {
     # --- 詳細設定: 項目と選択肢
     # 詳細設定の項目名
     'AI実行先': 'Run on',
+    # 押せない倍率ボタンの理由（「AI実行先」の訳語は上の 'AI実行先' と同じ語を使う）
+    '2倍は、AI実行先が Vulkan で、モデルが Anime Video v3 のときに選べます': '2x is available when Run on is set to Vulkan and the model is Anime Video v3',
     # AI実行先の選択肢
     '自動（GPU優先）': 'Auto (GPU first)',
     # AI実行先の選択肢
@@ -347,6 +369,8 @@ EN: dict[str, str | None] = {
     'TTAは同じ画像を反転などで複数回処理して仕上げる高品質モードです。少し良くなる場合がありますが、かなり遅くなります。': 'TTA processes the same picture several times, flipped and so on, and combines the results. It can look slightly better but is much slower.',
     # 出力フォルダ作成のヘルプ
     'チェックすると、出力を指定名のフォルダにまとめます。外すと入力ファイルと同じ場所へ直接出力します。': 'When on, the output goes into a folder with the given name. When off, it is saved directly next to the source file.',
+    # アクセントカラーのヘルプ
+    '画面の強調に使う色です。「Windows に合わせる」では、Windows の個人用設定で選んだ色を使います。': 'The color used for highlights. "Match Windows" uses the color chosen in Windows personalization settings.',
     # 補間倍率チェックボックスのヘルプ
     '入れると「補間後のfps」を選べるようになります。切っている間は、元動画の 2 倍になります。': 'Turn this on to choose "Interpolated frame rate". While it is off, the frame rate is twice the source.',
     # 補間後fpsのヘルプ
@@ -357,7 +381,7 @@ EN: dict[str, str | None] = {
     # 詳細設定内の見出し
     '追加キット': 'Add-on kits',
     # 追加キットの説明文
-    'ダウンロードした zip を、ultraeasy-upscaler.exe のあるフォルダに展開してください。次回の起動から使えます。': 'Extract the downloaded zip into the folder that contains ultraeasy-upscaler.exe. It becomes available the next time the app starts.',
+    'ダウンロードした zip を、togu-scaler.exe のあるフォルダに展開してください。次回の起動から使えます。': 'Extract the downloaded zip into the folder that contains togu-scaler.exe. It becomes available the next time the app starts.',
     # 追加キットの行の名前
     'NPU キット': 'NPU kit',
     # 追加キットの行の名前

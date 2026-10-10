@@ -30,7 +30,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repo = $PSScriptRoot
-$ownerRepo = "tomhda/ultraeasy-upscaler"
+$ownerRepo = "tomhda/togu-scaler"
 
 function Fail([string]$Message) {
     Write-Error $Message

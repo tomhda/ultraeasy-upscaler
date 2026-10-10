@@ -1,13 +1,13 @@
-﻿ultraeasy-upscaler AdcSR kit (for GPU)
+﻿TOGU SCALER AdcSR kit (for GPU)
 
 These files add the upscaling model AdcSR for use on a GPU.
 AdcSR is for still images only. It can't be used for videos.
 
 Install
-1. Close ultraeasy-upscaler.
-2. Extract the contents of this zip into the folder that contains ultraeasy-upscaler.exe, overwriting files.
+1. Close TOGU SCALER.
+2. Extract the contents of this zip into the folder that contains togu-scaler.exe, overwriting files.
    (The models folder merges with the one already there.)
-3. Start ultraeasy-upscaler. AdcSR is now available under "Image model".
+3. Start TOGU SCALER. AdcSR is now available under "Image model".
 
 Notes
 - It is very slow (about 108 seconds for one 854x480 image on a Radeon 860M).

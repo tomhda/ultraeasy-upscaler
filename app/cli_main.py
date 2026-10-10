@@ -1,4 +1,4 @@
-"""Console entry for the frozen build (ultraeasy-upscaler-cli.exe).
+"""Console entry for the frozen build (togu-scaler-cli.exe).
 
 PyInstaller entry script; run from source with ``python -m app.cli`` instead.
 """

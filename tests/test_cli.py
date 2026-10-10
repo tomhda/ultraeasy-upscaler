@@ -83,7 +83,7 @@ def test_status_json_shape(monkeypatch, capsys):
     assert code == 0
     payload = _json_out(out)
     assert payload["ok"] is True
-    assert payload["version"] == "0.11.0"
+    assert payload["version"] == "0.12.0"
     assert isinstance(payload["app_root"], str)
     assert payload["ffmpeg"] == {"found": True, "path": "C:/fake/ffmpeg.exe"}
     assert payload["backends"]["gpu"] == {"available": True}
@@ -507,7 +507,7 @@ def test_help_has_args_defaults_examples(capsys):
 def test_version(capsys):
     code, out, _err = _run(["--version"], capsys)
     assert code == 0
-    assert "0.11.0" in out
+    assert "0.12.0" in out
 
 
 # ----------------------------------------------------------------------- env
@@ -534,7 +534,7 @@ def test_frozen_cli_resolves_next_to_cli_exe(monkeypatch, tmp_path):
     """CLI exe 版でも同梱の models/ や vendor/ を exe の隣から探す。"""
     from app.core import binaries, settings
 
-    exe = tmp_path / "ultraeasy-upscaler-cli.exe"
+    exe = tmp_path / "togu-scaler-cli.exe"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe))
     assert settings._app_root() == tmp_path.resolve()
