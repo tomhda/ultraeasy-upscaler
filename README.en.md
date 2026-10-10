@@ -2,8 +2,9 @@
 
 [日本語](README.md) [![agent-friendly](docs/images/agent-friendly.svg)](AGENTS.md)
 
-**[⬇ Download TOGU SCALER v0.11.0](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-portable-win64.zip)**
+**[⬇ Download TOGU SCALER v0.12.0](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-portable-win64.zip)**
 (zip for Windows x64, 382 MB). See [Install](#install) for the steps.
+Up to v0.11.0, the app was named ultraeasy-upscaler.
 
 TOGU SCALER is a Windows app that upscales images and videos, and interpolates video frames, with a few clicks.
 Everything runs on your own PC. It collects no data, shows no ads, and is open source.
@@ -50,7 +51,7 @@ and Superman (1941), which is in the public domain.
 
 Tested on Windows 11 (x64) with a DirectX 12 GPU.
 
-1. Download [`togu-scaler-portable-win64.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-portable-win64.zip).
+1. Download [`togu-scaler-portable-win64.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-portable-win64.zip).
 2. Extract the zip anywhere you like. It is a portable app and needs no installation.
 3. Run `togu-scaler.exe`. The file is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Select **More info**, then **Run anyway**.
 
@@ -101,6 +102,7 @@ To uninstall, delete the extracted folder.
 
 - The gear at the top right opens settings for where the AI runs, the file format, video quality, the output location, the output folder name, the display language, and more. It also shows which add-on kits are installed.
 - The interface is available in English and Japanese. It starts in the Windows display language, and you can change it under **Display language** (the change takes effect the next time the app starts).
+- **Accent color** changes the color used for highlights. It starts with the Windows accent color.
 
 ## Choosing a model
 
@@ -115,7 +117,8 @@ Times are for enlarging one 854×480 image 4× on a Radeon 860M (the integrated 
 | AdcSR | Live-action stills | 108 s | A generative model that adds texture. It is very heavy and adds a lot, so it is for still images only. Not included in the app; it needs an [add-on kit](#add-on-kits) |
 
 - If you are unsure, start with Anime Video v3 for anime and CG, and 4xNomosUni SPAN for live action.
-- Setting **Run on** to Vulkan in the settings switches to a different engine (realesrgan-ncnn-vulkan). The model list changes to five Real-ESRGAN models, and Anime Video v3 can also enlarge 2×. If processing on the GPU cannot start, the app switches to this engine automatically.
+- Setting **Run on** to Vulkan at the top of the window switches to a different engine (realesrgan-ncnn-vulkan). The model list changes to five Real-ESRGAN models, and Anime Video v3 can also enlarge 2×. If processing on the GPU cannot start, the app switches to this engine automatically.
+- Models that need an add-on kit (AdcSR and FILM (Style)) are shown as "not installed" and cannot be chosen until the kit is added.
 
 ### Quality comparison
 
@@ -148,10 +151,10 @@ Models that are not included in the app are separate downloads.
 
 | Kit | Adds | File |
 |---|---|---|
-| FILM (Style) | The frame interpolation model FILM (Style) | [`togu-scaler-film-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-film-kit.zip) (178 MB) |
-| AdcSR (for GPU) | The upscaling model AdcSR on the GPU | [`togu-scaler-adcsr-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-adcsr-kit.zip) (1.7 GB) |
-| NPU kit | Processing on the NPU (below) | [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit.zip) (56 MB) |
-| AdcSR (for NPU) | The upscaling model AdcSR on the NPU | [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit-adcsr.zip) (1.7 GB) |
+| FILM (Style) | The frame interpolation model FILM (Style) | [`togu-scaler-film-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-film-kit.zip) (178 MB) |
+| AdcSR (for GPU) | The upscaling model AdcSR on the GPU | [`togu-scaler-adcsr-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-adcsr-kit.zip) (1.7 GB) |
+| NPU kit | Processing on the NPU (below) | [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit.zip) (56 MB) |
+| AdcSR (for NPU) | The upscaling model AdcSR on the NPU | [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit-adcsr.zip) (1.7 GB) |
 
 1. Close TOGU SCALER and extract the contents of the zip into the folder that contains `togu-scaler.exe`, overwriting files.
 2. Start the app. The model is now in the list.
@@ -167,9 +170,9 @@ Models that are not included in the app are separate downloads.
 On AMD Ryzen AI PCs, downloading an extra kit lets the app process on the NPU. The NPU becomes selectable when both of the following are in place.
 
 - AMD's [Ryzen AI Software 1.8.0](https://ryzenai.docs.amd.com/en/latest/inst.html) (get it from AMD and install it; NPU driver 32.0.203.329 or later)
-- [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit.zip) (56 MB)
+- [`togu-scaler-npu-kit.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit.zip) (56 MB)
 
-To use AdcSR on the NPU, you also need the NPU-only model [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.11.0/togu-scaler-npu-kit-adcsr.zip) (1.7 GB).
+To use AdcSR on the NPU, you also need the NPU-only model [`togu-scaler-npu-kit-adcsr.zip`](https://github.com/tomhda/togu-scaler/releases/download/v0.12.0/togu-scaler-npu-kit-adcsr.zip) (1.7 GB).
 
 Steps:
 
